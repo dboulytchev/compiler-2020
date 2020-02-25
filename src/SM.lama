@@ -6,9 +6,9 @@ import State;
 import Expr;
 import Util;
 
--- Stack machine interpreter. Takes a SM configuration and a program,
+-- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c@[st, s, w], insns) {
+fun eval (c, insns) {
   failure ("SM eval not implemented\n")
 }
 
