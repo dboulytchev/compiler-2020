@@ -7,8 +7,16 @@ import World;
 -- Evaluates a statement "stmt" in a configuration "c".
 -- A configuration is a pair of a state "s" and a world "w".
 -- Returns a final configuration (if any)
-fun eval (c, stmt) {
-  failure ("Stmt eval not implemented\n")
+fun eval ([st, w], stmt) {
+    -- printf("%s %s %s", st.string, w.string, stmt.string)
+
+    case stmt of
+            Read(x) -> case readWorld(w) of [val, new_w] -> [st <- [x, val], new_w] esac
+        |   Write(e) -> [st, writeWorld(evalExpr(st, e), w)]
+        |   Assn(x, e) -> [st <- [x, evalExpr(st, e)], w]
+        |   Seq(s1, s2) -> eval(eval([st, w], s1), s2)
+        |   Skip -> [st, w]
+    esac
 }
 
 -- Evaluates a program with a given input and returns an output
