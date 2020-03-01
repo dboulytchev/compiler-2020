@@ -3,9 +3,33 @@
 import List;
 import State;
 
+-- Implementation of binary operation
+public fun evalBinop(op, l, r) {
+  case op of
+    "*"  -> l *  r
+  | "/"  -> l /  r
+  | "%"  -> l %  r
+  | "+"  -> l +  r
+  | "-"  -> l -  r
+  | "==" -> l == r
+  | "!=" -> l != r
+  | "<"  -> l <  r
+  | "<=" -> l <= r
+  | ">"  -> l >  r
+  | ">=" -> l >= r
+  | "&&" -> l && r
+  | "!!" -> l !! r
+  | _    -> failure ("Unexpected error in evalBinop\n")
+  esac
+}
 
 -- The evaluator itself: takes a state and an expression,
 -- returns integer value
 public fun evalExpr (st, expr) {
-  failure ("evalExpr not implemented\n")
+  case expr of
+    Binop(op, l, r) -> evalBinop(op, evalExpr(st, l), evalExpr(st, r))
+  | Const(x)        -> x
+  | Var(x)          -> st(x)
+  | _               -> failure ("Unexpected error in evalExpr\n")
+  esac
 }
