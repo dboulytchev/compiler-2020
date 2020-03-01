@@ -9,7 +9,27 @@ import Util;
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
 fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+  case insns of
+    BINOP ("+") : rest -> eval([singleton(c[0][1][0] + c[0][0]) +++ c[0][1][1], c[1], c[2]], rest)
+  | BINOP ("-") : rest -> eval([singleton(c[0][1][0] - c[0][0]) +++ c[0][1][1], c[1], c[2]], rest)
+  | BINOP ("*") : rest -> eval([singleton(c[0][1][0] * c[0][0]) +++ c[0][1][1], c[1], c[2]], rest)
+  | BINOP ("/") : rest -> eval([singleton(c[0][1][0] / c[0][0]) +++ c[0][1][1], c[1], c[2]], rest)
+  | BINOP ("%") : rest -> eval([singleton(c[0][1][0] % c[0][0]) +++ c[0][1][1], c[1], c[2]], rest)
+  | BINOP ("==") : rest -> eval([singleton(c[0][1][0] == c[0][0]) +++ c[0][1][1], c[1], c[2]], rest)
+  | BINOP ("!=") : rest -> eval([singleton(c[0][1][0] != c[0][0]) +++ c[0][1][1], c[1], c[2]], rest)
+  | BINOP ("<") : rest -> eval([singleton(c[0][1][0] < c[0][0]) +++ c[0][1][1], c[1], c[2]], rest)
+  | BINOP ("<=") : rest -> eval([singleton(c[0][1][0] <= c[0][0]) +++ c[0][1][1], c[1], c[2]], rest)
+  | BINOP (">") : rest -> eval([singleton(c[0][1][0] > c[0][0]) +++ c[0][1][1], c[1], c[2]], rest)
+  | BINOP (">=") : rest -> eval([singleton(c[0][1][0] >= c[0][0]) +++ c[0][1][1], c[1], c[2]], rest)
+  | BINOP ("&&") : rest -> eval([singleton(c[0][1][0] && c[0][0]) +++ c[0][1][1], c[1], c[2]], rest)
+  | BINOP ("!!") : rest -> eval([singleton(c[0][1][0] !! c[0][0]) +++ c[0][1][1], c[1], c[2]], rest)
+  | CONST (x) : rest  -> eval([singleton(x) +++ c[0], c[1], c[2]], rest)
+  | READ : rest -> local t = readWorld(c[2]); eval([singleton(t.fst) +++ c[0], c[1], t.snd], rest)
+  | WRITE : rest -> eval([c[0][1], c[1], writeWorld(c[0][0], c[2])], rest)
+  | LD (x) : rest -> eval([singleton(c[1](x)) +++ c[0], c[1], c[2]], rest)
+  | ST (x) : rest -> eval([c[0][1], c[1] <- [x, c[0][0]], c[2]], rest)
+  | _ -> c
+  esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -21,12 +41,22 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+    Const (x) -> singleton(CONST (x))
+  | Var (x) -> singleton(LD (x))
+  | Binop (op, l, r) -> {compileExpr(l), compileExpr(r), BINOP (op)}
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  case stmt of
+    Read (x) -> {READ, ST (x)}
+  | Write (e) -> deepFlatten({compileExpr(e), WRITE})
+  | Assn (x, e) -> deepFlatten({compileExpr(e), ST (x)})
+  | Seq (s1, s2) -> deepFlatten({compileSM (s1), compileSM (s2)})
+  | _ -> {}
+  esac
 }

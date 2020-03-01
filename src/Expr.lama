@@ -7,5 +7,21 @@ import State;
 -- The evaluator itself: takes a state and an expression,
 -- returns integer value
 public fun evalExpr (st, expr) {
-  failure ("evalExpr not implemented\n")
+  case expr of
+    Const (x) -> x
+  | Var (x) -> st(x)
+  | Binop ("+", l, r) -> evalExpr(st, l) + evalExpr(st, r)
+  | Binop ("-", l, r) -> evalExpr(st, l) - evalExpr(st, r)
+  | Binop ("*", l, r) -> evalExpr(st, l) * evalExpr(st, r)
+  | Binop ("/", l, r) -> evalExpr(st, l) / evalExpr(st, r)
+  | Binop ("%", l, r) -> evalExpr(st, l) % evalExpr(st, r)
+  | Binop ("==", l, r) -> evalExpr(st, l) == evalExpr(st, r)
+  | Binop ("!=", l, r) -> evalExpr(st, l) != evalExpr(st, r)
+  | Binop ("<", l, r) -> evalExpr(st, l) < evalExpr(st, r)
+  | Binop ("<=", l, r) -> evalExpr(st, l) <= evalExpr(st, r)
+  | Binop (">", l, r) -> evalExpr(st, l) > evalExpr(st, r)
+  | Binop (">=", l, r) -> evalExpr(st, l) >= evalExpr(st, r)
+  | Binop ("&&", l, r) -> evalExpr(st, l) && evalExpr(st, r)
+  | Binop ("!!", l, r) -> evalExpr(st, l) !! evalExpr(st, r)
+  esac
 }
