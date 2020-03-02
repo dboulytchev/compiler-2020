@@ -6,6 +6,25 @@ import State;
 
 -- The evaluator itself: takes a state and an expression,
 -- returns integer value
-public fun evalExpr (st, expr) {
-  failure ("evalExpr not implemented\n")
+public fun evalExpr (state, expr) {
+  case expr of 
+  -- Binary operators
+    Binop ("+", l, r)   -> evalExpr (state, l) + evalExpr (state, r)
+  | Binop ("-", l, r)   -> evalExpr (state, l) - evalExpr (state, r)
+  | Binop ("*", l, r)   -> evalExpr (state, l) * evalExpr (state, r)
+  | Binop ("/", l, r)   -> evalExpr (state, l) / evalExpr (state, r)
+  | Binop ("%", l, r)   -> evalExpr (state, l) % evalExpr (state, r)
+  | Binop ("==", l, r)  -> evalExpr (state, l) == evalExpr (state, r)
+  | Binop ("!=", l, r)  -> evalExpr (state, l) != evalExpr (state, r)
+  | Binop ("<", l, r)   -> evalExpr (state, l) < evalExpr (state, r)
+  | Binop ("<=", l, r)  -> evalExpr (state, l) <= evalExpr (state, r)
+  | Binop (">", l, r)   -> evalExpr (state, l) > evalExpr (state, r)
+  | Binop (">=", l, r)  -> evalExpr (state, l) >= evalExpr (state, r)
+  | Binop ("&&", l, r)  -> evalExpr (state, l) && evalExpr (state, r)
+  | Binop ("!!", l, r)  -> evalExpr (state, l) !! evalExpr (state, r)
+  -- Everything else
+  | Const (x) -> x 
+  | Var (x)   -> x.state
+  | _         -> failure ("No implementation for this expression")
+  esac
 }

@@ -8,8 +8,47 @@ import Util;
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval ([stack, state, world], program) {
+  case program of
+    BINOP (op) : tail -> 
+        case stack of
+          right : left : stackTail -> 
+              local opResult = case op of 
+                "+"  -> left + right
+              | "-"  -> left - right
+              | "*"  -> left * right
+              | "/"  -> left / right
+              | "%"  -> left % right
+              | "==" -> left == right
+              | "!=" -> left != right
+              | "<"  -> left < right
+              | ">"  -> left > right
+              | ">=" -> left >= right
+              | "<=" -> left <= right
+              | "!!" -> left !! right
+              | "&&" -> left && right
+              esac;
+              eval ([opResult : stackTail, state, world], tail) 
+        esac
+  | CONST (n) : tail -> 
+        eval ([n : stack, state, world], tail)
+  | READ      : tail -> 
+        local readResult = world.readWorld;
+        eval ([readResult[0] : stack, state, readResult[1]], tail)
+  | WRITE      : tail ->
+        case stack of
+          top : stackTail -> 
+              eval ([stackTail, state, writeWorld (top, world)], tail)
+        esac
+  | LD (x)    : tail ->
+        eval ([state (x) : stack, state, world], tail)
+  | ST (x)    : tail ->
+        case stack of 
+          top : stackTail ->
+              eval ([stackTail, state <- [x, top], world], tail)
+        esac  
+  | _                -> [stack, state, world]
+  esac 
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -21,12 +60,21 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+    Binop (op, l, r)  -> deepFlatten(l.compileExpr +++ r.compileExpr +++ singleton (BINOP (op)))
+  | Const (n)         -> singleton(CONST (n))
+  | Var (x)           -> singleton(LD (x))
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  case stmt of
+    Read (x)     -> { READ, ST (x) }
+  | Write (x)    -> deepFlatten (compileExpr (x) +++ singleton(WRITE))
+  | Seq (x1, x2) -> deepFlatten (compileSM (x1) +++ compileSM (x2))
+  | Assn (x, e)  -> deepFlatten (compileExpr (e) +++ singleton(ST (x)))
+  esac 
 }
