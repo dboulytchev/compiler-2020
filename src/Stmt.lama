@@ -10,8 +10,7 @@ import World;
 fun eval (c, stmt) {
   case stmt of
     Seq (s1, s2) -> {
-                      local c1;
-                      c1 := eval (c, s1);
+                      local c1 = eval (c, s1);
                       return eval (c1, s2)
                     }
   | Read (var) -> {
@@ -29,8 +28,7 @@ fun eval (c, stmt) {
                           local st = c.fst <- [var, res];
                           return [st, c.snd]
                         }
-  esac;
-  return
+  esac
 }
 
 -- Evaluates a program with a given input and returns an output

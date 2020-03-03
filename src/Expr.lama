@@ -11,8 +11,7 @@ public fun evalExpr (st, expr) {
     Const (const) -> return const
   | Var (var) -> return st (var)
   | Binop (op, expr1, expr2) -> return applyBinop (op, evalExpr (st, expr1), evalExpr (st, expr2))
-  esac;
-  return
+  esac
 }
 
 public fun applyBinop (op, a, b) {

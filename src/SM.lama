@@ -10,35 +10,31 @@ import Util;
 -- returns a final configuration
 fun eval (c, insns) {
   local flatten = insns.deepFlatten;
-  local lol = flatten.size;
-  for local i; i := 0, i < lol, i := i+1 do
+  local siz = flatten.size;
+  for local i; i := 0, i < siz, i := i+1 do
     local popState = flatten.popStack;
+
     flatten := popState.snd;
     case popState.fst of
       Binop (op) -> c[0] := binopOnStack(c[0], op)
-    | Const (const) -> c[0] := {const : c[0]}
+    | Const (const) -> c[0] := const : c[0]
     | Read -> {
-                local valWorld, st;
-                valWorld := c[2].readWorld;
-                c[0] := {valWorld.fst : c[0]};
-                c[2] := valWorld.snd;
-                skip
+                local valWorld = c[2].readWorld;
+                c[0] := valWorld.fst : c[0];
+                c[2] := valWorld.snd
               }
     | Write -> {
                  local popState = c[0].popStack;
                  c[0] := popState.snd;
-                 c[2] := writeWorld(popState.fst, c[2]);
-                 skip
+                 c[2] := writeWorld(popState.fst, c[2])
                }
     | LD (var) -> c[0] := pushStack(c[1](var), c[0])
     | ST (var) -> {
                     local popState = c[0].popStack;
                     c[0] := popState.snd;
-                    c[1] := c[1] <- [var, popState.fst];
-                    skip
+                    c[1] := c[1] <- [var, popState.fst]
                   }
-    esac;
-    skip
+    esac
   od;
   return c
 }
