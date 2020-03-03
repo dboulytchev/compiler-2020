@@ -8,10 +8,10 @@ import State;
 -- returns integer value
 public fun evalExpr (state, expr) {
   case expr of
-		  Const (n)        -> n
-		| Var   (x)        -> state(x)
-		| Binop (op, l, r) -> op.evalBinop(state.evalExpr(l), state.evalExpr(r))
-	esac
+      Const (n)        -> n
+    | Var   (x)        -> state(x)
+    | Binop (op, l, r) -> op.evalBinop(state.evalExpr(l), state.evalExpr(r))
+  esac
 }
 
 -- The evaluator for binary operators
@@ -31,5 +31,5 @@ public fun evalBinop (op, l, r) {
     | "&&" -> l && r
     | "!!" -> l !! r
     | _    -> failure("Unknown operator: %s\n", op)
-	esac
+  esac
 }

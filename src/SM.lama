@@ -50,8 +50,8 @@ public fun compileSM (stmt) {
   case stmt of
       Skip         -> {}
     | Seq   (l, r) -> { compileSM(l), compileSM(r) }
-		| Read  (x)    -> { singleton(READ), singleton(ST (x)) }
-		| Write (e)    -> { compileExpr(e), singleton(WRITE) }
-		| Assn  (x, e) -> { compileExpr(e), singleton(ST (x)) }
+    | Read  (x)    -> { singleton(READ), singleton(ST (x)) }
+    | Write (e)    -> { compileExpr(e), singleton(WRITE) }
+    | Assn  (x, e) -> { compileExpr(e), singleton(ST (x)) }
   esac.flatten
 }
