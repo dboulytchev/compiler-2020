@@ -3,28 +3,33 @@
 import List;
 import State;
 
+-- Binary expression evaluator : takes operator and operands
+-- returns integer value
+public fun evalBinop (op, l, r) {
+  case op of 
+    "+"   -> l + r
+  | "-"   -> l - r
+  | "*"   -> l * r
+  | "/"   -> l / r
+  | "%"   -> l % r
+  | "=="  -> l == r
+  | "!="  -> l != r
+  | "<"   -> l < r
+  | "<="  -> l <= r
+  | ">"   -> l > r
+  | ">="  -> l >= r
+  | "&&"  -> l && r
+  | "!!"  -> l !! r
+  esac
+}
 
 -- The evaluator itself: takes a state and an expression,
 -- returns integer value
 public fun evalExpr (state, expr) {
   case expr of 
-  -- Binary operators
-    Binop ("+", l, r)   -> evalExpr (state, l) + evalExpr (state, r)
-  | Binop ("-", l, r)   -> evalExpr (state, l) - evalExpr (state, r)
-  | Binop ("*", l, r)   -> evalExpr (state, l) * evalExpr (state, r)
-  | Binop ("/", l, r)   -> evalExpr (state, l) / evalExpr (state, r)
-  | Binop ("%", l, r)   -> evalExpr (state, l) % evalExpr (state, r)
-  | Binop ("==", l, r)  -> evalExpr (state, l) == evalExpr (state, r)
-  | Binop ("!=", l, r)  -> evalExpr (state, l) != evalExpr (state, r)
-  | Binop ("<", l, r)   -> evalExpr (state, l) < evalExpr (state, r)
-  | Binop ("<=", l, r)  -> evalExpr (state, l) <= evalExpr (state, r)
-  | Binop (">", l, r)   -> evalExpr (state, l) > evalExpr (state, r)
-  | Binop (">=", l, r)  -> evalExpr (state, l) >= evalExpr (state, r)
-  | Binop ("&&", l, r)  -> evalExpr (state, l) && evalExpr (state, r)
-  | Binop ("!!", l, r)  -> evalExpr (state, l) !! evalExpr (state, r)
-  -- Everything else
-  | Const (x) -> x 
-  | Var (x)   -> x.state
-  | _         -> failure ("No implementation for this expression")
+    Binop (op, l, r) -> evalBinop (op, evalExpr (state, l), evalExpr (state, r))
+  | Const (x)        -> x 
+  | Var (x)          -> x.state
+  | _                -> failure ("No implementation for this expression")
   esac
 }

@@ -13,40 +13,31 @@ fun eval ([stack, state, world], program) {
     BINOP (op) : tail -> 
         case stack of
           right : left : stackTail -> 
-              local opResult = case op of 
-                "+"  -> left + right
-              | "-"  -> left - right
-              | "*"  -> left * right
-              | "/"  -> left / right
-              | "%"  -> left % right
-              | "==" -> left == right
-              | "!=" -> left != right
-              | "<"  -> left < right
-              | ">"  -> left > right
-              | ">=" -> left >= right
-              | "<=" -> left <= right
-              | "!!" -> left !! right
-              | "&&" -> left && right
-              esac;
-              eval ([opResult : stackTail, state, world], tail) 
+             eval ([evalBinop (op, left, right) : stackTail, state, world], tail) 
         esac
+
   | CONST (n) : tail -> 
         eval ([n : stack, state, world], tail)
+
   | READ      : tail -> 
         local readResult = world.readWorld;
         eval ([readResult[0] : stack, state, readResult[1]], tail)
+
   | WRITE      : tail ->
         case stack of
           top : stackTail -> 
               eval ([stackTail, state, writeWorld (top, world)], tail)
         esac
+
   | LD (x)    : tail ->
         eval ([state (x) : stack, state, world], tail)
+
   | ST (x)    : tail ->
         case stack of 
           top : stackTail ->
               eval ([stackTail, state <- [x, top], world], tail)
         esac  
+
   | _                -> [stack, state, world]
   esac 
 }
@@ -61,9 +52,9 @@ public fun evalSM (input, insns) {
 -- of stack machine instructions
 fun compileExpr (expr) {
   case expr of
-    Binop (op, l, r)  -> deepFlatten(l.compileExpr +++ r.compileExpr +++ singleton (BINOP (op)))
-  | Const (n)         -> singleton(CONST (n))
-  | Var (x)           -> singleton(LD (x))
+    Binop (op, l, r)  -> { l.compileExpr, r.compileExpr, singleton (BINOP (op)) }
+  | Const (n)         -> singleton (CONST (n))
+  | Var (x)           -> singleton (LD (x))
   esac
 }
 
@@ -71,10 +62,14 @@ fun compileExpr (expr) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  case stmt of
-    Read (x)     -> { READ, ST (x) }
-  | Write (x)    -> deepFlatten (compileExpr (x) +++ singleton(WRITE))
-  | Seq (x1, x2) -> deepFlatten (compileSM (x1) +++ compileSM (x2))
-  | Assn (x, e)  -> deepFlatten (compileExpr (e) +++ singleton(ST (x)))
-  esac 
+    fun compile (stmt) {
+      case stmt of
+        Read (x)     -> { READ, ST (x) }
+      | Write (x)    -> { compileExpr (x), singleton(WRITE) }
+      | Seq (x1, x2) -> { compile (x1), compile (x2) }
+      | Assn (x, e)  -> { compileExpr (e), singleton(ST (x)) }
+      esac 
+    }
+
+    stmt.compile.deepFlatten
 }
