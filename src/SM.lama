@@ -66,8 +66,7 @@ fun compileExpr (expr) {
     Const (const) -> return {Const (const)}
   | Var (var) -> return {LD (var)}
   | Binop (op, expr1, expr2) -> return {compileExpr(expr1), compileExpr(expr2), Binop (op)}
-  esac;
-  return
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
@@ -79,6 +78,5 @@ public fun compileSM (stmt) {
   | Read (var) -> return {Read, ST (var)}
   | Write (expr) -> return {compileExpr(expr), Write}
   | Assn (var, expr) -> return {compileExpr(expr), ST (var)}
-  esac;
-  return
+  esac
 }
