@@ -10,36 +10,30 @@ import Util;
 -- returns a final configuration
 fun eval ([sk, st, w], insns) {
 	case insns of
-		CONST (c) : ins ->
-			eval ([c : sk, st, w], ins)
+		CONST (c) : ins -> eval ([c : sk, st, w], ins)
 
 		| READ : ins ->
 			case readWorld (w) of
-				[v, nw] -> 
-					eval ([v : sk, st, nw], ins)
+				[v, nw] -> eval ([v : sk, st, nw], ins)
 			esac
 
 		| WRITE : ins ->
 			case sk of
-				head : t -> 
-					local nw = writeWorld (head, w);
-					eval ([t, st, nw], ins)
+				head : t ->	eval ([t, st, writeWorld (head, w)], ins)
 			esac
 
 		| ST (x) : ins -> 
 			case sk of
-				head : t -> 
-					eval ([t, st <- [x, head], w], ins)
+				head : t -> eval ([t, st <- [x, head], w], ins)
 			esac
 
-		| LD (x) : ins -> 
-			eval ([st (x) : sk, st, w], ins)
+		| LD (x) : ins -> eval ([st (x) : sk, st, w], ins)
 
 		| BINOP (o) : ins -> 
 			case sk of
 				r : l : t -> 
-					local res = evalBinop (o, l, r);
-					eval ([res : t, st, w], ins)
+					-- local res = evalBinop (o, l, r);
+					eval ([evalBinop (o, l, r) : t, st, w], ins)
 			esac
 		| {} -> [sk, st, w]
 	esac
