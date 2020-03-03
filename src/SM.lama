@@ -8,8 +8,23 @@ import Util;
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (config @ [stack, state, world], insns) {
+  if insns then
+    case insns.hd of
+        CONST (n)  -> [n : stack, state, world]
+      | BINOP (op) -> case stack of
+                        r : l : tail -> [op.evalBinop(l, r) : tail, state, world]
+                      esac
+      | LD (x)     -> [state(x) : stack, state, world]
+      | ST (x)     -> [stack.tl, state <- [x, stack.hd], world]
+      | READ       -> case readWorld(world) of
+                        [v, newworld] -> [v : stack, state, newworld]
+                      esac
+      | WRITE      -> [stack.tl, state, writeWorld(stack.hd, world)]
+    esac.eval(insns.tl)
+  else
+    config
+  fi
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -21,12 +36,22 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+      Const (c)        -> singleton(CONST (c))
+    | Var   (x)        -> singleton(LD (x))
+    | Binop (op, l, r) -> flatten({ compileExpr(l), compileExpr(r), singleton(BINOP (op)) })
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  case stmt of
+      Skip         -> {}
+    | Seq   (l, r) -> { compileSM(l), compileSM(r) }
+		| Read  (x)    -> { singleton(READ), singleton(ST (x)) }
+		| Write (e)    -> { compileExpr(e), singleton(WRITE) }
+		| Assn  (x, e) -> { compileExpr(e), singleton(ST (x)) }
+  esac.flatten
 }
