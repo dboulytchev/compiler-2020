@@ -22,7 +22,7 @@ fun eval (c, stmt) {
                   }
   | Write (expr) -> {
                       local res = evalExpr (c.fst, expr);
-                      return [c.fst, writeWorld(res, c.snd)]
+                      return [c.fst, writeWorld (res, c.snd)]
                     }
   | Assn (var, expr) -> {
                           local res = evalExpr (c.fst, expr);

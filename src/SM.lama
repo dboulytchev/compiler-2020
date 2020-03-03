@@ -9,7 +9,52 @@ import Util;
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
 fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+  local flatten = insns.deepFlatten;
+  local lol = flatten.size;
+  for local i; i := 0, i < lol, i := i+1 do
+    local popState = flatten.popStack;
+    flatten := popState.snd;
+    case popState.fst of
+      Binop (op) -> c[0] := binopOnStack(c[0], op)
+    | Const (const) -> c[0] := {const : c[0]}
+    | Read -> {
+                local valWorld, st;
+                valWorld := c[2].readWorld;
+                c[0] := {valWorld.fst : c[0]};
+                c[2] := valWorld.snd;
+                skip
+              }
+    | Write -> {
+                 local popState = c[0].popStack;
+                 c[0] := popState.snd;
+                 c[2] := writeWorld(popState.fst, c[2]);
+                 skip
+               }
+    | LD (var) -> c[0] := pushStack(c[1](var), c[0])
+    | ST (var) -> {
+                    local popState = c[0].popStack;
+                    c[0] := popState.snd;
+                    c[1] := c[1] <- [var, popState.fst];
+                    skip
+                  }
+    esac;
+    skip
+  od;
+  return c
+}
+
+fun binopOnStack (stack, op) {
+  local popState1 = stack.popStack;
+  local popState2 = popState1.snd.popStack;
+  return applyBinop(op, popState2.fst, popState1.fst) : popState2.snd
+}
+
+fun pushStack (val, stack) {
+  return val : stack
+}
+
+fun popStack (val : stack) {
+  return [val, stack]
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -21,12 +66,23 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+    Const (const) -> return {Const (const)}
+  | Var (var) -> return {LD (var)}
+  | Binop (op, expr1, expr2) -> return {compileExpr(expr1), compileExpr(expr2), Binop (op)}
+  esac;
+  return
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  case stmt of
+    Seq (s1, s2) -> return {compileSM(s1), compileSM(s2)}
+  | Read (var) -> return {Read, ST (var)}
+  | Write (expr) -> return {compileExpr(expr), Write}
+  | Assn (var, expr) -> return {compileExpr(expr), ST (var)}
+  esac;
+  return
 }
