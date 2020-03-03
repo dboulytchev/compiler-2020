@@ -9,12 +9,12 @@ import State;
 public fun evalExpr (st, expr) {
 
   case expr of
-    Const (x) -> x | Var (x) -> st (x) | Binop (o, l, r) -> evalOper (o, evalExpr (st, l), evalExpr (st, r) )
+    Const (x) -> x | Var (x) -> st (x) | Binop (o, l, r) -> evalBinop (o, evalExpr (st, l), evalExpr (st, r) )
   esac
 }
 
-public fun evalOper (obj, left, right) {
-    case obj of
+public fun evalBinop (b, left, right) {
+    case b of
         "+"  -> left + right
       | "-"  -> left - right
       | "*"  -> left * right
