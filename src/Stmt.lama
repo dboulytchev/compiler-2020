@@ -10,21 +10,15 @@ import World;
 fun eval ([s, w], stmt) {
 	case stmt of
 		Read (x) -> 
-			case readWorld (w) of
-				[v, nw] ->
-					[s <- [x, v], nw]
+			case
+        readWorld (w) of [v, nw] ->	[s <- [x, v], nw]
 			esac
 
-		| Write (e) -> 
-			local expr = evalExpr (s, e);
-			[s, writeWorld (expr, w)]
+		| Write (e) -> [s, writeWorld (evalExpr (s, e), w)]
 
-		| Assn (x, e) -> 
-			local expr = evalExpr (s, e);
-			[s <- [x, expr], w]
+		| Assn (x, e) -> [s <- [x, evalExpr (s, e)], w]
 
-		| Seq (s1, s2) -> 
-			eval (eval ([s, w], s1), s2)
+		| Seq (s1, s2) -> eval (eval ([s, w], s1), s2)
 
 		| Skip -> [s, w]
 	esac
