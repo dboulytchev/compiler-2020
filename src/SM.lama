@@ -8,49 +8,26 @@ import Util;
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  local flatten = insns.deepFlatten;
-  local siz = flatten.size;
-  for local i; i := 0, i < siz, i := i+1 do
-    local popState = flatten.popStack;
-
-    flatten := popState.snd;
-    case popState.fst of
-      Binop (op) -> c[0] := binopOnStack(c[0], op)
-    | Const (const) -> c[0] := const : c[0]
-    | Read -> {
-                local valWorld = c[2].readWorld;
-                c[0] := valWorld.fst : c[0];
-                c[2] := valWorld.snd
-              }
-    | Write -> {
-                 local popState = c[0].popStack;
-                 c[0] := popState.snd;
-                 c[2] := writeWorld(popState.fst, c[2])
-               }
-    | LD (var) -> c[0] := pushStack(c[1](var), c[0])
-    | ST (var) -> {
-                    local popState = c[0].popStack;
-                    c[0] := popState.snd;
-                    c[1] := c[1] <- [var, popState.fst]
-                  }
-    esac
-  od;
-  return c
-}
-
-fun binopOnStack (stack, op) {
-  local popState1 = stack.popStack;
-  local popState2 = popState1.snd.popStack;
-  return applyBinop(op, popState2.fst, popState1.fst) : popState2.snd
-}
-
-fun pushStack (val, stack) {
-  return val : stack
-}
-
-fun popStack (val : stack) {
-  return [val, stack]
+fun eval ([stack, st, w], insns) {
+  case insns of
+    Binop (op) : insns1 -> case stack of
+                             y : stack1 -> case stack1 of
+                                             x : stack2 -> eval ([applyBinop (op, x, y) : stack2, st, w], insns1)
+                                           esac
+                           esac
+  | Const (const) : insns1 -> eval ([const : stack, st, w], insns1)
+  | Read : insns1 -> case w.readWorld of
+                       [val, w1] -> eval ([val : stack, st, w1], insns1)
+                     esac
+  | Write : insns1 -> case stack of
+                        z : stack1 -> eval ([stack1, st, writeWorld (z, w)], insns1)
+                      esac
+  | LD (var) : insns1 -> eval ([st (var) : stack, st, w], insns1)
+  | ST (var) : insns1 -> case stack of
+                           z : stack1 -> eval ([stack1, st <- [var, z], w], insns1)
+                         esac
+  | {} -> [stack, st, w]
+  esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -63,9 +40,9 @@ public fun evalSM (input, insns) {
 -- of stack machine instructions
 fun compileExpr (expr) {
   case expr of
-    Const (const) -> return {Const (const)}
-  | Var (var) -> return {LD (var)}
-  | Binop (op, expr1, expr2) -> return {compileExpr(expr1), compileExpr(expr2), Binop (op)}
+    Const (const) -> {Const (const)}
+  | Var (var) -> {LD (var)}
+  | Binop (op, expr1, expr2) -> {compileExpr(expr1), compileExpr(expr2), Binop (op)}.deepFlatten
   esac
 }
 
@@ -74,9 +51,9 @@ fun compileExpr (expr) {
 -- instructions.
 public fun compileSM (stmt) {
   case stmt of
-    Seq (s1, s2) -> return {compileSM(s1), compileSM(s2)}
-  | Read (var) -> return {Read, ST (var)}
-  | Write (expr) -> return {compileExpr(expr), Write}
-  | Assn (var, expr) -> return {compileExpr(expr), ST (var)}
+    Seq (s1, s2) -> {compileSM(s1), compileSM(s2)}.deepFlatten
+  | Read (var) -> {Read, ST (var)}
+  | Write (expr) -> {compileExpr(expr), Write}.deepFlatten
+  | Assn (var, expr) -> {compileExpr(expr), ST (var)}.deepFlatten
   esac
 }

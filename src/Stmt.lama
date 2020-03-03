@@ -7,27 +7,14 @@ import World;
 -- Evaluates a statement "stmt" in a configuration "c".
 -- A configuration is a pair of a state "s" and a world "w".
 -- Returns a final configuration (if any)
-fun eval (c, stmt) {
+fun eval ([st, w], stmt) {
   case stmt of
-    Seq (s1, s2) -> {
-                      local c1 = eval (c, s1);
-                      return eval (c1, s2)
-                    }
-  | Read (var) -> {
-                    local valWorld, st;
-                    valWorld := c.snd.readWorld;
-                    st := c.fst <- [var, valWorld.fst];
-                    return [st, valWorld.snd]
-                  }
-  | Write (expr) -> {
-                      local res = evalExpr (c.fst, expr);
-                      return [c.fst, writeWorld (res, c.snd)]
-                    }
-  | Assn (var, expr) -> {
-                          local res = evalExpr (c.fst, expr);
-                          local st = c.fst <- [var, res];
-                          return [st, c.snd]
-                        }
+    Seq (s1, s2) -> eval (eval ([st, w], s1), s2)
+  | Read (var) -> case w.readWorld of
+                    [val, w1] -> [st <- [var, val], w1]
+                  esac
+  | Write (expr) -> [st, writeWorld (evalExpr (st, expr), w)]
+  | Assn (var, expr) -> [st <- [var, evalExpr (st, expr)], w]
   esac
 }
 
