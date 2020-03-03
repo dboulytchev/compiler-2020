@@ -13,27 +13,25 @@ fun eval ([sk, st, w], insns) {
 		CONST (c) : ins -> eval ([c : sk, st, w], ins)
 
 		| READ : ins ->
-			case readWorld (w) of
-				[v, nw] -> eval ([v : sk, st, nw], ins)
+			case
+        readWorld (w) of	[v, nw] -> eval ([v : sk, st, nw], ins)
 			esac
 
 		| WRITE : ins ->
-			case sk of
-				head : t ->	eval ([t, st, writeWorld (head, w)], ins)
+			case
+        sk of	head : t ->	eval ([t, st, writeWorld (head, w)], ins)
 			esac
 
 		| ST (x) : ins -> 
-			case sk of
-				head : t -> eval ([t, st <- [x, head], w], ins)
+			case
+        sk of	head : t -> eval ([t, st <- [x, head], w], ins)
 			esac
 
 		| LD (x) : ins -> eval ([st (x) : sk, st, w], ins)
 
 		| BINOP (o) : ins -> 
-			case sk of
-				r : l : t -> 
-					-- local res = evalBinop (o, l, r);
-					eval ([evalBinop (o, l, r) : t, st, w], ins)
+			case
+        sk of	r : l : t -> eval ([evalBinop (o, l, r) : t, st, w], ins)
 			esac
 		| {} -> [sk, st, w]
 	esac
@@ -52,9 +50,9 @@ fun compileExpr (expr) {
 		Const (x) -> singleton (CONST (x))
 		| Var (x) -> singleton (LD (x))
 		| Binop (o, l, r) ->
-			local cl = compileExpr (l);
-			local cr = compileExpr (r);
-			cl +++ cr +++ singleton (BINOP (o))
+			-- local cl = compileExpr (l);
+			-- local cr = compileExpr (r);
+			(compileExpr(l)) +++ (compileExpr (r)) +++ singleton (BINOP (o))
 	esac
 }
 
