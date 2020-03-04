@@ -3,6 +3,23 @@
 import List;
 import State;
 
+public fun sym2fun (sym) {
+  case sym of
+    "+"  -> infix  +
+  | "-"  -> infix  -
+  | "*"  -> infix  *
+  | "/"  -> infix  /
+  | "%"  -> infix  %
+  | "==" -> infix ==
+  | "!=" -> infix != 
+  | "<"  -> infix  <
+  | "<=" -> infix <=
+  | ">"  -> infix  >
+  | ">=" -> infix >=
+  | "&&" -> infix &&
+  | "!!" -> infix !!
+  esac
+}
 
 -- The evaluator itself: takes a state and an expression,
 -- returns integer value
@@ -14,5 +31,9 @@ import State;
 --        Binop (string, expr, expr)
 
 public fun evalExpr (st, expr) {
-  failure ("evalExpr not implemented\n")
+  case expr of
+    Var (a)            -> st (a)
+  | Const (a)          -> a
+  | Binop (op,  a, b) -> (sym2fun (op)) (evalExpr (st, a), evalExpr (st, b))
+  esac
 }

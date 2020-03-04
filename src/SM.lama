@@ -55,6 +55,26 @@ fun fromLabel (env, lab) {
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
 fun eval (env, c, insns) {
+  (*fun evalInternal (c@[stack, state, world], instruction) {
+    case instruction of
+      LD    (x)        -> [state (x) : stack, state, world]
+    | ST    (x)        -> [tl (stack), state <- [x, hd (stack)], world]
+    | READ             -> local ret = readWorld (world);
+                          [ret[0] : stack, state, ret[1]]
+    | WRITE            -> [tl (stack), state, writeWorld (hd (stack), world)]
+    | CONST (x)        -> [x : stack, state, world]
+    | BINOP (op)       -> [(fun (a : b : last) { (sym2fun (op)) (b, a) : last }) (stack), state, world]
+    esac
+  }
+
+  fun makeStep (context, instructions) {
+    case instructions of
+      i : is -> makeStep (evalInternal (context, i), is)
+    | {} -> context
+    esac
+  }
+
+  makeStep (c, deepFlatten (insns))*)
   failure ("SM eval not implemented\n")
 }
 
@@ -97,12 +117,25 @@ fun genLabels (env, n) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+    Var   (a)        -> LD    (a) : {}
+  | Const (a)        -> CONST (a) : {}
+  | Binop (op, a, b) -> {compileExpr (a), compileExpr (b), BINOP (op)}
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  fun compileSMinternal (stmt) {
+    case stmt of
+      Seq   (a, b)  -> {compileSM (a), compileSM (b)}
+    | Read  (a)     -> {READ, ST (a)}
+    | Write (e)     -> {compileExpr (e), WRITE}
+    | Assn  (a, e)  -> {compileExpr (e), ST (a)}
+    | _             -> {}
+    esac
+  }
+  deepFlatten (compileSMinternal (stmt))
 }
