@@ -9,7 +9,50 @@ import Util;
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
 fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+  fun evalBinop ([a : b : stack, state, world], operation) {
+    [operation (b, a) : stack, state, world]
+  }
+
+  fun tail (a : as) {
+    as
+  }
+
+  fun head (a : as) {
+    a
+  }
+
+  fun evalInternal (c@[stack, state, world], instruction) {
+    case instruction of
+      Load  (x)          -> [state (x) : stack, state, world]
+    | Store (x)          -> [tail (stack), state <- [x, head (stack)], world]
+    | Read               -> local ret = readWorld (world);
+                            [ret[0] : stack, state, ret[1]]
+    | Write              -> [tail (stack), state, writeWorld (head (stack), world)]
+    | Const (x)          -> [x : stack, state, world]
+    | Binop ("+",  a, b) -> evalBinop(c, fun (a, b) { a +  b })
+    | Binop ("-",  a, b) -> evalBinop(c, fun (a, b) { a -  b })
+    | Binop ("*",  a, b) -> evalBinop(c, fun (a, b) { a *  b })
+    | Binop ("/",  a, b) -> evalBinop(c, fun (a, b) { a /  b })
+    | Binop ("%",  a, b) -> evalBinop(c, fun (a, b) { a %  b })
+    | Binop ("==", a, b) -> evalBinop(c, fun (a, b) { a == b })
+    | Binop ("!=", a, b) -> evalBinop(c, fun (a, b) { a != b })
+    | Binop ("<",  a, b) -> evalBinop(c, fun (a, b) { a <  b })
+    | Binop ("<=", a, b) -> evalBinop(c, fun (a, b) { a <= b })
+    | Binop (">",  a, b) -> evalBinop(c, fun (a, b) { a >  b })
+    | Binop (">=", a, b) -> evalBinop(c, fun (a, b) { a >= b })
+    | Binop ("&&", a, b) -> evalBinop(c, fun (a, b) { a && b })
+    | Binop ("!!", a, b) -> evalBinop(c, fun (a, b) { a !! b })
+    esac
+  }
+
+  fun makeStep (context, instructions) {
+    case instructions of
+      i : is -> makeStep (evalInternal (context, i), is)
+    | {} -> context
+    esac
+  }
+
+  makeStep (c, deepFlatten (insns))
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -21,12 +64,34 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+    Var (a)            -> Load (a) : {}
+  | Const (a)          -> Const (a) : {}
+  | Binop ("+",  a, b) -> {compileExpr (a), compileExpr (b), Binop ("+",  a, b)}
+  | Binop ("-",  a, b) -> {compileExpr (a), compileExpr (b), Binop ("-",  a, b)}
+  | Binop ("*",  a, b) -> {compileExpr (a), compileExpr (b), Binop ("*",  a, b)}
+  | Binop ("/",  a, b) -> {compileExpr (a), compileExpr (b), Binop ("/",  a, b)}
+  | Binop ("%",  a, b) -> {compileExpr (a), compileExpr (b), Binop ("%",  a, b)}
+  | Binop ("==", a, b) -> {compileExpr (a), compileExpr (b), Binop ("==", a, b)}
+  | Binop ("!=", a, b) -> {compileExpr (a), compileExpr (b), Binop ("!=", a, b)}
+  | Binop ("<",  a, b) -> {compileExpr (a), compileExpr (b), Binop ("<",  a, b)}
+  | Binop ("<=", a, b) -> {compileExpr (a), compileExpr (b), Binop ("<=", a, b)}
+  | Binop (">",  a, b) -> {compileExpr (a), compileExpr (b), Binop (">",  a, b)}
+  | Binop (">=", a, b) -> {compileExpr (a), compileExpr (b), Binop (">=", a, b)}
+  | Binop ("&&", a, b) -> {compileExpr (a), compileExpr (b), Binop ("&&", a, b)}
+  | Binop ("!!", a, b) -> {compileExpr (a), compileExpr (b), Binop ("!!", a, b)}
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  case stmt of
+    Seq (a, b)  -> {compileSM (a), compileSM (b)}
+  | Read (a)    -> {Read, Store (a)}
+  | Write (e)   -> {compileExpr (e), Write}
+  | Assn (a, e) -> {compileExpr (e), Store (a)}
+  | _           -> {}
+  esac
 }
