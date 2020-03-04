@@ -37,10 +37,10 @@ public fun evalSM (input, insns) {
 -- of stack machine instructions
 fun compileExpr (expr) {
   case expr of
-      Const (c)        -> singleton(CONST (c))
-    | Var   (x)        -> singleton(LD (x))
-    | Binop (op, l, r) -> flatten({ compileExpr(l), compileExpr(r), singleton(BINOP (op)) })
-  esac
+      Const (c)        -> CONST (c)
+    | Var   (x)        -> LD (x)
+    | Binop (op, l, r) -> { compileExpr(l), compileExpr(r), BINOP (op) }
+  esac.deepFlatten
 }
 
 -- Compiles a statement into a stack machine code.
@@ -50,8 +50,8 @@ public fun compileSM (stmt) {
   case stmt of
       Skip         -> {}
     | Seq   (l, r) -> { compileSM(l), compileSM(r) }
-    | Read  (x)    -> { singleton(READ), singleton(ST (x)) }
-    | Write (e)    -> { compileExpr(e), singleton(WRITE) }
-    | Assn  (x, e) -> { compileExpr(e), singleton(ST (x)) }
-  esac.flatten
+    | Read  (x)    -> { READ, ST (x) }
+    | Write (e)    -> { compileExpr(e), WRITE }
+    | Assn  (x, e) -> { compileExpr(e), ST (x) }
+  esac.deepFlatten
 }
