@@ -7,27 +7,27 @@ import State;
 -- The evaluator itself: takes a state and an expression,
 -- returns integer value
 public fun evalExpr (st, expr) {
-	case expr of
-		Const (x) -> x
-		| Var (x) -> st (x)
-		| Binop (o, l, r) ->  evalBinop (o, evalExpr (st, l), evalExpr (st, r))
-	esac
+  case expr of
+    Const (x) -> x
+  | Var (x) -> st (x)
+  | Binop (o, l, r) ->  evalBinop (o, evalExpr (st, l), evalExpr (st, r))
+  esac
 }
 
 public fun evalBinop (o, l, r) {
-	case o of
-		"+"    -> l + r
-		| "-"  -> l - r
-		| "*"  -> l * r
-		| "/"  -> l / r
-		| "%"  -> l % r
-		| "==" -> l == r
-		| "!=" -> l != r
-		| ">"  -> l > r
-		| ">=" -> l >= r
-		| "<"  -> l < r
-		| "<=" -> l <= r
-		| "!!" -> l !! r
-		| "&&" -> l && r
-	esac
+  case o of
+    "+"    -> l + r
+  | "-"  -> l - r
+  | "*"  -> l * r
+  | "/"  -> l / r
+  | "%"  -> l % r
+  | "==" -> l == r
+  | "!=" -> l != r
+  | ">"  -> l > r
+  | ">=" -> l >= r
+  | "<"  -> l < r
+  | "<=" -> l <= r
+  | "!!" -> l !! r
+  | "&&" -> l && r
+  esac
 } 
