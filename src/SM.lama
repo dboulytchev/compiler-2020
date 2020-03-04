@@ -8,8 +8,30 @@ import Util;
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (c @ [stack, state, w], insns) {
+  printf("SM_eval: %s %s\n", c.string, insns.string);
+  case insns of
+      h : t -> case h of
+                     CONST(n)  -> [n:stack, state, w]
+                   | BINOP(op) -> case stack of
+                                      r:l:sttail -> [op.applyInfixOp(l, r):sttail, state, w]
+                                    | _          -> failure("Not enough values on stack for BINOP %s in statement %s\n", op.string, insns.string)
+                                  esac
+                   | LD(x)     -> [state(x):stack, state, w]
+                   | ST(x)     -> case stack of
+                                      h:sttail -> [sttail, state <- [x, h], w]
+                                    | _        -> failure("Not enough values on stack for ST in statement %s\n", insns.string)
+                                  esac
+                   | READ      -> case readWorld(w) of
+                                      [v, ww]  -> [v:stack, state, ww]
+                                  esac
+                   | WRITE     -> case stack of
+                                      h:sttail -> [sttail, state, writeWorld(h, w)]
+                                    | _        -> failure("Not enough values on stack for WRITE in statement %s\n", insns.string)
+                                  esac
+               esac . eval(t)
+    | _ -> c
+  esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -21,12 +43,23 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  printf("compileExpr: %s\n", expr.string);
+  case expr of
+      Const(c)       -> singleton(CONST(c))
+    | Var(x)         -> singleton(LD(x))
+    | Binop(op, l, r)-> flatten({compileExpr(l), compileExpr(r), singleton(BINOP(op))})
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  printf("compileSM: %s\n", stmt.string);
+  case stmt of
+      Assn(x, v)  -> flatten({compileExpr(v), singleton(ST(x))})
+    | Read(x)     -> {READ, ST(x)}
+    | Write(v)    -> flatten({compileExpr(v), singleton(WRITE)})
+    | Seq(s1, s2) -> flatten({compileSM(s1), compileSM(s2)})
+  esac
 }
