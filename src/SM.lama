@@ -8,8 +8,17 @@ import Util;
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (conf, insns) {
+  foldr(fun (c@[stack, state, world], instr) {
+    case [stack, instr] of
+      [x : y : s, Binop(oprStr)] -> [stringToOpr(oprStr)(y, x) : s, state, world]
+    | [s        , Const(n)     ] -> [n : s, state, world]
+    | [s        , Read         ] -> case readWorld(world) of [n, world_] -> [n : s, state, world_] esac
+    | [z : s    , Write        ] -> [s, state, writeWorld(z, world)]
+    | [s        , LD(var)      ] -> [state(var) : s, state, world]
+    | [z : s    , ST(var)      ] -> [s, state <- [var, z], world]
+    esac
+  }, conf, insns)
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -21,12 +30,22 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+    Const(n) -> Const(n) : {}
+  | Var(x)   -> LD(x) : {}
+  | Binop(oprStr, l, r) -> Binop(oprStr) : (compileExpr(r) +++ compileExpr(l))
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  case stmt of
+    Skip -> {}
+  | Assn(varStr, expr) -> ST(varStr) : compileExpr(expr)
+  | Read(varStr) -> {ST(varStr), Read}
+  | Write(expr)  -> Write : compileExpr(expr)
+  | Seq(s1, s2)  -> compileSM(s2) +++ compileSM(s1)
+  esac
 }
