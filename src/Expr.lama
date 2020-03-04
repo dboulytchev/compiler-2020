@@ -28,8 +28,8 @@ public fun evalBinary (op, left, right) {
   | ">=" -> left >= right
   | "==" -> left == right
   | "!=" -> left != right
-  | "&&" -> left && right
   | "!!" -> left !! right
+  | "&&" -> left && right
   esac
 }
 
