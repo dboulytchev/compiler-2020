@@ -8,9 +8,9 @@ import Util;
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (config @ [stack, state, world], insns) {
-  if insns then
-    case insns.hd of
+fun eval (config, insns) {
+  fun ([stack, state, world], insn) {
+    case insn of
         CONST (n)  -> [n : stack, state, world]
       | BINOP (op) -> case stack of
                         r : l : tail -> [op.evalBinop(l, r) : tail, state, world]
@@ -18,13 +18,11 @@ fun eval (config @ [stack, state, world], insns) {
       | LD (x)     -> [state(x) : stack, state, world]
       | ST (x)     -> [stack.tl, state <- [x, stack.hd], world]
       | READ       -> case readWorld(world) of
-                        [v, newworld] -> [v : stack, state, newworld]
+                        [n, newworld] -> [n : stack, state, newworld]
                       esac
       | WRITE      -> [stack.tl, state, writeWorld(stack.hd, world)]
-    esac.eval(insns.tl)
-  else
-    config
-  fi
+    esac
+  }.foldl(config, insns)
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -37,21 +35,24 @@ public fun evalSM (input, insns) {
 -- of stack machine instructions
 fun compileExpr (expr) {
   case expr of
-      Const (c)        -> CONST (c)
-    | Var   (x)        -> LD (x)
+      Const (c)        -> { CONST (c) }
+    | Var   (x)        -> { LD (x) }
     | Binop (op, l, r) -> { compileExpr(l), compileExpr(r), BINOP (op) }
-  esac.deepFlatten
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  case stmt of
-      Skip         -> {}
-    | Seq   (l, r) -> { compileSM(l), compileSM(r) }
-    | Read  (x)    -> { READ, ST (x) }
-    | Write (e)    -> { compileExpr(e), WRITE }
-    | Assn  (x, e) -> { compileExpr(e), ST (x) }
-  esac.deepFlatten
+  fun compile (stmt) {
+    case stmt of
+        Skip         -> {}
+      | Seq   (l, r) -> { compile(l), compile(r) }
+      | Read  (x)    -> { READ, ST (x) }
+      | Write (e)    -> { compileExpr(e), WRITE }
+      | Assn  (x, e) -> { compileExpr(e), ST (x) }
+    esac
+  }
+  stmt.compile.deepFlatten
 }
