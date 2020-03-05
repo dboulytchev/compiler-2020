@@ -8,25 +8,73 @@ import Util;
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval ([stack, state, world], command:insns, level) {
+  fun pop(list, num) {
+    if num == 0 then
+      list
+    else
+      case list of
+        first:rest -> [first, pop(rest, num - 1)]
+      | {only} -> [only, {}]
+      | _ -> failure ("bad list\n")
+      esac
+    fi
+  }
+
+  case command of
+    SMBinop (op) -> local firstSecondAndRest = pop(stack, 2) ;
+                    local first = firstSecondAndRest[0] ;
+                    local second = firstSecondAndRest[1][0] ;
+                    stack := evalExpr (state, Binop (op, Const (second), Const (first))) : firstSecondAndRest[1][1]
+  | SMConst (value) -> stack := value:stack
+  | SMRead -> local valueAndWorld = readWorld(world);
+              stack := valueAndWorld[0]:stack;
+              world := valueAndWorld[1]
+  | SMWrite -> local elementAndRest = pop (stack, 1) ;
+               local element = elementAndRest[0] ;
+               stack := elementAndRest[1] ;
+               world := writeWorld (element, world)
+  | SMLd (var) -> stack := state (var):stack
+  | SMSt (var) -> local elementAndRest = pop (stack, 1) ;
+                  local element = elementAndRest[0] ;
+                  stack := elementAndRest[1] ;
+                  state := state <- [var, element]
+  | _ -> failure ("invalid stack command: %s\n", command.string)
+  esac ;
+
+  case insns of
+    {} -> [stack, state, world]
+  | _:_ -> eval([stack, state, world], insns, level + 1)
+  | _ -> failure ("bad stack\n")
+  esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
 public fun evalSM (input, insns) {
-  eval ([{}, emptyState, createWorld (input)], insns)[2].getOutput
+  eval ([{}, emptyState, createWorld (input)], insns, 0)[2].getOutput
 }
 
 -- Compiles an expression into a stack machine code.
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+    Var (var) -> SMLd (var):{}
+  | Const (value) -> SMConst (value):{}
+  | Binop (op, lhs, rhs) -> {compileExpr(lhs), compileExpr(rhs), SMBinop (op)}
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  case stmt of
+    Skip -> {}
+  | Assn (var, expr) -> {compileExpr(expr), SMSt(var)}
+  | Read (var) -> {SMRead, SMSt (var)}
+  | Write (expr) -> {compileExpr(expr), SMWrite}
+  | Seq (lhs, rhs) -> {compileSM(lhs), compileSM(rhs)}
+  | _ -> failure ("invalid statement: %s\n", stmt.string)
+  esac.deepFlatten
 }
