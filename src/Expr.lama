@@ -28,6 +28,6 @@ public fun evalExpr (st, expr) {
   case expr of
       Const(x)        -> x
     | Var(x)          -> st(x)
-    | Binop(op, l, r) -> op.applyInfixOp(l, r)
+    | Binop(op, l, r) -> op.applyInfixOp(evalExpr(st, l), evalExpr(st, r))
   esac
 }
