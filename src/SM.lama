@@ -9,36 +9,28 @@ import Util;
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
 fun eval ([stack, state, world], command:insns, level) {
-  fun pop(list, num) {
-    if num == 0 then
-      list
-    else
-      case list of
-        first:rest -> [first, pop(rest, num - 1)]
-      | {only} -> [only, {}]
-      | _ -> failure ("bad list\n")
-      esac
-    fi
-  }
-
   case command of
-    SMBinop (op) -> local firstSecondAndRest = pop(stack, 2) ;
-                    local first = firstSecondAndRest[0] ;
-                    local second = firstSecondAndRest[1][0] ;
-                    stack := evalExpr (state, Binop (op, Const (second), Const (first))) : firstSecondAndRest[1][1]
+    SMBinop (op) -> case stack of
+                      first:second:newStack ->
+                        stack := evalExpr (state, Binop (op, Const (second), Const (first))) : newStack
+                    | _ -> failure ("pop from empty stack\n")
+                    esac
   | SMConst (value) -> stack := value:stack
-  | SMRead -> local valueAndWorld = readWorld(world);
-              stack := valueAndWorld[0]:stack;
-              world := valueAndWorld[1]
-  | SMWrite -> local elementAndRest = pop (stack, 1) ;
-               local element = elementAndRest[0] ;
-               stack := elementAndRest[1] ;
-               world := writeWorld (element, world)
+  | SMRead -> case readWorld(world) of
+                [value, newWorld] -> stack := value:stack ;
+                                     world := newWorld
+              esac
+  | SMWrite -> case stack of
+                 element:newStack -> stack := newStack ;
+                                     world := writeWorld (element, world)
+               | _ -> failure ("pop from empty stack\n")
+               esac
   | SMLd (var) -> stack := state (var):stack
-  | SMSt (var) -> local elementAndRest = pop (stack, 1) ;
-                  local element = elementAndRest[0] ;
-                  stack := elementAndRest[1] ;
-                  state := state <- [var, element]
+  | SMSt (var) -> case stack of
+                    element:newStack -> stack := newStack ;
+                                        state := state <- [var, element]
+                  | _ -> failure ("pop from empty stack\n")
+                  esac
   | _ -> failure ("invalid stack command: %s\n", command.string)
   esac ;
 

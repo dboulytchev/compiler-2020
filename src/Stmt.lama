@@ -11,8 +11,9 @@ fun eval ([state, world], stmt) {
   case stmt of
     Skip -> [state, world]
   | Assn (var, expr) -> [state <- [var, evalExpr (state, expr)], world]
-  | Read (var) -> local valAndWorld = readWorld (world) ;
-                  [state <- [var, valAndWorld[0]], valAndWorld[1]]
+  | Read (var) -> case readWorld (world) of
+                    [value, newWorld] -> [state <- [var, value], newWorld]
+                  esac
   | Write (expr) -> [state, writeWorld (evalExpr (state, expr), world)]
   | Seq (lhs, rhs) -> eval (eval ([state, world], lhs), rhs)
   | _ -> failure ("invalid statement: %s\n", stmt.string)
