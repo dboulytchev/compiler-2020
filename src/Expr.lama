@@ -3,6 +3,23 @@
 import List;
 import State;
 
+public fun sym2fun (sym) {
+  case sym of
+    "+"  -> infix  +
+  | "-"  -> infix  -
+  | "*"  -> infix  *
+  | "/"  -> infix  /
+  | "%"  -> infix  %
+  | "==" -> infix ==
+  | "!=" -> infix != 
+  | "<"  -> infix  <
+  | "<=" -> infix <=
+  | ">"  -> infix  >
+  | ">=" -> infix >=
+  | "&&" -> infix &&
+  | "!!" -> infix !!
+  esac
+}
 
 -- The evaluator itself: takes a state and an expression,
 -- returns integer value
@@ -10,18 +27,6 @@ public fun evalExpr (st, expr) {
   case expr of
     Var (a)            -> st (a)
   | Const (a)          -> a
-  | Binop ("+",  a, b) -> evalExpr (st, a) +  evalExpr (st, b)
-  | Binop ("-",  a, b) -> evalExpr (st, a) -  evalExpr (st, b)
-  | Binop ("*",  a, b) -> evalExpr (st, a) *  evalExpr (st, b)
-  | Binop ("/",  a, b) -> evalExpr (st, a) /  evalExpr (st, b)
-  | Binop ("%",  a, b) -> evalExpr (st, a) %  evalExpr (st, b)
-  | Binop ("==", a, b) -> evalExpr (st, a) == evalExpr (st, b)
-  | Binop ("!=", a, b) -> evalExpr (st, a) != evalExpr (st, b)
-  | Binop ("<",  a, b) -> evalExpr (st, a) <  evalExpr (st, b)
-  | Binop ("<=", a, b) -> evalExpr (st, a) <= evalExpr (st, b)
-  | Binop (">",  a, b) -> evalExpr (st, a) >  evalExpr (st, b)
-  | Binop (">=", a, b) -> evalExpr (st, a) >= evalExpr (st, b)
-  | Binop ("&&", a, b) -> evalExpr (st, a) && evalExpr (st, b)
-  | Binop ("!!", a, b) -> evalExpr (st, a) !! evalExpr (st, b)
+  | Binop (op,  a, b) -> (sym2fun (op)) (evalExpr (st, a), evalExpr (st, b))
   esac
 }
