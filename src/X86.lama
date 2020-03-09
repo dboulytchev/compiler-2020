@@ -331,10 +331,6 @@ public fun compile (env, code) {
                                             Binop("^", edx, edx), Binop("cmp", x, edx), Set(suffix("!="), "%dl"),
                                             Binop(op, edx, eax), Mov(eax, y)}]
                       esac
-                  | None ->
-                      case op of
-                        _ -> 42
-                      esac
                   esac
                 esac
             esac
