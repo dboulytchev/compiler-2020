@@ -286,7 +286,38 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
+	| Store (v) -> 
+            case env.pop of
+              [s, env] -> local newEnv = env.addGlobal (v); [newEnv, code : move (s, newEnv.loc (v))]
+            esac
+        | Load  (v) -> 
+            case env.allocate of
+              [s, env] -> local newEnv = env.addGlobal (v); [newEnv, code : move (newEnv.loc (v), s)]
+            esac
+        | Const (v) ->
+            [env.push (L (v)), code]
+        | Binop (op, a, b) ->
+            case env.pop2 of
+              [x, y, env] ->
+                fun contains (l, op) {
+                  case l of
+                    {}        -> false
+                  | o : last -> if compare (o, op) == 0 then true else last.contains (op) fi
+                  esac
+                }
+                case env.allocate of
+                  [s, env] -> [env, code :
+                    if {"/", "%"}.contains (op) 
+                    then 
+                      Push (ebx) : move (y, eax) : Binop ("^", edx, edx) : move (x, ebx) : IDiv (ebx) : Pop (ebx) : move (if compare (op, "/") == 0 then eax else edx fi, s)
+                    else
+                      if {"*", "+", "-", "&&", "!!"}.contains (op) 
+                        then move (y, eax) : Binop (op, x, eax) : move (eax, s)
+                        else move (y, eax) : Binop ("cmp", x, eax) : Set (suffix (op), "%al") : Binop ("&&", L (1), eax) : move (eax, s) 
+                      fi
+                    fi]
+                esac
+            esac
         esac
       }, [env, {}], code)
   }

@@ -13,9 +13,9 @@ fun eval (c, insns) {
     case instruction of
       Load  (x)         -> [state (x) : stack, state, world]
     | Store (x)         -> [tl (stack), state <- [x, hd (stack)], world]
-    | Read              -> local ret = readWorld (world);
+    | READ              -> local ret = readWorld (world);
                            [ret[0] : stack, state, ret[1]]
-    | Write             -> [tl (stack), state, writeWorld (hd (stack), world)]
+    | WRITE             -> [tl (stack), state, writeWorld (hd (stack), world)]
     | Const (x)         -> [x : stack, state, world]
 
     | Binop (op,  a, b) -> [(fun (a : b : last) { (sym2fun (op)) (b, a) : last }) (stack), state, world]
@@ -29,7 +29,7 @@ fun eval (c, insns) {
     esac
   }
 
-  makeStep (c, deepFlatten (insns))
+  makeStep (c, insns)
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -52,11 +52,14 @@ fun compileExpr (expr) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  case stmt of
-    Seq (a, b)  -> {compileSM (a), compileSM (b)}
-  | Read (a)    -> {Read, Store (a)}
-  | Write (e)   -> {compileExpr (e), Write}
-  | Assn (a, e) -> {compileExpr (e), Store (a)}
-  | _           -> {}
-  esac
+  fun compileSMinternal (stmt) {
+    case stmt of
+      Seq (a, b)  -> {compileSM (a), compileSM (b)}
+    | Read (a)    -> {READ, Store (a)}
+    | Write (e)   -> {compileExpr (e), WRITE}
+    | Assn (a, e) -> {compileExpr (e), Store (a)}
+    | _           -> {}
+    esac
+  }
+  deepFlatten (compileSMinternal (stmt))
 }
