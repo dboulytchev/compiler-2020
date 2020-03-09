@@ -4,8 +4,31 @@ import List;
 import State;
 
 
+public fun callBinop (op, left, right) {
+ 
+  case op of 
+    "+" -> left + right
+  | "-" -> left - right
+  | "*" -> left * right
+  | "/" -> left / right
+  | "%" -> left % right
+  | "<" -> left < right
+  | "<=" -> left <= right
+  | ">" -> left > right
+  | ">=" -> left >= right
+  | "==" -> left == right
+  | "!=" -> left != right
+  | "&&" -> left && right
+  | "!!" -> left !! right
+  esac
+}
+
 -- The evaluator itself: takes a state and an expression,
 -- returns integer value
 public fun evalExpr (st, expr) {
-  failure ("evalExpr not implemented\n")
+  case expr of 
+    Const(x) -> x
+  | Var(x) -> st(x)
+  | Binop(op, l, r) -> callBinop(op, evalExpr(st, l), evalExpr(st, r))
+  esac
 }
