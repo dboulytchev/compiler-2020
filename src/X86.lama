@@ -278,19 +278,45 @@ fun compile (env, code) {
     foldl (
       fun ([env, code], i) {           
         case i of
-          READ ->
-            case env.allocate of
-              [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
+          READ           -> case env.allocate of
+              [s, env]   -> [env, code : {Call ("Lread"), Mov (eax, s)}]
             esac             
-        | WRITE ->
-            case env.pop of
-              [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
+        | WRITE          -> case env.pop of
+              [s, env]   -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | CONST (val) -> case env.allocate of
+        | CONST (val)    -> case env.allocate of
                 [s, env] -> [env, code : singleton(Mov(L(val), s))]
                 esac
-        | LD (val) ->
-        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
+        | LD    (val)    -> case env.addGlobal(val).allocate of
+                [s, env] -> [env, code : move(env.loc(val), s)]
+                esac
+        | ST    (val)    -> case env.addGlobal(val).pop of
+                [s, env] -> [env, code : move(s, env.loc(val))]
+                esac
+        | BINOP (op)     -> case env.pop2 of
+                                 [first, second, env] ->
+                                 case env.allocate of
+                                      [s, env] -> [env, code :
+                                      case op of
+                                            "+"  -> {Mov(second, eax), Binop(op, first, eax), Mov(eax, s)}
+                                          | "-"  -> {Mov(second, eax), Binop(op, first, eax), Mov(eax, s)}
+                                          | "*"  -> {Mov(second, eax), Binop(op, first, eax), Mov(eax, s)}
+                                          | "/"  -> {Mov(second, eax), Cltd, IDiv(first), Mov(eax, s)}
+                                          | "%"  -> {Mov(second, eax), Cltd, IDiv(first), Mov(edx, s)}
+                                          | "<"  -> {Mov(second, eax), Binop("^", eax, eax), Binop("cmp", first, edx), Set(suffix(op), "%al"), Mov(eax, s)}
+                                          | "<=" -> {Mov(second, eax), Binop("^", eax, eax), Binop("cmp", first, edx), Set(suffix(op), "%al"), Mov(eax, s)}
+                                          | ">" -> {Mov(second, eax), Binop("^", eax, eax), Binop("cmp", first, edx), Set(suffix(op), "%al"), Mov(eax, s)}
+                                          | ">=" -> {Mov(second, eax), Binop("^", eax, eax), Binop("cmp", first, edx), Set(suffix(op), "%al"), Mov(eax, s)}
+                                          | "==" -> {Mov(second, eax), Binop("^", eax, eax), Binop("cmp", first, edx), Set(suffix(op), "%al"), Mov(eax, s)}
+                                          | "!=" -> {Mov(second, eax), Binop("^", eax, eax), Binop("cmp", first, edx), Set(suffix(op), "%al"), Mov(eax, s)}
+                                          | "&&" -> {Mov(second, eax), Binop(op, first, eax), Mov(eax, s)}
+                                          | "!!" -> {Mov(second, eax), Binop(op, first, eax), Mov(eax, s)}
+                                      esac
+                                      ]
+                                 esac
+                            esac
+        | _              -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
+
         esac
       }, [env, {}], code)
   }
