@@ -293,7 +293,7 @@ fun compile (env, code) {
 
     foldl (
       fun ([env, code], i) {
-        case i of
+      case i of
           READ ->
             case env.allocate of
               [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
