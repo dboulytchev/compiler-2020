@@ -286,6 +286,10 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
+        | CONST (val) -> case env.allocate of
+                [s, env] -> [env, code : singleton(Mov(L(val), s))]
+                esac
+        | LD (val) ->
         | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
