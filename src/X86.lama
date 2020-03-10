@@ -303,12 +303,12 @@ fun compile (env, code) {
                                           | "*"  -> {Mov(second, eax), Binop(op, first, eax), Mov(eax, s)}
                                           | "/"  -> {Mov(second, eax), Cltd, IDiv(first), Mov(eax, s)}
                                           | "%"  -> {Mov(second, eax), Cltd, IDiv(first), Mov(edx, s)}
-                                          | "<"  -> {Mov(second, eax), Binop("^", eax, eax), Binop("cmp", first, edx), Set(suffix(op), "%al"), Mov(eax, s)}
-                                          | "<=" -> {Mov(second, eax), Binop("^", eax, eax), Binop("cmp", first, edx), Set(suffix(op), "%al"), Mov(eax, s)}
-                                          | ">" -> {Mov(second, eax), Binop("^", eax, eax), Binop("cmp", first, edx), Set(suffix(op), "%al"), Mov(eax, s)}
-                                          | ">=" -> {Mov(second, eax), Binop("^", eax, eax), Binop("cmp", first, edx), Set(suffix(op), "%al"), Mov(eax, s)}
-                                          | "==" -> {Mov(second, eax), Binop("^", eax, eax), Binop("cmp", first, edx), Set(suffix(op), "%al"), Mov(eax, s)}
-                                          | "!=" -> {Mov(second, eax), Binop("^", eax, eax), Binop("cmp", first, edx), Set(suffix(op), "%al"), Mov(eax, s)}
+                                          | "<"  -> {Mov(second, eax), Binop("^", edx, edx), Binop("cmp", first, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
+                                          | "<=" -> {Mov(second, eax), Binop("^", edx, edx), Binop("cmp", first, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
+                                          | ">"  -> {Mov(second, eax), Binop("^", edx, edx), Binop("cmp", first, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
+                                          | ">=" -> {Mov(second, eax), Binop("^", edx, edx), Binop("cmp", first, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
+                                          | "==" -> {Mov(second, eax), Binop("^", edx, edx), Binop("cmp", first, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
+                                          | "!=" -> {Mov(second, eax), Binop("^", edx, edx), Binop("cmp", first, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
                                           | "&&" -> {Mov(second, eax), Binop(op, first, eax), Mov(eax, s)}
                                           | "!!" -> {Mov(second, eax), Binop(op, first, eax), Mov(eax, s)}
                                       esac
