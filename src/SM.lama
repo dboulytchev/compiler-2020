@@ -8,25 +8,62 @@ import Util;
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval([stack, st, w], insns) {
+	case insns of
+    {} -> [stack, st, w]
+  | CONST(c) : ins -> eval([c : stack, st, w], ins)
+  | BINOP(op) : ins -> 
+    case stack of
+      r : l : t -> eval([evalBinop(op, l, r) : t, st, w], ins)
+    esac
+  | READ : ins ->
+    case readWorld(w) of
+      [v, nw] -> eval([v : stack, st, nw], ins)
+    esac
+  | WRITE : ins ->
+    case stack of
+      head : t -> eval([t, st, writeWorld(head, w)], ins)
+    esac
+  | ST(x) : ins -> 
+    case stack of
+      head : t -> eval([t, st <- [x, head], w], ins)
+    esac
+  | LD(x) : ins -> eval([st(x) : stack, st, w], ins)
+	esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
-public fun evalSM (input, insns) {
-  eval ([{}, emptyState, createWorld (input)], insns)[2].getOutput
+public fun evalSM(input, insns) {
+  eval([{}, emptyState, createWorld(input)], insns)[2].getOutput
 }
 
 -- Compiles an expression into a stack machine code.
--- Takes an expression, returns a list (of, possibly, lists)
+-- Takes an expression, returns a list(of, possibly, lists)
 -- of stack machine instructions
-fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+fun compileExpr(expr) {
+	case expr of
+    Const(x) -> singleton(CONST(x))
+  | Var(x) -> singleton(LD(x))
+  | Binop(op, l, r) ->
+    {compileExpr(l), compileExpr(r), singleton(BINOP(op))}.deepFlatten
+	esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
-public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+public fun compileSM(stmt) {
+  stmt.compileNestedSM.deepFlatten
+}
+
+public fun compileNestedSM(stmt) {
+	case stmt of
+    Read(x) -> {READ, ST(x)}
+  | Write(e) -> 
+    {compileExpr(e), singleton(WRITE)}
+  | Assn(x, e) -> 
+    {compileExpr(e), singleton(ST(x))}
+  | Seq(s1, s2) -> 
+    {compileSM(s1), compileSM(s2)}
+	esac
 }
