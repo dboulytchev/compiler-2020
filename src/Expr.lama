@@ -7,5 +7,24 @@ import State;
 -- The evaluator itself: takes a state and an expression,
 -- returns integer value
 public fun evalExpr (st, expr) {
-  failure ("evalExpr not implemented\n")
+  case expr of
+    Var (var) -> st (var)
+  | Const (value) -> value
+
+  | Binop ("+", lhs, rhs) -> evalExpr (st, lhs) + evalExpr (st, rhs)
+  | Binop ("-", lhs, rhs) -> evalExpr (st, lhs) - evalExpr (st, rhs)
+  | Binop ("*", lhs, rhs) -> evalExpr (st, lhs) * evalExpr (st, rhs)
+  | Binop ("/", lhs, rhs) -> evalExpr (st, lhs) / evalExpr (st, rhs)
+  | Binop ("%", lhs, rhs) -> evalExpr (st, lhs) % evalExpr (st, rhs)
+  | Binop ("==", lhs, rhs) -> evalExpr (st, lhs) == evalExpr (st, rhs)
+  | Binop ("!=", lhs, rhs) -> evalExpr (st, lhs) != evalExpr (st, rhs)
+  | Binop ("<", lhs, rhs) -> evalExpr (st, lhs) < evalExpr (st, rhs)
+  | Binop ("<=", lhs, rhs) -> evalExpr (st, lhs) <= evalExpr (st, rhs)
+  | Binop (">", lhs, rhs) -> evalExpr (st, lhs) > evalExpr (st, rhs)
+  | Binop (">=", lhs, rhs) -> evalExpr (st, lhs) >= evalExpr (st, rhs)
+  | Binop ("&&", lhs, rhs) -> evalExpr (st, lhs) && evalExpr (st, rhs)
+  | Binop ("!!", lhs, rhs) -> evalExpr (st, lhs) !! evalExpr (st, rhs)
+
+  | _ -> failure ("invalid expression: %s\n", expr.string)
+  esac
 }
