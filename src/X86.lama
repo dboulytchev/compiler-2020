@@ -286,10 +286,44 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
+        | LD (x) ->
+            case env.addGlobal(x).allocate of -- Do we really need addGlobal here?
+              [s, env] -> [env, code : {move(env.loc(x), s)}]
+            esac
+        | ST (x) -> 
+            case env.addGlobal(x).pop of
+              [s, env] -> [env, code : {move(s, env.loc(x))}]
+            esac
+        | CONST (n) ->
+            case env.allocate of
+              [s, env] -> [env, code : singleton(Mov(L (n), s))]
+            esac
+        | BINOP (op) ->
+            case env.pop2 of
+              [r, l, env] -> 
+                case env.allocate of
+                  [s, env] -> [env, code : 
+                    case op of
+                        "/"  -> {move(l, eax), Cltd, IDiv (r), move (eax, s)}
+                      | "%"  -> {move(l, eax), Cltd, IDiv (r), move (edx, s)}
+                      | "==" -> {Binop ("cmp", r, l), Set (op.suffix, "%al"), Binop ("&&", L (1), eax), move (eax, s)}
+                      | "!=" -> {Binop ("cmp", r, l), Set (op.suffix, "%al"), Binop ("&&", L (1), eax), move (eax, s)}
+                      | "<"  -> {Binop ("cmp", r, l), Set (op.suffix, "%al"), Binop ("&&", L (1), eax), move (eax, s)}
+                      | "<=" -> {Binop ("cmp", r, l), Set (op.suffix, "%al"), Binop ("&&", L (1), eax), move (eax, s)}
+                      | ">"  -> {Binop ("cmp", r, l), Set (op.suffix, "%al"), Binop ("&&", L (1), eax), move (eax, s)}
+                      | ">=" -> {Binop ("cmp", r, l), Set (op.suffix, "%al"), Binop ("&&", L (1), eax), move (eax, s)}
+                      | op   -> {Binop (op, r, l), move(l, s)}
+                    esac
+                  ]
+                esac
+            esac
         | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
   }
+
+
+  -- failure ("%s\n", code.string);
 
   compile (env, code) 
 }
@@ -298,8 +332,8 @@ fun compile (env, code) {
 -- and returns x86 listing as a string
 public fun compileX86 (code) {
   case compile (initEnv (), code) of
-    [env, code] ->
-       map (insnString, 
+    [env, code] -> 
+        map (insnString, 
             deepFlatten ({
               Meta ("\t.global\tmain\n"),
               dataSection (
