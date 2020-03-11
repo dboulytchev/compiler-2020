@@ -45,17 +45,17 @@ local wordSize = 4;
 --   Call  (string)             -- calls a function by its name 
 --   Ret                        -- returns from a function
 --   Meta  (string)             -- metainformation (declarations, etc.)
-                                                               
+
 -- Machine instruction printer
 fun insnString (insn) {
-  
+
   fun binopString (op) {
     case op of
       "+"   -> "addl"
     | "-"   -> "subl"
     | "*"   -> "imull"
     | "&&"  -> "andl"
-    | "!!"  -> "orl" 
+    | "!!"  -> "orl"
     | "^"   -> "xorl"
     | "cmp" -> "cmpl"
     esac
@@ -69,7 +69,7 @@ fun insnString (insn) {
     | L (i) -> sprintf ("$%d", i)
     esac
   }
-  
+
   case insn of
     Cltd               -> "\tcltd\n"
   | Set   (suf, s)     -> sprintf ("\tset%s\t%s\n", suf, s)
@@ -100,12 +100,12 @@ fun makeEnv (stack, stackSlots, globals) {
   fun envString () {
     sprintf ("Stack     : %s\nStackSlots: %d\nGlobals   : %s\n", stack.string, stackSlots, elements (globals).string)
   }
-  
+
   -- Allocates a new position on the symbolic stack;
   -- returns a pair: a location for allocated item and
   -- an updated environment
   fun allocate () {
-    case 
+    case
       case stack of
         {}        -> [ebx, 0]
       | S (n) : _ -> [S (n+1), n+2]
@@ -145,7 +145,7 @@ fun makeEnv (stack, stackSlots, globals) {
   fun loc (name) {
     M (globalName (name))
   }
-  
+
   -- Gets a list of global variables from the environment
   fun getGlobals () {
     globals.elements
@@ -274,19 +274,62 @@ fun suffix (op) {
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
+  fun cmpOperationCode(op, lhs, rhs, res) {
+    Mov (lhs, eax) : Mov (rhs, edx) : Binop ("cmp", eax, edx) : Set (suffix (op), "%eax") : Mov (eax, res) : {}
+  }
+
+  fun boolOperationCode(op, lhs, rhs, res) {
+    Mov (lhs, eax) : Mov (rhs, edx) :
+    Binop ("cmp", eax, L (0)) : Set (suffix (">"), "%eax") :
+    Binop ("cmp", edx, L (0)) : Set (suffix (">"), "%edx") :
+    Binop (op, eax, edx) : Mov (eax, res) : {}
+  }
+
   fun compile (env, code) {
     foldl (
-      fun ([env, code], i) {           
+      fun ([env, code], i) {
         case i of
           READ ->
             case env.allocate of
               [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
-            esac             
+            esac
         | WRITE ->
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
+        | LD (var) ->
+            case env.addGlobal (var).allocate of
+              [location, env] -> [env, code : move (env.loc (var), location)]
+            esac
+        | ST (var) ->
+            case env.addGlobal (var).pop of
+              [location, env] -> [env, code : move (location, env.loc (var))]
+            esac
+        | CONST (value) ->
+            case env.allocate of
+              [location, env] -> [env, code : move (L (value), location) : {} ]
+            esac
+        | BINOP (op) ->
+            case env.pop2 of [rhs, lhs, env] ->
+              case env.allocate of [res, env] ->
+                [env, code :
+                  case op of
+                    "/" -> Mov (lhs, eax) : Mov (L (0), edx) : Cltd : IDiv (rhs) : Mov (eax, res) : {}
+                  | "%" -> Mov (lhs, eax) : Mov (L (0), edx) : Cltd : IDiv (rhs) : Mov (edx, res) : {}
+                  | "<" -> cmpOperationCode (op, lhs, rhs, res)
+                  | "<=" -> cmpOperationCode (op, lhs, rhs, res)
+                  | "==" -> cmpOperationCode (op, lhs, rhs, res)
+                  | "!=" -> cmpOperationCode (op, lhs, rhs, res)
+                  | ">=" -> cmpOperationCode (op, lhs, rhs, res)
+                  | ">" -> cmpOperationCode (op, lhs, rhs, res)
+                  | "!!" -> boolOperationCode (op, lhs, rhs, res)
+                  | "&&" -> boolOperationCode (op, lhs, rhs, res)
+                  | _ -> Mov (lhs, eax) : Mov (rhs, edx) : Binop (op, edx, eax) : Mov (eax, res) : {}
+                  esac
+                : if stackOpnd (rhs) then Pop (eax) : {} else {} fi]
+              esac
+            esac
+        | _ -> failure ("Unknown instruction: %s\n", i.string)
         esac
       }, [env, {}], code)
   }

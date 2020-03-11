@@ -10,23 +10,23 @@ import Util;
 -- returns a final configuration
 fun eval ([stack, state, world], command:insns, level) {
   case command of
-    SMBinop (op) -> case stack of
+    BINOP (op) -> case stack of
                       first:second:newStack ->
                         stack := evalExpr (state, Binop (op, Const (second), Const (first))) : newStack
                     | _ -> failure ("pop from empty stack\n")
                     esac
-  | SMConst (value) -> stack := value:stack
-  | SMRead -> case readWorld(world) of
+  | CONST (value) -> stack := value:stack
+  | READ -> case readWorld(world) of
                 [value, newWorld] -> stack := value:stack ;
                                      world := newWorld
               esac
-  | SMWrite -> case stack of
+  | WRITE -> case stack of
                  element:newStack -> stack := newStack ;
                                      world := writeWorld (element, world)
                | _ -> failure ("pop from empty stack\n")
                esac
-  | SMLd (var) -> stack := state (var):stack
-  | SMSt (var) -> case stack of
+  | LD (var) -> stack := state (var):stack
+  | ST (var) -> case stack of
                     element:newStack -> stack := newStack ;
                                         state := state <- [var, element]
                   | _ -> failure ("pop from empty stack\n")
@@ -51,9 +51,9 @@ public fun evalSM (input, insns) {
 -- of stack machine instructions
 fun compileExpr (expr) {
   case expr of
-    Var (var) -> SMLd (var):{}
-  | Const (value) -> SMConst (value):{}
-  | Binop (op, lhs, rhs) -> {compileExpr(lhs), compileExpr(rhs), SMBinop (op)}
+    Var (var) -> LD (var):{}
+  | Const (value) -> CONST (value):{}
+  | Binop (op, lhs, rhs) -> {compileExpr(lhs), compileExpr(rhs), BINOP (op)}
   esac
 }
 
@@ -63,9 +63,9 @@ fun compileExpr (expr) {
 public fun compileSM (stmt) {
   case stmt of
     Skip -> {}
-  | Assn (var, expr) -> {compileExpr(expr), SMSt(var)}
-  | Read (var) -> {SMRead, SMSt (var)}
-  | Write (expr) -> {compileExpr(expr), SMWrite}
+  | Assn (var, expr) -> {compileExpr(expr), ST(var)}
+  | Read (var) -> {READ, ST (var)}
+  | Write (expr) -> {compileExpr(expr), WRITE}
   | Seq (lhs, rhs) -> {compileSM(lhs), compileSM(rhs)}
   | _ -> failure ("invalid statement: %s\n", stmt.string)
   esac.deepFlatten
