@@ -275,6 +275,14 @@ fun suffix (op) {
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
   fun compile (env, code) {
+    fun bin (s1, s2, s, op) {
+      { Mov (s2, eax), Binop (op, s1, eax), Mov (eax, s) }
+    }
+
+    fun cmp (s1, s2, s, op) {
+      { Mov (s2, eax), Binop ("^", edx, edx), Binop ("cmp", s1, eax), Set (suffix (op), "%dl"), Mov (edx, s) }
+    }
+
     foldl (
       fun ([env, code], i) {           
         case i of
@@ -286,7 +294,38 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
+        | CONST (x) -> case env.allocate of
+                         [s, env] -> [env, code : singleton ( Mov (L (x), s))]
+                       esac
+        | ST (v) -> case env.addGlobal (v).pop of
+                      [s, env] -> [env, code : move (s, env.loc (v))]
+                    esac
+        | LD (v) -> case env.addGlobal (v).allocate of
+                      [s, env] -> [env, code : move (env.loc (v), s)]
+                    esac
+        | BINOP (op) ->
+          case env.pop2 of
+            [s1, s2, env] ->
+              case env.allocate of
+                [s, env] -> [env, code :
+                  case op of
+                    "+" -> bin (s1, s2, s, op)
+                  | "-" -> bin (s1, s2, s, op)
+                  | "*" -> bin (s1, s2, s, op)
+                  | "&&" -> bin (s1, s2, s, op)
+                  | "!!" -> bin (s1, s2, s, op)
+                  | ">" -> cmp (s1, s2, s, op)
+                  | ">=" -> cmp (s1, s2, s, op)
+                  | "<" -> cmp (s1, s2, s, op)
+                  | "<=" -> cmp (s1, s2, s, op)
+                  | "==" -> cmp (s1, s2, s, op)
+                  | "!=" -> cmp (s1, s2, s, op)
+                  | "/" -> { Mov (s2, eax), Cltd, IDiv (s1), Mov (eax, s) }
+                  | "%" -> { Mov (s2, eax), Cltd, IDiv (s1), Mov (edx, s) }
+                  esac
+                ]
+              esac
+          esac
         esac
       }, [env, {}], code)
   }
