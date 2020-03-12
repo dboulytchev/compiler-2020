@@ -328,7 +328,7 @@ fun compile (env, code) {
             case env.addGlobal(var).pop of
               [s, env] -> [env, code : move(s, env.loc(var))]
             esac
-	| Const (const) ->
+        | Const (const) ->
             case env.allocate of
               [s, env] -> [env, code : singleton(Mov (L (const), s))]
             esac
