@@ -25,8 +25,7 @@ fun eval ([sk,st,w], ins) {
      esac
      | LD(x) : in -> eval([st(x):sk,st,w],in)
      | BINOP(b) : in ->
-     case 
-      sk of right : left : t -> eval([evalBinop(b,left,right): t,st,w], in)
+     case sk of right : left : t -> eval([evalBinop(b,left,right): t,st,w], in)
      esac
      | {} -> [sk,st,w]
   esac
@@ -45,7 +44,7 @@ fun compileExpr (expr) {
   case expr of
       Const(x) -> singleton(CONST(x))
     | Var(x) -> singleton(LD(x))
-    | Binop(b,left,right) -> compileExpr(left) +++ compileExpr(right) +++ singleton(BINOP(b))
+    | Binop(b,left,right) -> {compileExpr(left),compileExpr(right),BINOP(b)}
   esac
 }
 
@@ -53,10 +52,14 @@ fun compileExpr (expr) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  case stmt of
-      Read(x) -> {READ, ST(x)}
-   |  Write(e) -> compileExpr(e) +++ singleton(WRITE)
-   |  Assn(x,e) -> compileExpr(e) +++ singleton(ST(x))
-   |  Seq(s1,s2) -> compileSM(s1) +++ compileSM(s2)
-   esac
+  fun compile(stmt){
+    case stmt of
+         Read(x) -> {READ, ST(x)}
+      |  Write(e) -> {compileExpr(e), WRITE}
+      |  Assn(x,e) -> {compileExpr(e), ST(x)}
+      |  Seq(s1,s2) -> {compile(s1), compile(s2)}
+    esac
  }
+  deepFlatten (compile(stmt))
+}
+
