@@ -304,28 +304,65 @@ fun suffix (op) {
   esac
 }
 
+-- @type MemLoc -> Instr
+fun setZero(item) {
+  case item of
+    R(_) -> Binop("^", item, item)
+  | S(_) -> Mov(L(0), item)
+  esac
+}
+
+fun isSimpleArithOpr(opr) {
+  case opr of
+    "+" -> true
+  | "-" -> true
+  | "*" -> true
+  | "^" -> true
+  | _   -> false
+  esac
+}
+
+fun isLogicalOpr(opr) {
+  case opr of
+    "&&" -> true
+  | "!!" -> true
+  | _    -> false
+  esac
+}
+
+fun isComparisonOpr(opr) {
+  case opr of
+    "<"  -> true
+  | "<=" -> true
+  | ">"  -> true
+  | ">=" -> true
+  | "==" -> true
+  | "!=" -> true
+  | _    -> false
+  esac
+}
+
 (**
  * @returns list of x86 instructions resulted from compilation
  *          of `s opr d` expression
  * @type    [String, MemLoc, MemLoc] -> {Instr}
 *)
 fun compileBinop(opr, s, d) {
-  case opr of
-    "+"  -> binop(opr, s, d)
-  | "-"  -> binop(opr, s, d)
-  | "*"  -> binop(opr, s, d)
-  | "^"  -> binop(opr, s, d)
-  | "/"  -> {Mov(d, eax), Cltd, IDiv(s), Mov(eax, d)}
-  | "%"  -> {Mov(d, eax), Cltd, IDiv(s), Mov(edx, d)}
-  | "&&" -> binop(opr, s, d)
-  | "!!" -> binop(opr, s, d)
-  | "<"  -> binop("cmp", s, d) +++ {Set(suffix(opr), "%al"), Mov(eax, d)}
-  | "<=" -> binop("cmp", s, d) +++ {Set(suffix(opr), "%al"), Mov(eax, d)}
-  | ">"  -> binop("cmp", s, d) +++ {Set(suffix(opr), "%al"), Mov(eax, d)}
-  | ">=" -> binop("cmp", s, d) +++ {Set(suffix(opr), "%al"), Mov(eax, d)}
-  | "==" -> binop("cmp", s, d) +++ {Set(suffix(opr), "%al"), Mov(eax, d)}
-  | "!=" -> binop("cmp", s, d) +++ {Set(suffix(opr), "%al"), Mov(eax, d)}
-  esac 
+  if opr.isSimpleArithOpr then 
+    binop(opr, s, d)
+  elif opr.isLogicalOpr then
+    {setZero(eax), Binop("cmp", s, eax), Set(suffix("!="), "%al"), -- %al := s != 0
+     setZero(edx), Binop("cmp", d, edx), Set(suffix("!="), "%dl"), -- %dl := d != 0
+     Binop(opr, edx, eax), Mov(eax, d)}
+  elif isComparisonOpr(opr) then
+    setZero(eax) : binop("cmp", s, d) +++ {Set(suffix(opr), "%al"), Mov(eax, d)}
+  else
+    case opr of
+      "/" -> {Mov(d, eax), Cltd, IDiv(s), Mov(eax, d)}
+    | "%" -> {Mov(d, eax), Cltd, IDiv(s), Mov(edx, d)}
+    | _ -> failure("Unknown operator: %s\n", opr)
+    esac
+  fi
 }
 
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment

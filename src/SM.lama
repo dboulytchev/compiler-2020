@@ -29,28 +29,30 @@ public fun evalSM (input, insns) {
 }
 
 -- Compiles an expression into a stack machine code.
--- Takes an expression, returns a list (of, possibly, lists)
--- of stack machine instructions
-fun compileExpr (expr) {
+-- Takes an expression and a list where to put the resulting
+-- stack machine instructions
+-- @type [Expr, {SMInstr}] -> {SMInstr}
+fun compileExpr (expr, acc) {
   case expr of
-    Const(n) -> Const(n) : {}
-  | Var(x)   -> LD(x) : {}
-  | Binop(oprStr, l, r) -> Binop(oprStr) : (compileExpr(r) +++ compileExpr(l))
+    Const(n) -> Const(n) : acc
+  | Var(x)   -> LD(x) : acc
+  | Binop(opr, l, r) -> Binop(opr) : compileExpr(r, compileExpr(l, acc))
   esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
+-- @type Stmt -> {SMInstr}
 public fun compileSM (stmt) {
-  fun compileSM (stmt) {
+  fun compileSM (stmt, acc) {
     case stmt of
-      Skip -> {}
-    | Assn(varStr, expr) -> ST(varStr) : compileExpr(expr)
-    | Read(varStr) -> {ST(varStr), Read}
-    | Write(expr)  -> Write : compileExpr(expr)
-    | Seq(s1, s2)  -> compileSM(s2) +++ compileSM(s1)
+      Skip -> acc
+    | Assn(varStr, expr) -> ST(varStr) : compileExpr(expr, acc)
+    | Read(varStr) -> ST(varStr) : Read : acc
+    | Write(expr)  -> Write : compileExpr(expr, acc)
+    | Seq(s1, s2)  -> compileSM(s2, compileSM(s1, acc))
     esac
   }
-  reverse(compileSM(stmt))
+  reverse(compileSM(stmt, {}))
 }
