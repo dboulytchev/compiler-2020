@@ -13,7 +13,11 @@ fun eval ([sk,st,w], ins) {
        CONST(c) : in -> eval([c: sk,st,w],in)
      | READ : in ->
      case 
-       sk of head : t -> eval([t,st,writeWorld(head,w)],in)
+       readWorld(w) of [v,nw] -> eval([v:sk,st,nw],in)
+     esac
+     | WRITE : in ->
+     case 
+      sk of head : t -> eval ([t, st, writeWorld(head,w)],in)
      esac
      | ST(x) : in ->
      case
@@ -22,8 +26,7 @@ fun eval ([sk,st,w], ins) {
      | LD(x) : in -> eval([st(x):sk,st,w],in)
      | BINOP(b) : in ->
      case 
-      sk of
-        right : left : t -> eval([evalBinop(b,left,right): t,st,w], in)
+      sk of right : left : t -> eval([evalBinop(b,left,right): t,st,w], in)
      esac
      | {} -> [sk,st,w]
   esac

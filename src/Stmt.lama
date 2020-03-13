@@ -14,7 +14,7 @@ fun eval ([s,w],stmt) {
           readWorld(w) of [v,m] -> [s <- [x,v],m]
         esac
     | Write(v) -> [s,writeWorld(evalExpr(s,v),w)]
-    | Ass(x,v) -> [s <- [x,evalExpr(s,v),w]]
+    | Assn(x,v) -> [s <- [x,evalExpr(s,v)],w]
     | Seq(s1,s2) -> eval(eval([s,w],s1),s2)
     | Skip -> [s,w]
     esac
