@@ -46,7 +46,7 @@ fun eval ([stack, state, world], insns) {
 
 -- Runs a stack machine for a given input and a given program, returns an output
 public fun evalSM (input, insns) {
-  eval ([{}, emptyState, createWorld (input)], insns)[2].getOutput
+  eval ([{}, emptyState, createWorld (input)], insns.deepFlatten)[2].getOutput
 }
 
 -- Compiles an expression into a stack machine code.
@@ -69,5 +69,5 @@ public fun compileSM (stmt) {
   | Read(varName) -> {READ, ST(varName)}
   | Write(expr) -> {compileExpr(expr), WRITE}
   | Seq(s1, s2) -> {compileSM(s1), compileSM(s2)}
-  esac.deepFlatten
+  esac
 }

@@ -294,6 +294,17 @@ fun compile (env, code) {
     }
   }
 
+  fun logopsBinop(x, y, res, op) {
+    {
+      Mov (y, eax),
+      Binop (op, x, eax),
+      Binop ("cmp", L (0), eax),
+      Mov (L (0), eax),
+      Set (suffix("!="), "%al"),
+      Mov (eax, res)
+    }
+  }
+
   fun comparBinop(x, y, res, op) {
     {
       Mov (y, eax),
@@ -309,6 +320,7 @@ fun compile (env, code) {
   }
 
   local binaryOps = zipWithFun({"+", "-", "*"}, simpleBinop)
+                +++ zipWithFun({"&&", "!!"}, logopsBinop)
                 +++ zipWithFun({"/", "%"}, divremBinop)
                 +++ zipWithFun({"<", "<=", ">", ">=", "==", "!="}, comparBinop);
 
@@ -360,7 +372,7 @@ fun compile (env, code) {
 -- A top-level codegeneration function. Takes a stack machine program
 -- and returns x86 listing as a string
 public fun compileX86 (code) {
-  case compile (initEnv (), code) of
+  case compile (initEnv (), code.deepFlatten) of
     [env, code] ->
        map (insnString, 
             deepFlatten ({
