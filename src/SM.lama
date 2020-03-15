@@ -11,7 +11,7 @@ import Util;
 fun eval (conf, insns) {
   foldl(fun (c@[stack, state, world], instr) {
     case [stack, instr] of
-      [x : y : s, Binop(oprStr)] -> [stringToOpr(oprStr)(y, x) : s, state, world]
+      [x : y : s, Binop(oprStr)] -> [evalBinop(oprStr)(y, x) : s, state, world]
     | [s        , Const(n)     ] -> [n : s, state, world]
     | [s        , Read         ] -> case readWorld(world) of 
                                       [n, w] -> [n : s, state, w] 
