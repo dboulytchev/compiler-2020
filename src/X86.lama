@@ -274,32 +274,37 @@ fun suffix (op) {
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
+  -- Compiles arithmetic and boolean operators to x86
   fun compileBasic (op, l, r) {
     singleton (Binop (op, l, r))
   }
-  
+ 
+  -- Compiles division operators to X86  
   fun compileDiv (op, l, r) {
-    case op of 
-      "/" -> { Mov (r, eax), Cltd, IDiv (l), Mov (eax, r) }
-    | "%" -> { Mov (r, eax), Cltd, IDiv (l), Mov (edx, r) }
-    esac
+    { Mov (r, eax), Cltd, IDiv (l) } :
+    singleton (case op of 
+                "/"  -> Mov (eax, r)
+               | "%" -> Mov (edx, r)
+               esac)
   }
 
+  -- Compiles comparison operators to x86
   fun compileComp (op, l, r) {
     { Mov (L(0), eax), Binop ("cmp", l, r), Set (op.suffix, "%al"), Mov (eax, r) }
   }
 
+  -- Compiles binary operators to x86
   fun compileBinop (op, l, r) {
     case op of
-      "+" -> op.compileBasic (l, r)
-    | "-" -> op.compileBasic (l, r)
-    | "*" -> op.compileBasic (l, r)
-    | "^" -> op.compileBasic (l, r)
-    | "&&" -> op.compileBasic (l, r)
-    | "!!" -> op.compileBasic (l, r)
-    | "/" -> op.compileDiv (l, r)
-    | "%" -> op.compileDiv (l, r)
-    | _   -> op.compileComp (l, r)    
+      "+"  -> compileBasic (op, l, r)
+    | "-"  -> compileBasic (op, l, r)
+    | "*"  -> compileBasic (op, l, r)
+    | "^"  -> compileBasic (op, l, r)
+    | "&&" -> compileBasic (op, l, r)
+    | "!!" -> compileBasic (op, l, r)
+    | "/"  -> compileDiv (op, l, r)
+    | "%"  -> compileDiv (op, l, r)
+    | _    -> compileComp (op, l, r)    
     esac
   }
 
