@@ -297,7 +297,7 @@ fun compile (env, code) {
   fun compileBool (op, l, r) {
     { Move (L(0), eax), Binop ("cmp", l, eax), Set ("!=".suffix, "%al"), 
       Move (L(0), edx), Binop ("cmp", r, edx), Set ("!=".suffix, "%dl"),
-      Binop (op, eax, edx), Mov (eax, r) }
+      Binop (op, eax, edx), Mov (edx, r) }
   }
 
   -- Compiles binary operators to x86
