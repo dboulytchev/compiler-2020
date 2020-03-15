@@ -274,7 +274,7 @@ fun suffix (op) {
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
-  fun compileArith (op, l, r) {
+  fun compileBasic (op, l, r) {
     singleton (Binop (op, l, r))
   }
   
@@ -291,10 +291,12 @@ fun compile (env, code) {
 
   fun compileBinop (op, l, r) {
     case op of
-      "+" -> op.compileArith (l, r)
-    | "-" -> op.compileArith (l, r)
-    | "*" -> op.compileArith (l, r)
-    | "^" -> op.compileArith (l, r)
+      "+" -> op.compileBasic (l, r)
+    | "-" -> op.compileBasic (l, r)
+    | "*" -> op.compileBasic (l, r)
+    | "^" -> op.compileBasic (l, r)
+    | "&&" -> op.compileBasic (l, r)
+    | "!!" -> op.compileBasic (l, r)
     | "/" -> op.compileDiv (l, r)
     | "%" -> op.compileDiv (l, r)
     | _   -> op.compileComp (l, r)    
@@ -315,7 +317,7 @@ fun compile (env, code) {
             esac
         | LD (x)     -> 
             case env.allocate of
-              [s, env] -> [env.addGlobal (x), code : move (env.loc (x), s)]
+              [s, env] -> [env, code : move (env.loc (x), s)]
             esac
         | ST (x)     ->
             case env.pop of
