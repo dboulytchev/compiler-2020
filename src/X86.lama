@@ -31,6 +31,15 @@ local wordSize = 4;
 --    M (string) -- a named memory location          
 --    L (int)    -- an immediate operand             
 
+(* 
+@begintype MemLoc = 
+  | R Int
+  | S Int
+  | M String
+  | L Int
+@endtype
+*)
+
 -- Some x86 instruction (we do not need all of them):
 --   Mov   (opnd, opnd)         -- copies a value from the first to the second operand  
 --   Binop (string, opnd, opnd) -- makes a binary operation; note, the first operand   
@@ -45,7 +54,22 @@ local wordSize = 4;
 --   Call  (string)             -- calls a function by its name 
 --   Ret                        -- returns from a function
 --   Meta  (string)             -- metainformation (declarations, etc.)
-                                                               
+
+(* 
+@begintype Instr = 
+  | Mov   MemLoc MemLoc
+  | Binop String MemLoc MemLoc
+  | IDiv  MemLoc
+  | Cltd
+  | Set   String String
+  | Push  MemLoc
+  | Pop   MemLoc
+  | Call  String
+  | Ret
+  | Meta  String
+@endtype
+*)
+
 -- Machine instruction printer
 fun insnString (insn) {
   
@@ -258,6 +282,15 @@ fun move (from, to) {
   fi
 }
 
+-- Generates a binop between locations, using
+-- intermediate register if needed
+fun binop (op, src, dest) {
+  if memOpnd (dest) && memOpnd (src)
+  then {Mov (src, eax), Binop(op, eax, dest)}
+  else singleton (Binop(op, src, dest))
+  fi
+}
+
 -- Gets a suffix for Set instruction from
 -- source language comparison operator
 fun suffix (op) {
@@ -271,77 +304,98 @@ fun suffix (op) {
   esac
 }
 
+-- @type MemLoc -> Instr
+fun setZero(item) {
+  case item of
+    R(_) -> Binop("^", item, item)
+  | S(_) -> Mov(L(0), item)
+  esac
+}
+
+fun isSimpleArithOpr(opr) {
+  case opr of
+    "+" -> true
+  | "-" -> true
+  | "*" -> true
+  | "^" -> true
+  | _   -> false
+  esac
+}
+
+fun isLogicalOpr(opr) {
+  case opr of
+    "&&" -> true
+  | "!!" -> true
+  | _    -> false
+  esac
+}
+
+fun isComparisonOpr(opr) {
+  case opr of
+    "<"  -> true
+  | "<=" -> true
+  | ">"  -> true
+  | ">=" -> true
+  | "==" -> true
+  | "!=" -> true
+  | _    -> false
+  esac
+}
+
+(**
+ * @returns list of x86 instructions resulted from compilation
+ *          of `s opr d` expression
+ * @type    [String, MemLoc, MemLoc] -> {Instr}
+*)
+fun compileBinop(opr, s, d) {
+  if opr.isSimpleArithOpr then 
+    binop(opr, s, d)
+  elif opr.isLogicalOpr then
+    {setZero(eax), Binop("cmp", s, eax), Set(suffix("!="), "%al"), -- %al := s != 0
+     setZero(edx), Binop("cmp", d, edx), Set(suffix("!="), "%dl"), -- %dl := d != 0
+     Binop(opr, edx, eax), Mov(eax, d)}
+  elif isComparisonOpr(opr) then
+    setZero(eax) : binop("cmp", s, d) +++ {Set(suffix(opr), "%al"), Mov(eax, d)}
+  else
+    case opr of
+      "/" -> {Mov(d, eax), Cltd, IDiv(s), Mov(eax, d)}
+    | "%" -> {Mov(d, eax), Cltd, IDiv(s), Mov(edx, d)}
+    | _ -> failure("Unknown operator: %s\n", opr)
+    esac
+  fi
+}
+
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
-  fun compile (env, code) {
-    fun basic(s1, s2, s, op) {
-      {Mov(s2, eax), Binop(op, s1, eax), Mov(eax, s)}
-    }
-
-    fun delete(s1, s2, s) {
-      {Mov(s2, eax), Cltd, IDiv (s1), Mov(eax, s)}
-    }
-
-    fun div(s1, s2, s) {
-      {Mov(s2, eax), Cltd, IDiv(s1), Mov(edx, s)}
-    }
-
-    fun compare(s1, s2, s, op) {
-      {Mov(s2, eax), Binop("^", edx, edx), Binop("cmp", s1, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
-    }
-
-    foldl (
-      fun ([env, code], i) {
-      case i of
-          READ ->
-            case env.allocate of
-              [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
-            esac
-        | WRITE ->
-            case env.pop of
-              [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
-            esac
-        | LD(x) ->
-            case env.addGlobal(x).allocate of
-              [s, env] -> [env, code : move(env.loc(x), s)]
-            esac
-        | ST(x) ->
-            case env.addGlobal(x).pop of
-              [s, env] -> [env, code : move(s, env.loc(x))]
-            esac
-        | CONST(c) ->
-            case env.allocate of
-              [s, env] -> [env, code : {Mov(L(c), s)}]
-            esac
-        | BINOP(op) ->
-            case env.pop2 of
-              [s1, s2, env] ->
-                case env.allocate of
-                  [s, env] -> [env, code : 
-                    case op of
-                        "+" -> basic(s1, s2, s, op)
-                      | "-" -> basic(s1, s2, s, op)
-                      | "*" -> basic(s1, s2, s, op)
-                      | "&&" -> basic(s1, s2, s, op)
-                      | "!!" -> basic(s1, s2, s, op)
-                      | "/" -> delete(s1, s2, s)
-                      | "%" -> div(s1, s2, s)
-                      | ">" -> compare(s1, s2, s, op)
-                      | ">=" -> compare(s1, s2, s, op)
-                      | "==" -> compare(s1, s2, s, op)
-                      | "!=" -> compare(s1, s2, s, op)
-                      | "<=" -> compare(s1, s2, s, op)
-                      | "<" -> compare(s1, s2, s, op)
-                    esac
-                  ]
-                esac
-            esac
+  foldl (fun ([env, code], i) {           
+    case i of
+      Read ->
+        case env.allocate of
+          [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
+        esac             
+    | Write ->
+        case env.pop of
+          [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
         esac
-      }, [env, {}], code)
-  }
-
-  compile (env, code) 
+    | Const(n) -> 
+        case env.allocate of
+          [s, env] -> [env, code : singleton(Mov(L(n), s))]
+        esac
+    | LD(var) ->
+        case env.addGlobal(var).allocate of
+          [s, env] -> [env, code : move(env.loc(var), s)]
+        esac
+    | ST(var) ->
+        case env.addGlobal(var).pop of
+          [s, env] -> [env, code : move(s, env.loc(var))]
+        esac
+    | Binop(opr) ->
+        case env.pop2 of
+          [s, d, env] -> [env.push(d), code : compileBinop(opr, s, d)]
+        esac
+    esac
+  }, [env, {}], code)
 }
 
 -- A top-level codegeneration function. Takes a stack machine program
