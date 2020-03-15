@@ -293,6 +293,13 @@ fun compile (env, code) {
     { Mov (L(0), eax), Binop ("cmp", l, r), Set (op.suffix, "%al"), Mov (eax, r) }
   }
 
+  -- Compiles boolean operators to x86
+  fun compileBool (op, l, r) {
+    { Move (L(0), eax), Binop ("cmp", l, eax), Set ("!=".suffix, "%al"), 
+      Move (L(0), edx), Binop ("cmp", r, edx), Set ("!=".suffix, "%dl"),
+      Binop (op, eax, edx), Mov (eax, r) }
+  }
+
   -- Compiles binary operators to x86
   fun compileBinop (op, l, r) {
     case op of
@@ -300,8 +307,8 @@ fun compile (env, code) {
     | "-"  -> compileBasic (op, l, r)
     | "*"  -> compileBasic (op, l, r)
     | "^"  -> compileBasic (op, l, r)
-    | "&&" -> compileBasic (op, l, r)
-    | "!!" -> compileBasic (op, l, r)
+    | "&&" -> compileBool (op, l, r)
+    | "!!" -> compileBool (op, l, r)
     | "/"  -> compileDiv (op, l, r)
     | "%"  -> compileDiv (op, l, r)
     | _    -> compileComp (op, l, r)    
