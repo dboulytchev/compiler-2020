@@ -274,18 +274,61 @@ fun suffix (op) {
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
+  fun compileArith (op, l, r) {
+    singleton (Binop (op, l, r))
+  }
+  
+  fun compileDiv (op, l, r) {
+    case op of 
+      "/" -> { Mov (r, eax), Cltd, IDiv (l), Mov (eax, r) }
+    | "%" -> { Mov (r, eax), Cltd, IDiv (l), Mov (edx, r) }
+    esac
+  }
+
+  fun compileComp (op, l, r) {
+    { Mov (L(0), eax), Binop ("cmp", l, r), Set (op.suffix, "%al"), Mov (eax, r) }
+  }
+
+  fun compileBinop (op, l, r) {
+    case op of
+      "+" -> op.compileArith (l, r)
+    | "-" -> op.compileArith (l, r)
+    | "*" -> op.compileArith (l, r)
+    | "^" -> op.compileArith (l, r)
+    | "/" -> op.compileDiv (l, r)
+    | "%" -> op.compileDiv (l, r)
+    | _   -> op.compileComp (l, r)    
+    esac
+  }
+
   fun compile (env, code) {
     foldl (
       fun ([env, code], i) {           
         case i of
-          READ ->
+          READ       ->
             case env.allocate of
               [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
             esac             
-        | WRITE ->
+        | WRITE      ->
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
+        | LD (x)     -> 
+            case env.allocate of
+              [s, env] -> [env.addGlobal (x), code : move (env.loc (x), s)]
+            esac
+        | ST (x)     ->
+            case env.pop of
+              [s, env] -> [env.addGlobal (x), code : move (s, env.loc (x))]
+            esac
+        | CONST (n)  -> 
+            case env.allocate of
+              [s, env] -> [env, code : singleton (Mov (L (n), s))]
+            esac
+        | BINOP (op) ->
+            case env.pop2 of
+              [l, r, env] -> [env.push (r), code : op.compileBinop (l, r)]
+            esac 
         | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
