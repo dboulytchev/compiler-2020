@@ -4,6 +4,7 @@ import SM;
 import Collection;
 import List;
 import Util;
+import Manifest;
 
 -- Assembler language interface
 -- The registers: 
@@ -78,7 +79,7 @@ fun insnString (insn) {
   | Mov   (s1, s2)     -> sprintf ("\tmovl\t%s,\t%s\n", opndString (s1), opndString (s2))
   | Push  (s)          -> sprintf ("\tpushl\t%s\n", opndString (s))
   | Pop   (s)          -> sprintf ("\tpopl\t%s\n", opndString (s))
-  | Ret                -> "\tret"
+  | Ret                -> "\tret\n"
   | Call  (p)          -> sprintf ("\tcall\t%s\n", p)
   | Meta  (m)          -> m
   esac
@@ -293,7 +294,8 @@ local binop_groups = {
 public fun compile (env, code) {
   fun compile (env, code) {
     foldl (
-      fun ([env, code], i) {           
+      fun ([env, scode], i) {
+        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
         case i of
           READ ->
             case env.allocate of
@@ -307,16 +309,16 @@ public fun compile (env, code) {
             case env.allocate of
               [s, env] -> [env, code : singleton(Mov (L (c), s))]
             esac
-        | ST(x) -> 
+        | ST(x) ->
             case env.pop of
               [head, env] -> [env.addGlobal(x), code : move(head, env.loc(x))]
             esac
         | LD(x) ->
             case env.allocate of
-              [s, env] -> [env, code : {move(env.loc(x), s)}] 
+              [s, env] -> [env, code : {move(env.loc(x), s)}]
             esac
         | BINOP(op) ->
-            case env.pop2 of 
+            case env.pop2 of
               [x, y, env] ->
                 case env.push(y) of env ->
                   case assoc(binop_groups, op) of
@@ -325,7 +327,7 @@ public fun compile (env, code) {
                         ASM -> [env, code: {Mov (y, eax), Binop (op, x, eax), Mov (eax, y)}]
                       | DIV -> [env, code: {Push (ebx), Mov (y, eax), Cltd, Mov (x, ebx), IDiv (ebx), Pop (ebx),
                                             Mov(case op of "/" -> eax | "%" -> edx esac, y)}]
-                      | CMP -> [env, code: {Binop("^", edx, edx), Mov(x, eax), Binop("cmp", eax, y), 
+                      | CMP -> [env, code: {Binop("^", edx, edx), Mov(x, eax), Binop("cmp", eax, y),
                                             Set(suffix(op), "%dl"), Mov(edx, y)}]
                       | BLN -> [env, code: {Binop("^", eax, eax), Binop("cmp", y, eax), Set(suffix("!="), "%al"),
                                             Binop("^", edx, edx), Binop("cmp", x, edx), Set(suffix("!="), "%dl"),
@@ -334,7 +336,7 @@ public fun compile (env, code) {
                   esac
                 esac
             esac
-        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
+        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
   }
@@ -342,22 +344,31 @@ public fun compile (env, code) {
   compile (env, code) 
 }
 
--- A top-level codegeneration function. Takes a stack machine program
--- and returns x86 listing as a string
-public fun compileX86 (code) {
+-- A top-level codegeneration function. Takes a driver's environment and a stack machine program,
+-- compiles the program into machine code, and compiles the machine code into an executable
+public fun compileX86 (args, code) {
   case compile (initEnv (), code) of
     [env, code] ->
-       map (insnString, 
-            deepFlatten ({
-              Meta ("\t.global\tmain\n"),
-              dataSection (
-                map (dataDef, getGlobals (env))
-              ),
-              codeSection ({
-                Meta ("main:\n"),
-                prologue (getStackSize (env)),
-                code,
-                epilogue ()})
-            })).stringcat
+       local asmFile = args.getBaseName ++ ".s",
+             runtime = case getEnv ("LAMA_RUNTIME") of
+                         #unboxed -> "../runtime/"
+                       | path     -> path
+                       esac ++ "/runtime.o";
+
+       fwrite (asmFile,
+               map (insnString,
+                    deepFlatten ({
+                      Meta ("\t.global\tmain\n"),
+                      dataSection (
+                        map (dataDef, getGlobals (env))
+                      ),
+                      codeSection ({
+                        Meta ("main:\n"),
+                        prologue (getStackSize (env)),
+                        code,
+                        epilogue ()})
+                    })).stringcat);
+
+       system ({"gcc -g -m32 -o ", args.getBaseName, " ", runtime, " ", asmFile}.stringcat)
   esac
 }
