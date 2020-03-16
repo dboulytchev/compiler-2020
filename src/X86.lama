@@ -283,6 +283,16 @@ fun compile (env, code) {
       { Mov (s2, eax), Binop ("^", edx, edx), Binop ("cmp", s1, eax), Set (suffix (op), "%dl"), Mov (edx, s) }
     }
 
+    fun div (s1, s2, s, op) {
+      { Mov (s2, eax), Cltd, IDiv (s1), Mov (case op of "/" -> eax | "%" -> edx esac, s) }
+    }
+
+    fun log (s1, s2, s, op) {
+      { Binop ("^", eax, eax), Binop ("cmp", s2, eax), Set (suffix ("!="), "%al"),
+        Binop ("^", edx, edx), Binop ("cmp", s1, edx), Set (suffix ("!="), "%dl"),
+        Binop (op, edx, eax), Mov (eax, s) }
+    }
+
     foldl (
       fun ([env, code], i) {           
         case i of
@@ -312,16 +322,16 @@ fun compile (env, code) {
                     "+" -> bin (s1, s2, s, op)
                   | "-" -> bin (s1, s2, s, op)
                   | "*" -> bin (s1, s2, s, op)
-                  | "&&" -> bin (s1, s2, s, op)
-                  | "!!" -> bin (s1, s2, s, op)
+                  | "&&" -> log (s1, s2, s, op)
+                  | "!!" -> log (s1, s2, s, op)
                   | ">" -> cmp (s1, s2, s, op)
                   | ">=" -> cmp (s1, s2, s, op)
                   | "<" -> cmp (s1, s2, s, op)
                   | "<=" -> cmp (s1, s2, s, op)
                   | "==" -> cmp (s1, s2, s, op)
                   | "!=" -> cmp (s1, s2, s, op)
-                  | "/" -> { Mov (s2, eax), Cltd, IDiv (s1), Mov (eax, s) }
-                  | "%" -> { Mov (s2, eax), Cltd, IDiv (s1), Mov (edx, s) }
+                  | "/" -> div (s1, s2, s, op)
+                  | "%" -> div (s1, s2, s, op)
                   esac
                 ]
               esac
