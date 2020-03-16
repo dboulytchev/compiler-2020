@@ -274,9 +274,9 @@ fun suffix (op) {
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
-  -- Compiles arithmetic and boolean operators to x86
+  -- Compiles arithmetic operators to x86
   fun compileBasic (op, l, r) {
-    singleton (Binop (op, l, r))
+    { Mov (r, eax), Binop (op, l, eax), Mov (eax, r) }
   }
  
   -- Compiles division operators to X86  
