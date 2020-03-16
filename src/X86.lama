@@ -275,7 +275,7 @@ fun suffix (op) {
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
   -- Compiles arithmetic operators to x86
-  fun compileBasic (op, l, r) {
+  fun compileArith (op, l, r) {
     { Mov (r, eax), Binop (op, l, eax), Mov (eax, r) }
   }
  
@@ -303,10 +303,10 @@ fun compile (env, code) {
   -- Compiles binary operators to x86
   fun compileBinop (op, l, r) {
     case op of
-      "+"  -> compileBasic (op, l, r)
-    | "-"  -> compileBasic (op, l, r)
-    | "*"  -> compileBasic (op, l, r)
-    | "^"  -> compileBasic (op, l, r)
+      "+"  -> compileArith (op, l, r)
+    | "-"  -> compileArith (op, l, r)
+    | "*"  -> compileArith (op, l, r)
+    | "^"  -> compileArith (op, l, r)
     | "&&" -> compileBool (op, l, r)
     | "!!" -> compileBool (op, l, r)
     | "/"  -> compileDiv (op, l, r)
