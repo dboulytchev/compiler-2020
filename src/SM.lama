@@ -49,11 +49,14 @@ fun compileExpr (expr) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
+  fun compile_sm(stmt) {
   case stmt of
     Read  (val)       -> {READ, ST (val)}
-  | Write (expr)      -> deepFlatten({compileExpr(expr), WRITE})
-  | Seq   (x1, x2)    -> deepFlatten({compileSM (x1), compileSM (x2)})
-  | Assn  (val, expr) -> deepFlatten({compileExpr(expr), ST (val)})
+  | Write (expr)      -> {compileExpr(expr), WRITE}
+  | Seq   (x1, x2)    -> {compileSM (x1), compileSM (x2)}
+  | Assn  (val, expr) -> {compileExpr(expr), ST (val)}
   | _                 -> {}
   esac
+  }
+  deepFlatten(compile_sm(stmt))
 }

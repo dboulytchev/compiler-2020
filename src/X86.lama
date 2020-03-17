@@ -275,6 +275,30 @@ fun suffix (op) {
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
   fun compile (env, code) {
+    fun simple_binop(first, second, s, op) {
+      {Mov(second, eax), Binop(op, first, eax), Mov(eax, s)}
+    }
+
+    fun div_binop(first, second, s) {
+      {Mov(second, eax), Cltd, IDiv (first), Mov(eax, s)}
+    }
+
+    fun mod_binop(first, second, s) {
+      {Mov(second, eax), Cltd, IDiv(first), Mov(edx, s)}
+    }
+
+    fun compare_binop(first, second, s, op) {
+      {Mov(second, eax), Binop("^", edx, edx), Binop("cmp", first, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
+    }
+
+    fun logic_binop(first, second, s, op) {
+      {
+        Binop("^", eax, eax), Binop("^", edx, edx),
+        Binop("cmp", first, eax), Set(suffix(op), "%al"),
+        Binop("cmp", second, edx), Set(suffix(op), "%dl"),
+        Binop(op, eax, edx), Mov(edx, s)
+      }
+    }
     foldl (
       fun ([env, code], i) {           
         case i of
@@ -298,19 +322,19 @@ fun compile (env, code) {
                                  case env.allocate of
                                       [s, env] -> [env, code :
                                       case op of
-                                            "+"  -> {Mov(second, eax), Binop(op, first, eax), Mov(eax, s)}
-                                          | "-"  -> {Mov(second, eax), Binop(op, first, eax), Mov(eax, s)}
-                                          | "*"  -> {Mov(second, eax), Binop(op, first, eax), Mov(eax, s)}
-                                          | "/"  -> {Mov(second, eax), Cltd, IDiv(first), Mov(eax, s)}
-                                          | "%"  -> {Mov(second, eax), Cltd, IDiv(first), Mov(edx, s)}
-                                          | "<"  -> {Mov(second, eax), Binop("^", edx, edx), Binop("cmp", first, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
-                                          | "<=" -> {Mov(second, eax), Binop("^", edx, edx), Binop("cmp", first, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
-                                          | ">"  -> {Mov(second, eax), Binop("^", edx, edx), Binop("cmp", first, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
-                                          | ">=" -> {Mov(second, eax), Binop("^", edx, edx), Binop("cmp", first, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
-                                          | "==" -> {Mov(second, eax), Binop("^", edx, edx), Binop("cmp", first, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
-                                          | "!=" -> {Mov(second, eax), Binop("^", edx, edx), Binop("cmp", first, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
-                                          | "&&" -> {Mov(second, eax), Binop(op, first, eax), Mov(eax, s)}
-                                          | "!!" -> {Mov(second, eax), Binop(op, first, eax), Mov(eax, s)}
+                                            "+"  -> simple_binop(first, second, s, op)
+                                          | "-"  -> simple_binop(first, second, s, op)
+                                          | "*"  -> simple_binop(first, second, s, op)
+                                          | "/"  -> div_binop(first, second, s)
+                                          | "%"  -> mod_binop(first, second, s)
+                                          | "<"  -> compare_binop(first, second, s, op)
+                                          | "<=" -> compare_binop(first, second, s, op)
+                                          | ">"  -> compare_binop(first, second, s, op)
+                                          | ">=" -> compare_binop(first, second, s, op)
+                                          | "==" -> compare_binop(first, second, s, op)
+                                          | "!=" -> compare_binop(first, second, s, op)
+                                          | "&&" -> logic_binop(first, second, s, op)
+                                          | "!!" -> logic_binop(first, second, s, op)
                                       esac
                                       ]
                                  esac
