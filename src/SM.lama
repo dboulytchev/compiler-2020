@@ -46,23 +46,21 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-	case expr of
-		Const (x) -> singleton (CONST (x)) | Var (x) -> singleton (LD (x))
-		| Binop (o, l, r) -> (compileExpr(l)) +++ (compileExpr (r)) +++ singleton (BINOP (o))
-	esac
+  case expr of
+    Const (x) -> singleton (CONST (x))
+  | Var (x) -> singleton (LD (x))
+  | Binop (o, l, r) -> deepFlatten (compileExpr (l) +++ compileExpr(r) +++ singleton (BINOP (o)))
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-	case stmt of
-		Read (x) -> {READ, ST (x)}
-
-		| Write (e) -> compileExpr (e) +++ singleton (WRITE)
-
-		| Assn (x, e) -> compileExpr (e) +++ singleton (ST (x))
-
-		| Seq (s1, s2) -> compileSM (s1) +++ compileSM (s2)
-	esac
+  case stmt of
+    Assn (x, e) -> deepFlatten (compileExpr (e) +++ singleton (ST (x)))
+  | Read (x) -> { READ, ST (x) }
+  | Write (x) -> deepFlatten (compileExpr (x) +++ singleton (WRITE))
+  | Seq (s1, s2) -> deepFlatten (compileSM (s1) +++ compileSM (s2))
+  esac 
 }
