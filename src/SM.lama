@@ -80,7 +80,8 @@ public fun compileExpr (expr) {
 public fun compileSM (stmt) {
     fun compile (stmt) {
         case stmt of
-            Assn(x, e) -> {compileExpr(e), ST(x)}
+            Skip -> singleton()
+        |   Assn(x, e) -> {compileExpr(e), ST(x)}
         |   Read(x) -> {READ, ST(x)}
         |   Write(e) -> {compileExpr(e), WRITE}
         |   Seq(s1, s2) -> {compileSM(s1), compileSM(s2)}
