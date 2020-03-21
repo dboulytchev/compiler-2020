@@ -4,17 +4,18 @@ import Ostap;
 import Lexer;
 import List;
 import Fun;
+import Matcher;
 
 -- A parser of "something" in brackets; l, r are left and right
--- brackets as strings, p --- a parser of "something"
+-- brackets as parsers, p --- a parser of "something"
 fun inbr (l, p, r) {
-  s (l) |> lift (p |> bypass (s (r)))
+  l |> lift (p |> bypass (r))
 }
 
 -- Primary expression
 local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
                             lident  @ fun (x) {Var (x)} |
-                            inbr ("(", exp, ")")),
+                            inbr (s ("("), exp, s (")"))),
       exp = memo $ eta (failure ("expression parsing not implemented\n"));
 
 local stmt = memo $ eta (failure ("statement parsing not implemented\n"));
@@ -22,4 +23,3 @@ local stmt = memo $ eta (failure ("statement parsing not implemented\n"));
 
 -- Public top-level parser
 public parse = stmt;
-             
