@@ -52,8 +52,7 @@ local stElif = memo $ eta (kElif |> lift (orExp |> fun (e) {
                                 stElif @ fun (s2) {If (e, s1, s2)}
                                 })
                             })
-                        );
-                                
+                        );                                
                                 
 local st = memo $ eta (kSkip @ fun (_) {Skip} | 
                        kRead |> lift (primary @ fun(Var (x)) {Read (x)}) |
