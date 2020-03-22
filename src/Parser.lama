@@ -7,18 +7,44 @@ import Fun;
 
 -- A parser of "something" in brackets; l, r are left and right
 -- brackets as strings, p --- a parser of "something"
-fun inbr (l, p, r) {
-  s (l) |> lift (p |> bypass (s (r)))
+fun inbr (p) {
+  s ("(") |> lift (p |> bypass (s (")")))
 }
+
+local ops = map(fun([type, ops]) {
+    [type, map(fun(op) {
+      [s(op), fun (l, r) { Binop(op, l, r) }]
+    }, ops)]
+  }, {
+    [Left, singleton("!!")],
+    [Left, singleton("&&")],
+    [Nona, { "==", "!=", "<", "<=", ">", ">=" }],
+    [Left, { "+", "-" }],
+    [Left, { "*", "/", "%" }]
+  }
+);
 
 -- Primary expression
 local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
                             lident  @ fun (x) {Var (x)} |
-                            inbr ("(", exp, ")")),
-      exp = memo $ eta (failure ("expression parsing not implemented\n"));
+                            inbr (exp));
 
-local stmt = memo $ eta (failure ("statement parsing not implemented\n"));
-   
+local exp = memo $ eta (expr(ops, primary)(id));
+
+local substmt = memo $ eta (
+    lident |> fun(x) {
+      (s(":=") |> lift(exp)) @ fun(val) { Assn(x, val) }
+    }
+  | kSkip @ lift(Skip)
+  | (kRead |> lift(inbr(lident))) @ fun(x) { Read(x) }
+  | (kWrite |> lift(exp)) @ fun(val) { Write(val) }
+);
+
+local stmt = memo $ eta (
+  substmt | substmt |> fun (stmt1) {
+    (s(";") |> lift(stmt)) @ fun (stmt2) { Seq(stmt1, stmt2) }
+  }
+);
 
 -- Public top-level parser
 public parse = stmt;
