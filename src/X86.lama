@@ -311,9 +311,13 @@ fun compile (env, code) {
                     then 
                       Push (ebx) : move (y, eax) : Binop ("^", edx, edx) : move (x, ebx) : IDiv (ebx) : Pop (ebx) : move (if compare (op, "/") == 0 then eax else edx fi, s)
                     else
-                      if {"*", "+", "-", "&&", "!!"}.contains (op) 
+                      if {"*", "+", "-"}.contains (op) 
                         then move (y, eax) : Binop (op, x, eax) : move (eax, s)
-                        else move (y, eax) : Binop ("cmp", x, eax) : Set (suffix (op), "%al") : Binop ("&&", L (1), eax) : move (eax, s) 
+                        else 
+                          if {"&&", "!!"}.contains (op)
+                            then move (x, eax) : Binop ("cmp", L (0), eax) : Set (suffix ("!="), "%al") : move (y, edx) : Binop ("cmp", L (0), edx) : Set (suffix ("!="), "%dl") : Binop (op, edx, eax) : Binop ("&&", L (1), eax) : move (eax, s)
+                            else move (y, eax) : Binop ("cmp", x, eax) : Set (suffix (op), "%al") : Binop ("&&", L (1), eax) : move (eax, s) 
+                          fi
                       fi
                     fi]
                 esac
