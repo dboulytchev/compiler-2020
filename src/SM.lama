@@ -45,14 +45,15 @@ fun compileExpr (expr) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  fun compile (stmt) {
+  fun compileSM (stmt) {
     case stmt of
         Skip         -> {}
-      | Seq   (l, r) -> { compile(l), compile(r) }
+      | Seq   (l, r) -> { compileSM(l), compileSM(r) }
       | Read  (x)    -> { READ, ST (x) }
       | Write (e)    -> { compileExpr(e), WRITE }
       | Assn  (x, e) -> { compileExpr(e), ST (x) }
     esac
   }
-  stmt.compile.deepFlatten
+  
+  compileSM(stmt).deepFlatten
 }
