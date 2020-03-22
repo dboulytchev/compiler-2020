@@ -28,14 +28,14 @@ public fun showSM (prg) {
 fun eval (c, insns) {
   fun evalInternal (c@[stack, state, world], instruction) {
     case instruction of
-      Load  (x)         -> [state (x) : stack, state, world]
-    | Store (x)         -> [tl (stack), state <- [x, hd (stack)], world]
-    | READ              -> local ret = readWorld (world);
-                           [ret[0] : stack, state, ret[1]]
-    | WRITE             -> [tl (stack), state, writeWorld (hd (stack), world)]
-    | Const (x)         -> [x : stack, state, world]
+      LD    (x)        -> [state (x) : stack, state, world]
+    | ST    (x)        -> [tl (stack), state <- [x, hd (stack)], world]
+    | READ             -> local ret = readWorld (world);
+                          [ret[0] : stack, state, ret[1]]
+    | WRITE            -> [tl (stack), state, writeWorld (hd (stack), world)]
+    | CONST (x)        -> [x : stack, state, world]
 
-    | Binop (op,  a, b) -> [(fun (a : b : last) { (sym2fun (op)) (b, a) : last }) (stack), state, world]
+    | BINOP (op)       -> [(fun (a : b : last) { (sym2fun (op)) (b, a) : last }) (stack), state, world]
     esac
   }
 
@@ -59,9 +59,9 @@ public fun evalSM (input, insns) {
 -- of stack machine instructions
 fun compileExpr (expr) {
   case expr of
-    Var (a)           -> Load (a) : {}
-  | Const (a)         -> Const (a) : {}
-  | Binop (op,  a, b) -> {compileExpr (a), compileExpr (b), Binop (op,  a, b)}
+    Var   (a)        -> LD    (a) : {}
+  | Const (a)        -> CONST (a) : {}
+  | Binop (op, a, b) -> {compileExpr (a), compileExpr (b), BINOP (op)}
   esac
 }
 
@@ -71,11 +71,11 @@ fun compileExpr (expr) {
 public fun compileSM (stmt) {
   fun compileSMinternal (stmt) {
     case stmt of
-      Seq (a, b)  -> {compileSM (a), compileSM (b)}
-    | Read (a)    -> {READ, Store (a)}
-    | Write (e)   -> {compileExpr (e), WRITE}
-    | Assn (a, e) -> {compileExpr (e), Store (a)}
-    | _           -> {}
+      Seq   (a, b)  -> {compileSM (a), compileSM (b)}
+    | Read  (a)     -> {READ, ST (a)}
+    | Write (e)     -> {compileExpr (e), WRITE}
+    | Assn  (a, e)  -> {compileExpr (e), ST (a)}
+    | _             -> {}
     esac
   }
   deepFlatten (compileSMinternal (stmt))

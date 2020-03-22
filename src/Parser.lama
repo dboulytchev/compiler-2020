@@ -11,15 +11,44 @@ fun inbr (l, p, r) {
   s (l) |> lift (p |> bypass (s (r)))
 }
 
--- Primary expression
-local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
-                            lident  @ fun (x) {Var (x)} |
-                            inbr ("(", exp, ")")),
-      exp = memo $ eta (failure ("expression parsing not implemented\n"));
+fun rParser (p, ops) {
+  p |> fun (l) { (ops |> fun (bin) { rParser (p, ops) @ fun (r) { bin (l, r) } }) | (empty @ fun (_) { l }) }
+}
 
-local stmt = memo $ eta (failure ("statement parsing not implemented\n"));
-   
+fun nParser (p, ops) {
+  p |> fun (l) { (ops |> fun (bin) { p @ fun (r) { bin (l, r) } }) | (empty @ fun (_) { l }) }
+}
+
+fun lParser (p, ops) {
+  fun internal (l) { 
+    (ops |> fun (bin) { p |> fun (r) { internal (bin (l, r)) } }) | (empty @ lift (l)) 
+  }
+  p |> internal
+}
+
+fun binOpParser (op) {
+  s (op) @ lift (fun (l, r) { Binop (op, l, r) })
+}
+
+fun binOpsParser (op : ops) {
+  foldl (infix |, binOpParser (op), map (binOpParser, ops))
+}
+
+-- Primary expression
+local primary = memo $ eta (decimal @ fun (x) { Const (stringInt (x))} |
+                            lident  @ fun (x) { Var (x)} |
+                            inbr ("(", exp, ")")),
+      exp = memo $ eta (fun (p, [assoc, ops]) { assoc (p, binOpsParser (ops)) }.foldr (primary,
+                        [lParser, "!!" : {}] : 
+                        [lParser, "&&" : {}] : 
+                        [nParser, {"==", "!=", "<=", ">=", "<", ">"}] : 
+                        [lParser, {"+", "-"}] :
+                        [lParser, {"*", "/", "%"}] : {}));
+
+local stmt = memo $ eta (rParser ((kRead  |> lift (inbr ("(", lident, ")") @ fun (x) { Read  (x) }))
+                                | (kWrite |> lift (inbr ("(", exp,    ")") @ fun (x) { Write (x) }))
+                                | (lident |> fun (a) { s (":=") |> lift (exp @ fun (b) { Assn (a, b) }) }), s (";") @ lift (fun (a, b) { Seq (a, b) })) |> bypass (end));
+
 
 -- Public top-level parser
 public parse = stmt;
-             
