@@ -62,7 +62,7 @@ fun compileExpr(expr) {
     Const(x) -> singleton(CONST(x))
   | Var(x) -> singleton(LD(x))
   | Binop(op, l, r) ->
-    {compileExpr(l), compileExpr(r), singleton(BINOP(op))}.deepFlatten
+    {compileExpr(l), compileExpr(r), singleton(BINOP(op))}
 	esac
 }
 
@@ -75,12 +75,13 @@ public fun compileSM(stmt) {
 
 public fun compileNestedSM(stmt) {
 	case stmt of
-    Read(x) -> {READ, ST(x)}
+    Skip -> {}
+  | Read(x) -> {READ, ST(x)}
   | Write(e) -> 
     {compileExpr(e), singleton(WRITE)}
   | Assn(x, e) -> 
     {compileExpr(e), singleton(ST(x))}
   | Seq(s1, s2) -> 
-    {compileSM(s1), compileSM(s2)}
+    {compileSM(s1), compileSM(s2)} 
 	esac
 }
