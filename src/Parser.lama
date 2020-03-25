@@ -34,10 +34,10 @@ fun descr (op) {
 local exp = memo $ eta (expr (ops, primary) (id));
 
 local part = memo $ eta (
-  kSkip @ lift (Skip) 
-| (kRead |> lift (inbr ("(", lident, ")"))) @ fun (v) { Read (v) }
-| (kWrite |> lift (inbr ("(", lident, ")")))) @ fun (e) { Write (e) } 
-| lident |> fun (v) { s (":=") |> lift (exp @ fun (e) { Assn (v, e) }) }
+  kRead  |> lift(inbr("(", lident, ")") @ fun (x) {Read(x)})
+| kWrite |> lift(inbr("(", exp, ")") @ fun (x) {Write(x)})
+| lident |> fun (i) { (s (":=") |> lift (exp)) @ fun (e) { Assn (i, e) } }
+| kSkip @ lift(Skip)
 );
 
 local stmt = memo $ eta (
