@@ -73,6 +73,7 @@ public fun compileSM (stmt) {
     | Read (x) -> { READ, ST (x) }
     | Write (x) -> { compileExpr (x), WRITE }
     | Seq (s1, s2) -> { compile (s1), compile (s2) }
+    | _ -> {}
     esac
   }
 
