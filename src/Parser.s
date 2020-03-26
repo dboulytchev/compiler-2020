@@ -4,45 +4,45 @@
 
 	.data
 
-string_5:	.string	"!!"
+string_0:	.string	"!!"
 
-string_8:	.string	"!="
+string_3:	.string	"!="
 
-string_4:	.string	"%"
+string_12:	.string	"%"
 
-string_6:	.string	"&&"
+string_1:	.string	"&&"
 
 string_15:	.string	"("
 
 string_16:	.string	")"
 
-string_2:	.string	"*"
+string_10:	.string	"*"
 
-string_0:	.string	"+"
+string_8:	.string	"+"
 
-string_1:	.string	"-"
+string_9:	.string	"-"
 
-string_3:	.string	"/"
+string_11:	.string	"/"
 
 string_14:	.string	":="
 
 string_13:	.string	";"
 
-string_10:	.string	"<"
+string_5:	.string	"<"
 
-string_9:	.string	"<="
+string_4:	.string	"<="
 
-string_7:	.string	"=="
+string_2:	.string	"=="
 
-string_12:	.string	">"
+string_7:	.string	">"
 
-string_11:	.string	">="
+string_6:	.string	">="
 
 _init:	.int 0
 
 	.section custom_data,"aw",@progbits
 
-filler:	.fill	10, 4, 1
+filler:	.fill	8, 4, 1
 
 global_exp:	.int	1
 
@@ -291,7 +291,7 @@ _continue:
 	addl	$8,	%esp
 	popl	%ebx
 	movl	%eax,	%ecx
-# STRING ("+") / 
+# STRING ("!!") / 
 
 	movl	$string_0,	%esi
 	pushl	%ebx
@@ -312,7 +312,39 @@ _continue:
 	popl	%ecx
 	popl	%ebx
 	movl	%eax,	%esi
-# STRING ("-") / 
+# CALL ("Lsingleton", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	call	Lsingleton
+	addl	$4,	%esp
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	%esi
+# CALL (".array", 2, false) / 
+
+	pushl	%ebx
+	pushl	%esi
+	pushl	%ecx
+	pushl	$5
+	call	Barray
+	addl	$12,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# SEXP ("Left", 0) / 
+
+	movl	$9982356,	%esi
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	$3
+	call	Bsexp
+	addl	$8,	%esp
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	%esi
+# STRING ("&&") / 
 
 	movl	$string_1,	%edi
 	pushl	%ebx
@@ -337,7 +369,45 @@ _continue:
 	popl	%ecx
 	popl	%ebx
 	movl	%eax,	%edi
-# STRING ("*") / 
+# CALL ("Lsingleton", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	call	Lsingleton
+	addl	$4,	%esp
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	%edi
+# CALL (".array", 2, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%edi
+	pushl	%esi
+	pushl	$5
+	call	Barray
+	addl	$12,	%esp
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	%esi
+# SEXP ("Nona", 0) / 
+
+	movl	$10548097,	%edi
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	$3
+	call	Bsexp
+	addl	$8,	%esp
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	%edi
+# STRING ("==") / 
 
 	movl	$string_2,	-4(%ebp)
 	pushl	%ebx
@@ -366,9 +436,244 @@ _continue:
 	popl	%ecx
 	popl	%ebx
 	movl	%eax,	-4(%ebp)
+# STRING ("!=") / 
+
+	movl	$string_3,	-8(%ebp)
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-8(%ebp)
+	call	Bstring
+	addl	$4,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-8(%ebp)
+# CALL ("Lbinop", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-8(%ebp)
+	call	Lbinop
+	addl	$4,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-8(%ebp)
+# STRING ("<=") / 
+
+	movl	$string_4,	-12(%ebp)
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-12(%ebp)
+	call	Bstring
+	addl	$4,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-12(%ebp)
+# CALL ("Lbinop", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-12(%ebp)
+	call	Lbinop
+	addl	$4,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-12(%ebp)
+# STRING ("<") / 
+
+	movl	$string_5,	-16(%ebp)
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-16(%ebp)
+	call	Bstring
+	addl	$4,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-16(%ebp)
+# CALL ("Lbinop", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-16(%ebp)
+	call	Lbinop
+	addl	$4,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-16(%ebp)
+# STRING (">=") / 
+
+	movl	$string_6,	-20(%ebp)
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-20(%ebp)
+	call	Bstring
+	addl	$4,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-20(%ebp)
+# CALL ("Lbinop", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-20(%ebp)
+	call	Lbinop
+	addl	$4,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-20(%ebp)
+# STRING (">") / 
+
+	movl	$string_7,	-24(%ebp)
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-24(%ebp)
+	call	Bstring
+	addl	$4,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-24(%ebp)
+# CALL ("Lbinop", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-24(%ebp)
+	call	Lbinop
+	addl	$4,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-24(%ebp)
 # CONST (0) / 
 
-	movl	$1,	-8(%ebp)
+	movl	$1,	-28(%ebp)
+# SEXP ("cons", 2) / 
+
+	movl	$848787,	-32(%ebp)
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-32(%ebp)
+	pushl	-28(%ebp)
+	pushl	-24(%ebp)
+	pushl	$7
+	call	Bsexp
+	addl	$16,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-24(%ebp)
+# SEXP ("cons", 2) / 
+
+	movl	$848787,	-28(%ebp)
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-28(%ebp)
+	pushl	-24(%ebp)
+	pushl	-20(%ebp)
+	pushl	$7
+	call	Bsexp
+	addl	$16,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-20(%ebp)
+# SEXP ("cons", 2) / 
+
+	movl	$848787,	-24(%ebp)
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-24(%ebp)
+	pushl	-20(%ebp)
+	pushl	-16(%ebp)
+	pushl	$7
+	call	Bsexp
+	addl	$16,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-16(%ebp)
+# SEXP ("cons", 2) / 
+
+	movl	$848787,	-20(%ebp)
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-20(%ebp)
+	pushl	-16(%ebp)
+	pushl	-12(%ebp)
+	pushl	$7
+	call	Bsexp
+	addl	$16,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-12(%ebp)
+# SEXP ("cons", 2) / 
+
+	movl	$848787,	-16(%ebp)
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-16(%ebp)
+	pushl	-12(%ebp)
+	pushl	-8(%ebp)
+	pushl	$7
+	call	Bsexp
+	addl	$16,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-8(%ebp)
 # SEXP ("cons", 2) / 
 
 	movl	$848787,	-12(%ebp)
@@ -382,218 +687,6 @@ _continue:
 	pushl	$7
 	call	Bsexp
 	addl	$16,	%esp
-	popl	%edi
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	-4(%ebp)
-# SEXP ("cons", 2) / 
-
-	movl	$848787,	-8(%ebp)
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	-8(%ebp)
-	pushl	-4(%ebp)
-	pushl	%edi
-	pushl	$7
-	call	Bsexp
-	addl	$16,	%esp
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	%edi
-# SEXP ("cons", 2) / 
-
-	movl	$848787,	-4(%ebp)
-	pushl	%ebx
-	pushl	%ecx
-	pushl	-4(%ebp)
-	pushl	%edi
-	pushl	%esi
-	pushl	$7
-	call	Bsexp
-	addl	$16,	%esp
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	%esi
-# CALL (".array", 2, false) / 
-
-	pushl	%ebx
-	pushl	%esi
-	pushl	%ecx
-	pushl	$5
-	call	Barray
-	addl	$12,	%esp
-	popl	%ebx
-	movl	%eax,	%ecx
-# SEXP ("Left", 0) / 
-
-	movl	$9982356,	%esi
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	$3
-	call	Bsexp
-	addl	$8,	%esp
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	%esi
-# STRING ("/") / 
-
-	movl	$string_3,	%edi
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	call	Bstring
-	addl	$4,	%esp
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	%edi
-# CALL ("Lbinop", 1, false) / 
-
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	call	Lbinop
-	addl	$4,	%esp
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	%edi
-# STRING ("%") / 
-
-	movl	$string_4,	-4(%ebp)
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	pushl	-4(%ebp)
-	call	Bstring
-	addl	$4,	%esp
-	popl	%edi
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	-4(%ebp)
-# CALL ("Lbinop", 1, false) / 
-
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	pushl	-4(%ebp)
-	call	Lbinop
-	addl	$4,	%esp
-	popl	%edi
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	-4(%ebp)
-# CONST (0) / 
-
-	movl	$1,	-8(%ebp)
-# SEXP ("cons", 2) / 
-
-	movl	$848787,	-12(%ebp)
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	pushl	-12(%ebp)
-	pushl	-8(%ebp)
-	pushl	-4(%ebp)
-	pushl	$7
-	call	Bsexp
-	addl	$16,	%esp
-	popl	%edi
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	-4(%ebp)
-# SEXP ("cons", 2) / 
-
-	movl	$848787,	-8(%ebp)
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	-8(%ebp)
-	pushl	-4(%ebp)
-	pushl	%edi
-	pushl	$7
-	call	Bsexp
-	addl	$16,	%esp
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	%edi
-# CALL (".array", 2, false) / 
-
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%edi
-	pushl	%esi
-	pushl	$5
-	call	Barray
-	addl	$12,	%esp
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	%esi
-# SEXP ("Left", 0) / 
-
-	movl	$9982356,	%edi
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	pushl	$3
-	call	Bsexp
-	addl	$8,	%esp
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	%edi
-# STRING ("!!") / 
-
-	movl	$string_5,	-4(%ebp)
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	pushl	-4(%ebp)
-	call	Bstring
-	addl	$4,	%esp
-	popl	%edi
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	-4(%ebp)
-# CALL ("Lbinop", 1, false) / 
-
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	pushl	-4(%ebp)
-	call	Lbinop
-	addl	$4,	%esp
-	popl	%edi
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	-4(%ebp)
-# CALL ("Lsingleton", 1, false) / 
-
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	pushl	-4(%ebp)
-	call	Lsingleton
-	addl	$4,	%esp
 	popl	%edi
 	popl	%esi
 	popl	%ecx
@@ -629,9 +722,9 @@ _continue:
 	popl	%ecx
 	popl	%ebx
 	movl	%eax,	-4(%ebp)
-# STRING ("&&") / 
+# STRING ("+") / 
 
-	movl	$string_6,	-8(%ebp)
+	movl	$string_8,	-8(%ebp)
 	pushl	%ebx
 	pushl	%ecx
 	pushl	%esi
@@ -658,15 +751,69 @@ _continue:
 	popl	%ecx
 	popl	%ebx
 	movl	%eax,	-8(%ebp)
-# CALL ("Lsingleton", 1, false) / 
+# STRING ("-") / 
+
+	movl	$string_9,	-12(%ebp)
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-12(%ebp)
+	call	Bstring
+	addl	$4,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-12(%ebp)
+# CALL ("Lbinop", 1, false) / 
 
 	pushl	%ebx
 	pushl	%ecx
 	pushl	%esi
 	pushl	%edi
-	pushl	-8(%ebp)
-	call	Lsingleton
+	pushl	-12(%ebp)
+	call	Lbinop
 	addl	$4,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-12(%ebp)
+# CONST (0) / 
+
+	movl	$1,	-16(%ebp)
+# SEXP ("cons", 2) / 
+
+	movl	$848787,	-20(%ebp)
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-20(%ebp)
+	pushl	-16(%ebp)
+	pushl	-12(%ebp)
+	pushl	$7
+	call	Bsexp
+	addl	$16,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-12(%ebp)
+# SEXP ("cons", 2) / 
+
+	movl	$848787,	-16(%ebp)
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-16(%ebp)
+	pushl	-12(%ebp)
+	pushl	-8(%ebp)
+	pushl	$7
+	call	Bsexp
+	addl	$16,	%esp
 	popl	%edi
 	popl	%esi
 	popl	%ecx
@@ -688,9 +835,9 @@ _continue:
 	popl	%ecx
 	popl	%ebx
 	movl	%eax,	-4(%ebp)
-# SEXP ("Nona", 0) / 
+# SEXP ("Left", 0) / 
 
-	movl	$10548097,	-8(%ebp)
+	movl	$9982356,	-8(%ebp)
 	pushl	%ebx
 	pushl	%ecx
 	pushl	%esi
@@ -704,9 +851,9 @@ _continue:
 	popl	%ecx
 	popl	%ebx
 	movl	%eax,	-8(%ebp)
-# STRING ("==") / 
+# STRING ("*") / 
 
-	movl	$string_7,	-12(%ebp)
+	movl	$string_10,	-12(%ebp)
 	pushl	%ebx
 	pushl	%ecx
 	pushl	%esi
@@ -733,9 +880,9 @@ _continue:
 	popl	%ecx
 	popl	%ebx
 	movl	%eax,	-12(%ebp)
-# STRING ("!=") / 
+# STRING ("/") / 
 
-	movl	$string_8,	-16(%ebp)
+	movl	$string_11,	-16(%ebp)
 	pushl	%ebx
 	pushl	%ecx
 	pushl	%esi
@@ -762,9 +909,9 @@ _continue:
 	popl	%ecx
 	popl	%ebx
 	movl	%eax,	-16(%ebp)
-# STRING ("<=") / 
+# STRING ("%") / 
 
-	movl	$string_9,	-20(%ebp)
+	movl	$string_12,	-20(%ebp)
 	pushl	%ebx
 	pushl	%ecx
 	pushl	%esi
@@ -791,150 +938,9 @@ _continue:
 	popl	%ecx
 	popl	%ebx
 	movl	%eax,	-20(%ebp)
-# STRING ("<") / 
-
-	movl	$string_10,	-24(%ebp)
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	pushl	-24(%ebp)
-	call	Bstring
-	addl	$4,	%esp
-	popl	%edi
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	-24(%ebp)
-# CALL ("Lbinop", 1, false) / 
-
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	pushl	-24(%ebp)
-	call	Lbinop
-	addl	$4,	%esp
-	popl	%edi
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	-24(%ebp)
-# STRING (">=") / 
-
-	movl	$string_11,	-28(%ebp)
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	pushl	-28(%ebp)
-	call	Bstring
-	addl	$4,	%esp
-	popl	%edi
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	-28(%ebp)
-# CALL ("Lbinop", 1, false) / 
-
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	pushl	-28(%ebp)
-	call	Lbinop
-	addl	$4,	%esp
-	popl	%edi
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	-28(%ebp)
-# STRING (">") / 
-
-	movl	$string_12,	-32(%ebp)
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	pushl	-32(%ebp)
-	call	Bstring
-	addl	$4,	%esp
-	popl	%edi
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	-32(%ebp)
-# CALL ("Lbinop", 1, false) / 
-
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	pushl	-32(%ebp)
-	call	Lbinop
-	addl	$4,	%esp
-	popl	%edi
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	-32(%ebp)
 # CONST (0) / 
 
-	movl	$1,	-36(%ebp)
-# SEXP ("cons", 2) / 
-
-	movl	$848787,	-40(%ebp)
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	pushl	-40(%ebp)
-	pushl	-36(%ebp)
-	pushl	-32(%ebp)
-	pushl	$7
-	call	Bsexp
-	addl	$16,	%esp
-	popl	%edi
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	-32(%ebp)
-# SEXP ("cons", 2) / 
-
-	movl	$848787,	-36(%ebp)
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	pushl	-36(%ebp)
-	pushl	-32(%ebp)
-	pushl	-28(%ebp)
-	pushl	$7
-	call	Bsexp
-	addl	$16,	%esp
-	popl	%edi
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	-28(%ebp)
-# SEXP ("cons", 2) / 
-
-	movl	$848787,	-32(%ebp)
-	pushl	%ebx
-	pushl	%ecx
-	pushl	%esi
-	pushl	%edi
-	pushl	-32(%ebp)
-	pushl	-28(%ebp)
-	pushl	-24(%ebp)
-	pushl	$7
-	call	Bsexp
-	addl	$16,	%esp
-	popl	%edi
-	popl	%esi
-	popl	%ecx
-	popl	%ebx
-	movl	%eax,	-24(%ebp)
+	movl	$1,	-24(%ebp)
 # SEXP ("cons", 2) / 
 
 	movl	$848787,	-28(%ebp)
@@ -1273,9 +1279,9 @@ LinitParser_epilogue:
 	movl	%ebp,	%esp
 	popl	%ebp
 	ret
-	.set	LinitParser_SIZE,	40
+	.set	LinitParser_SIZE,	32
 
-	.set	LSinitParser_SIZE,	10
+	.set	LSinitParser_SIZE,	8
 
 # LABEL ("Llambda_3") / 
 

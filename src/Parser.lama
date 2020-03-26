@@ -16,18 +16,19 @@ fun binop(op) {
 }
 
 local operations = { 
-      [Left, {binop("+"), binop("-"), binop("*")}],
-      [Left, {binop("/"), binop("%")}],
       [Left, singleton(binop("!!"))],
       [Left, singleton(binop("&&"))],
-      [Nona, {binop("=="), binop("!="), binop("<="), binop("<"), binop(">="), binop(">")}]
+      [Nona, {binop("=="), binop("!="), binop("<="), binop("<"), binop(">="), binop(">")}],
+      [Left, {binop("+"), binop("-")}],
+      [Left, {binop("*"), binop("/"), binop("%")}]
+      
   };
 
 -- Primary expression
 local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
                             lident  @ fun (x) {Var (x)} |
-                            inbr (exp));
-local exp = memo $ eta (expr(operations, primary)(id));
+                            inbr (exp)),
+      exp = memo $ eta (expr(operations, primary)(id));
 
 local stmt = memo $ eta (
       kSkip    @ lift(Skip)
