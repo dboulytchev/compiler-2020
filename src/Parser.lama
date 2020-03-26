@@ -12,14 +12,24 @@ fun inbr (l, p, r) {
 }
 
 -- Primary expression
-local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
-                            lident  @ fun (x) {Var (x)} |
-                            inbr ("(", exp, ")")),
-      exp = memo $ eta (failure ("expression parsing not implemented\n"));
+local primary   = memo $ eta (
+  decimal @ fun (x) {Const (stringInt (x))} 
+  | lident  @ fun (x) {Var (x)} 
+  | inbr ("(", exp, ")")),
+local exp       = memo $ eta (failure ("expression parsing not implemented\n"));
 
-local stmt = memo $ eta (failure ("statement parsing not implemented\n"));
+local stmt      = memo $ eta (
+
+
+
+)
+
+local statement = memo $ eta (
+                  stmt | (stmt |> fun(st) {
+                       s(";") |> lift(statement @ fun(st2) {Seq(st, st2)})
+                  });
    
 
 -- Public top-level parser
-public parse = stmt;
+public parse = statement;
              
