@@ -295,8 +295,8 @@ fun compile (env, code) {
     fun logic_binop(first, second, s, op) {
       {
         Binop("^", eax, eax), Binop("^", edx, edx),
-        Binop("cmp", first, eax), Set(suffix(op), "%al"),
-        Binop("cmp", second, edx), Set(suffix(op), "%dl"),
+        Binop("cmp", first, eax), Set(suffix("!="), "%al"),
+        Binop("cmp", second, edx), Set(suffix("!="), "%dl"),
         Binop(op, eax, edx), Mov(edx, s)
       }
     }

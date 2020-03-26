@@ -7,28 +7,40 @@ import Fun;
 
 -- A parser of "something" in brackets; l, r are left and right
 -- brackets as strings, p --- a parser of "something"
-fun inbr (l, p, r) {
-  s (l) |> lift (p |> bypass (s (r)))
+fun inbr (p) {
+  s ("(") |> lift (p |> bypass (s (")")))
 }
 
+fun binop(op) { 
+  [s(op), fun(l, r) { Binop(op, l, r) }]
+}
+
+local operations = { 
+      [Left, {binop("+"), binop("-"), binop("*")}],
+      [Left, {binop("/"), binop("%")}],
+      [Left, singleton(binop("!!"))],
+      [Left, singleton(binop("&&"))],
+      [Nona, {binop("=="), binop("!="), binop("<="), binop("<"), binop(">="), binop(">")}]
+  };
+
 -- Primary expression
-local primary   = memo $ eta (
-  decimal @ fun (x) {Const (stringInt (x))} 
-  | lident  @ fun (x) {Var (x)} 
-  | inbr ("(", exp, ")")),
-local exp       = memo $ eta (failure ("expression parsing not implemented\n"));
+local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
+                            lident  @ fun (x) {Var (x)} |
+                            inbr (exp),
+      exp = memo $ eta (expr(operations, primary)(id));
 
-local stmt      = memo $ eta (
-
-
-
-)
+local stmt = memo $ eta (
+      kSkip    @ lift(Skip)
+    | lident  |> fun(val1) {(s(":=") |> lift(exp)) @ fun(val2) { Assn(val1, val2) }}
+    | (kRead  |> lift(inbr(lident))) @ fun(val) { Read(val) }
+    | (kWrite |> lift(exp)) @ fun(val) { Write(val) }
+);
 
 local statement = memo $ eta (
-                  stmt | (stmt |> fun(st) {
-                       s(";") |> lift(statement @ fun(st2) {Seq(st, st2)})
-                  });
-   
+  stmt | stmt |> fun (s1) {
+    (s(";") |> lift(statement)) @ fun (s2) { Seq(s1, s2) }
+  }
+);
 
 -- Public top-level parser
 public parse = statement;
