@@ -4,11 +4,10 @@ import Ostap;
 import Lexer;
 import List;
 import Fun;
-
 import Matcher;
 
 -- A parser of "something" in brackets; l, r are left and right
--- brackets as strings, p --- a parser of "something"
+-- brackets as parsers, p --- a parser of "something"
 fun inbr (l, p, r) {
   l |> lift (p |> bypass (r))
 }
@@ -26,21 +25,21 @@ local ops = { [Left, singleton (bin ("!!"))],
                        bin ("=="),
                        bin ("!=") }],
               [Left, { bin ("+"),
-                       bin ("-")}],
+                       bin ("-") }],
               [Left, { bin ("*"),
                        bin ("/"),
-                       bin ("%")}]};
+                       bin ("%") }]};
 
 local ifElif = memo $ eta (kElif |> lift (exp |> fun (e) {
                              kThen |> lift (stmt |> fun (s1) {
                                kElse |> lift (stmt |> fun (s2) {
                                  kFi @ lift (If (e, s1, s2)) }) |
                                kFi @ lift (If (e, s1, Skip)) |
-                               ifElif @ fun (s2) {If (e, s1, s2)} }) }) );
+                               ifElif @ fun (s2) { If (e, s1, s2) } }) }) );
 
 -- Primary expression
 local primary = memo $ eta (decimal @ fun (x) { Const (stringInt (x)) } |
-                            lident  @ fun (x) {Var (x)} |
+                            lident  @ fun (x) { Var (x) } |
                             inbr (s ("("), exp, s (")")));
 
 local exp = memo $ eta (expr (ops, primary)(id));
@@ -57,14 +56,14 @@ local st = memo $ eta (kSkip @ lift (Skip) |
                            kElse |> lift (stmt |> fun (s2) {
                              kFi @ lift (If (e, s1, s2)) }) |
                            kFi @ lift (If (e, s1, Skip)) |
-                           ifElif @ fun (s2) {If (e, s1, s2)} }) }) |
+                           ifElif @ fun (s2) { If (e, s1, s2) } }) }) |
                        kRepeat |> lift (stmt |> fun (s) {
                          kUntil |> lift (exp @ fun (e) { Repeat (s, e) }) }) |
                        kFor |> lift (stmt |> fun (s1) {
                          s(",") |> lift (exp |> fun (e) {
                            s(",") |> lift (stmt |> fun (s2) {
                              kDo |> lift (stmt |> fun (s3) {
-                               kOd @ lift (Seq (s1, While (e, Seq(s3, s2)))) }) }) }) }));
+                               kOd @ lift (Seq (s1, While (e, Seq (s3, s2)))) }) }) }) }));
 
 local stmt = memo $ eta (st |
                          st |> fun (s1) { s(";") |> lift (stmt @ fun (s2) { Seq (s1, s2) }) });
@@ -72,4 +71,3 @@ local stmt = memo $ eta (st |
 
 -- Public top-level parser
 public parse = stmt;
-             

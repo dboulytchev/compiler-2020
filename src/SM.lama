@@ -25,8 +25,6 @@ public fun showSM (prg) {
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
---
--- A statement is represented by a data structure of the following shape:
 fun eval ([s, st, w], insns) {
   case insns of
     CONST (c) : o -> eval ([c : s, st, w], o)
