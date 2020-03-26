@@ -26,8 +26,8 @@ local operations = {
 -- Primary expression
 local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
                             lident  @ fun (x) {Var (x)} |
-                            inbr (exp),
-      exp = memo $ eta (expr(operations, primary)(id));
+                            inbr (exp));
+local exp = memo $ eta (expr(operations, primary)(id));
 
 local stmt = memo $ eta (
       kSkip    @ lift(Skip)

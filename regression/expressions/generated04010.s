@@ -20,16 +20,16 @@ main:
 	addl	%ecx,	%eax
 	movl	%eax,	%ebx
 	movl	global_x0,	%ecx
-	movl	$53,	%esi
-	movl	$54,	%edi
-	movl	%esi,	%eax
-	addl	%edi,	%eax
-	movl	%eax,	%esi
-	movl	%ecx,	%eax
-	imull	%esi,	%eax
-	movl	%eax,	%ecx
 	movl	%ebx,	%eax
 	addl	%ecx,	%eax
+	movl	%eax,	%ebx
+	movl	$53,	%ecx
+	movl	$54,	%esi
+	movl	%ecx,	%eax
+	addl	%esi,	%eax
+	movl	%eax,	%ecx
+	movl	%ebx,	%eax
+	imull	%ecx,	%eax
 	movl	%eax,	%ebx
 	movl	%ebx,	global_y
 	movl	global_y,	%ebx
