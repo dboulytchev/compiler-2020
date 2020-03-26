@@ -14,14 +14,13 @@ fun eval ([sk, st, w], insns) {
   			eval ([c : sk, st, w], ins)
 
 		| READ : ins ->
-        case readWorld (w) of	[v, nw] -> 
+        case readWorld (w) of [v, nw] -> 
           eval ([v : sk, st, nw], ins)
         esac
 
 		| WRITE : ins ->
         case sk of head : t -> 
-          local nw = writeWorld (head, w);
-          eval ([t, st, nw], ins)
+          eval ([t, st, writeWorld (head, w)], ins)
         esac
 
 		| ST (x) : ins -> 
@@ -34,8 +33,7 @@ fun eval ([sk, st, w], insns) {
 
 		| BINOP (o) : ins -> 
 			case sk of r : l : t -> 
-					local res = evalBinop (o, l, r);
-					eval ([res : t, st, w], ins)
+					eval ([evalBinop (o, l, r) : t, st, w], ins)
 			esac
 
 		| {} -> [sk, st, w]
@@ -60,9 +58,7 @@ fun compileExpr (expr) {
         	singleton (LD (x))
 
 		| Binop (o, l, r) ->
-		  	local cl = compileExpr (l);
-		  	local cr = compileExpr (r);
-		  	cl +++ cr +++ singleton (BINOP (o))
+		  	compileExpr (l) +++ compileExpr (r) +++ singleton (BINOP (o))
 
 	esac
 }
