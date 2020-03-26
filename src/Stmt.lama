@@ -24,12 +24,10 @@ fun eval ([s, w], stmt) {
 			esac
 
 		| Write (e) -> 
-		  	local expr = evalExpr (s, e);
-		  	[s, writeWorld (expr, w)]
+		  	[s, writeWorld (evalExpr (s, e), w)]
 
 		| Assn (x, e) -> 
-  			local expr = evalExpr (s, e);
-  			[s <- [x, expr], w]
+  			[s <- [x, evalExpr (s, e)], w]
 
 		| Seq (s1, s2) -> 
   			eval (eval ([s, w], s1), s2)
