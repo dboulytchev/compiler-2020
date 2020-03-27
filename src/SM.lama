@@ -57,7 +57,7 @@ fun compileExpr (expr) {
   case expr of
     Const (x) -> singleton (CONST (x))
   | Var (x) -> singleton (LD (x))
-  | Binop (o, l, r) -> { compileExpr (l), compileExpr(r), BINOP (o) }
+  | Binop (o, l, r) -> { compileExpr (l), compileExpr (r), BINOP (o) }
   esac
 }
 
