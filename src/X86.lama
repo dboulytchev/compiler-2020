@@ -4,6 +4,7 @@ import SM;
 import Collection;
 import List;
 import Util;
+import Manifest;
 
 -- Assembler language interface
 -- The registers: 
@@ -31,15 +32,6 @@ local wordSize = 4;
 --    M (string) -- a named memory location          
 --    L (int)    -- an immediate operand             
 
-(* 
-@begintype MemLoc = 
-  | R Int
-  | S Int
-  | M String
-  | L Int
-@endtype
-*)
-
 -- Some x86 instruction (we do not need all of them):
 --   Mov   (opnd, opnd)         -- copies a value from the first to the second operand  
 --   Binop (string, opnd, opnd) -- makes a binary operation; note, the first operand   
@@ -54,22 +46,7 @@ local wordSize = 4;
 --   Call  (string)             -- calls a function by its name 
 --   Ret                        -- returns from a function
 --   Meta  (string)             -- metainformation (declarations, etc.)
-
-(* 
-@begintype Instr = 
-  | Mov   MemLoc MemLoc
-  | Binop String MemLoc MemLoc
-  | IDiv  MemLoc
-  | Cltd
-  | Set   String String
-  | Push  MemLoc
-  | Pop   MemLoc
-  | Call  String
-  | Ret
-  | Meta  String
-@endtype
-*)
-
+                                                               
 -- Machine instruction printer
 fun insnString (insn) {
   
@@ -102,7 +79,7 @@ fun insnString (insn) {
   | Mov   (s1, s2)     -> sprintf ("\tmovl\t%s,\t%s\n", opndString (s1), opndString (s2))
   | Push  (s)          -> sprintf ("\tpushl\t%s\n", opndString (s))
   | Pop   (s)          -> sprintf ("\tpopl\t%s\n", opndString (s))
-  | Ret                -> "\tret"
+  | Ret                -> "\tret\n"
   | Call  (p)          -> sprintf ("\tcall\t%s\n", p)
   | Meta  (m)          -> m
   esac
