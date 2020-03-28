@@ -11,15 +11,38 @@ fun inbr (l, p, r) {
   s (l) |> lift (p |> bypass (s (r)))
 }
 
--- Primary expression
-local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
-                            lident  @ fun (x) {Var (x)} |
-                            inbr ("(", exp, ")")),
-      exp = memo $ eta (failure ("expression parsing not implemented\n"));
+fun binop(oprStr) { 
+  [s(oprStr), fun(l, r) { Binop(oprStr, l, r) }]
+}
 
-local stmt = memo $ eta (failure ("statement parsing not implemented\n"));
+local oprs = 
+  { [Left, singleton(binop("!!"))]
+  , [Left, singleton(binop("&&"))]
+  , [Nona, {binop("=="), binop("!="), binop("<="), binop("<"), binop(">="), binop(">")}]
+  , [Left, {binop("+"), binop("-")}]
+  , [Left, {binop("*"), binop("/"), binop("%")}]
+  };
+
+-- Primary expression
+local primary = memo $ eta ( 
+    decimal @ fun (x) {Const (stringInt (x))} 
+  | lident  @ fun (x) {Var (x)} 
+  | inbr ("(", exp, ")")
+  ),
+      exp = memo $ eta (expr(oprs, primary)(id));
+
+local stmtItem = memo $ eta (
+    (kWrite |> lift(exp)) @ fun(e) { Write(e) }  
+  | (kRead  |> lift(inbr("(", lident, ")"))) @ fun(var) { Read(var) }
+  | kSkip @ lift(Skip)
+  | lident |> fun(var) { s(":=") |> lift(exp  @ fun(e)  { Assn(var, e) }) }   
+  ),
+      stmt = memo $ eta (
+        listBy(stmtItem, s(";")) @ fun(l) { 
+          foldr(fun (acc, item) { Seq(item, acc) }, Skip, l) 
+        }
+      );
    
 
 -- Public top-level parser
 public parse = stmt;
-             
