@@ -250,6 +250,14 @@ fun memOpnd (opnd) {
   esac
 }
 
+-- Checks if an operand resides in memory
+fun isRegOpnd (opnd) {
+  case opnd of
+    R (_) -> true
+  | _     -> false
+  esac
+}
+
 -- Generates a move between locations, using
 -- intermediate register if needed
 fun move (from, to) {
@@ -289,17 +297,16 @@ fun setZero(item) {
   esac
 }
 
-fun isSimpleArithOpr(opr) {
+fun isSimpleArith(opr) {
   case opr of
     "+" -> true
   | "-" -> true
-  | "*" -> true
   | "^" -> true
   | _   -> false
   esac
 }
 
-fun isLogicalOpr(opr) {
+fun isLogical(opr) {
   case opr of
     "&&" -> true
   | "!!" -> true
@@ -307,7 +314,7 @@ fun isLogicalOpr(opr) {
   esac
 }
 
-fun isComparisonOpr(opr) {
+fun isComparison(opr) {
   case opr of
     "<"  -> true
   | "<=" -> true
@@ -325,17 +332,23 @@ fun isComparisonOpr(opr) {
  * @type    [String, MemLoc, MemLoc] -> {Instr}
 *)
 fun compileBinop(opr, s, d) {
-  if opr.isSimpleArithOpr then 
+  if   opr.isSimpleArith then 
     binop(opr, s, d)
-  elif opr.isLogicalOpr then
+  elif opr.isLogical then
     {setZero(eax), Binop("cmp", s, eax), Set(suffix("!="), "%al"), -- %al := s != 0
      setZero(edx), Binop("cmp", d, edx), Set(suffix("!="), "%dl"), -- %dl := d != 0
      Binop(opr, edx, eax), Mov(eax, d)}
-  elif isComparisonOpr(opr) then
-    setZero(eax) : binop("cmp", s, d) +++ {Set(suffix(opr), "%al"), Mov(eax, d)}
+  elif opr.isComparison then
+     -- V only %edx is allowed here, %eax is already used in comparison
+     --                 V --- %eax used here
+     setZero(edx) : binop("cmp", s, d) +++ {Set(suffix(opr), "%dl"), Mov(edx, d)}
   else
     case opr of
-      "/" -> {Mov(d, eax), Cltd, IDiv(s), Mov(eax, d)}
+      "*" -> if   d.isRegOpnd 
+             then singleton(Binop("*", s, d)) 
+             else {Mov(d, eax), Binop("*", s, eax), Mov(eax, d)} 
+             fi 
+    | "/" -> {Mov(d, eax), Cltd, IDiv(s), Mov(eax, d)}
     | "%" -> {Mov(d, eax), Cltd, IDiv(s), Mov(edx, d)}
     | _ -> failure("Unknown operator: %s\n", opr)
     esac
@@ -345,52 +358,66 @@ fun compileBinop(opr, s, d) {
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
-  foldl (fun ([env, code], i) {           
-    case i of
-      Read ->
-        case env.allocate of
-          [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
-        esac             
-    | Write ->
-        case env.pop of
-          [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
-        esac
-    | Const(n) -> 
+  fun compile (env, code) {
+    foldl (fun ([env, scode], i) {
+      local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+      case i of
+        READ ->
+          case env.allocate of
+            [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
+          esac             
+      | WRITE ->
+          case env.pop of
+            [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
+          esac
+      | CONST(n) -> 
         case env.allocate of
           [s, env] -> [env, code : singleton(Mov(L(n), s))]
         esac
-    | LD(var) ->
-        case env.addGlobal(var).allocate of
-          [s, env] -> [env, code : move(env.loc(var), s)]
-        esac
-    | ST(var) ->
-        case env.addGlobal(var).pop of
-          [s, env] -> [env, code : move(s, env.loc(var))]
-        esac
-    | Binop(opr) ->
-        case env.pop2 of
-          [s, d, env] -> [env.push(d), code : compileBinop(opr, s, d)]
-        esac
-    esac
-  }, [env, {}], code)
+      | LD(var) ->
+          case env.addGlobal(var).allocate of
+            [s, env] -> [env, code : move(env.loc(var), s)]
+          esac
+      | ST(var) ->
+          case env.addGlobal(var).pop of
+            [s, env] -> [env, code : move(s, env.loc(var))]
+          esac
+      | BINOP(opr) ->
+          case env.pop2 of
+            [s, d, env] -> [env.push(d), code : compileBinop(opr, s, d)]
+          esac
+      esac
+    }, [env, {}], code)
+  }
+
+  compile (env, code) 
 }
 
--- A top-level codegeneration function. Takes a stack machine program
--- and returns x86 listing as a string
-public fun compileX86 (code) {
+-- A top-level codegeneration function. Takes a driver's environment and a stack machine program,
+-- compiles the program into machine code, and compiles the machine code into an executable
+public fun compileX86 (args, code) {
   case compile (initEnv (), code) of
     [env, code] ->
-       map (insnString, 
-            deepFlatten ({
-              Meta ("\t.global\tmain\n"),
-              dataSection (
-                map (dataDef, getGlobals (env))
-              ),
-              codeSection ({
-                Meta ("main:\n"),
-                prologue (getStackSize (env)),
-                code,
-                epilogue ()})
-            })).stringcat
+       local asmFile = args.getBaseName ++ ".s",
+             runtime = case getEnv ("LAMA_RUNTIME") of
+                         #unboxed -> "../runtime/"
+                       | path     -> path
+                       esac ++ "/runtime.o";
+       
+       fwrite (asmFile,
+               map (insnString, 
+                    deepFlatten ({
+                      Meta ("\t.global\tmain\n"),
+                      dataSection (
+                        map (dataDef, getGlobals (env))
+                      ),
+                      codeSection ({
+                        Meta ("main:\n"),
+                        prologue (getStackSize (env)),
+                        code,
+                        epilogue ()})
+                    })).stringcat);
+                    
+       system ({"gcc -g -m32 -o ", args.getBaseName, " ", runtime, " ", asmFile}.stringcat)
   esac
 }
