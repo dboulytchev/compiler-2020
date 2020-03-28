@@ -6,27 +6,21 @@ import State;
 import Expr;
 import Util;
 
--- Stack code printer. Takes a list of SM instructions, return its
--- string representation.
-public fun showSMInsn (i) {
-  case i of
-    READ      -> sprintf ("READ")
-  | WRITE     -> sprintf ("WRITE")
-  | BINOP (s) -> sprintf ("BINOP %s", s)
-  | LD    (x) -> sprintf ("LD %s", x)
-  | ST    (x) -> sprintf ("ST %s", x)
-  | CONST (n) -> sprintf ("CONST %d", n)
-  esac
-}
-
-public fun showSM (prg) {
-  map (fun (i) {showSMInsn (i) ++ "\n"}, prg).stringcat
-}
-
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (conf, insns) {
+  foldl(fun (c@[stack, state, world], instr) {
+    case [stack, instr] of
+      [x : y : s, Binop(oprStr)] -> [stringToOpr(oprStr)(y, x) : s, state, world]
+    | [s        , Const(n)     ] -> [n : s, state, world]
+    | [s        , Read         ] -> case readWorld(world) of 
+                                      [n, w] -> [n : s, state, w] 
+                                    esac
+    | [z : s    , Write        ] -> [s, state, writeWorld(z, world)]
+    | [s        , LD(var)      ] -> [state(var) : s, state, world]
+    | [z : s    , ST(var)      ] -> [s, state <- [var, z], world]
+    esac
+  }, conf, insns)
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -35,15 +29,30 @@ public fun evalSM (input, insns) {
 }
 
 -- Compiles an expression into a stack machine code.
--- Takes an expression, returns a list (of, possibly, lists)
--- of stack machine instructions
-fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+-- Takes an expression and a list where to put the resulting
+-- stack machine instructions
+-- @type [Expr, {SMInstr}] -> {SMInstr}
+fun compileExpr (expr, acc) {
+  case expr of
+    Const(n) -> Const(n) : acc
+  | Var(x)   -> LD(x) : acc
+  | Binop(opr, l, r) -> Binop(opr) : compileExpr(r, compileExpr(l, acc))
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
+-- @type Stmt -> {SMInstr}
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  fun compileSM (stmt, acc) {
+    case stmt of
+      Skip -> acc
+    | Assn(varStr, expr) -> ST(varStr) : compileExpr(expr, acc)
+    | Read(varStr) -> ST(varStr) : Read : acc
+    | Write(expr)  -> Write : compileExpr(expr, acc)
+    | Seq(s1, s2)  -> compileSM(s2, compileSM(s1, acc))
+    esac
+  }
+  reverse(compileSM(stmt, {}))
 }

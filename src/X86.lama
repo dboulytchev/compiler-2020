@@ -4,7 +4,6 @@ import SM;
 import Collection;
 import List;
 import Util;
-import Manifest;
 
 -- Assembler language interface
 -- The registers: 
@@ -32,6 +31,15 @@ local wordSize = 4;
 --    M (string) -- a named memory location          
 --    L (int)    -- an immediate operand             
 
+(* 
+@begintype MemLoc = 
+  | R Int
+  | S Int
+  | M String
+  | L Int
+@endtype
+*)
+
 -- Some x86 instruction (we do not need all of them):
 --   Mov   (opnd, opnd)         -- copies a value from the first to the second operand  
 --   Binop (string, opnd, opnd) -- makes a binary operation; note, the first operand   
@@ -46,7 +54,22 @@ local wordSize = 4;
 --   Call  (string)             -- calls a function by its name 
 --   Ret                        -- returns from a function
 --   Meta  (string)             -- metainformation (declarations, etc.)
-                                                               
+
+(* 
+@begintype Instr = 
+  | Mov   MemLoc MemLoc
+  | Binop String MemLoc MemLoc
+  | IDiv  MemLoc
+  | Cltd
+  | Set   String String
+  | Push  MemLoc
+  | Pop   MemLoc
+  | Call  String
+  | Ret
+  | Meta  String
+@endtype
+*)
+
 -- Machine instruction printer
 fun insnString (insn) {
   
@@ -79,7 +102,7 @@ fun insnString (insn) {
   | Mov   (s1, s2)     -> sprintf ("\tmovl\t%s,\t%s\n", opndString (s1), opndString (s2))
   | Push  (s)          -> sprintf ("\tpushl\t%s\n", opndString (s))
   | Pop   (s)          -> sprintf ("\tpopl\t%s\n", opndString (s))
-  | Ret                -> "\tret\n"
+  | Ret                -> "\tret"
   | Call  (p)          -> sprintf ("\tcall\t%s\n", p)
   | Meta  (m)          -> m
   esac
@@ -259,6 +282,15 @@ fun move (from, to) {
   fi
 }
 
+-- Generates a binop between locations, using
+-- intermediate register if needed
+fun binop (op, src, dest) {
+  if memOpnd (dest) && memOpnd (src)
+  then {Mov (src, eax), Binop(op, eax, dest)}
+  else singleton (Binop(op, src, dest))
+  fi
+}
+
 -- Gets a suffix for Set instruction from
 -- source language comparison operator
 fun suffix (op) {
@@ -272,55 +304,116 @@ fun suffix (op) {
   esac
 }
 
+-- @type MemLoc -> Instr
+fun setZero(item) {
+  case item of
+    R(_) -> Binop("^", item, item)
+  | S(_) -> Mov(L(0), item)
+  esac
+}
+
+fun isSimpleArithOpr(opr) {
+  case opr of
+    "+" -> true
+  | "-" -> true
+  | "*" -> true
+  | "^" -> true
+  | _   -> false
+  esac
+}
+
+fun isLogicalOpr(opr) {
+  case opr of
+    "&&" -> true
+  | "!!" -> true
+  | _    -> false
+  esac
+}
+
+fun isComparisonOpr(opr) {
+  case opr of
+    "<"  -> true
+  | "<=" -> true
+  | ">"  -> true
+  | ">=" -> true
+  | "==" -> true
+  | "!=" -> true
+  | _    -> false
+  esac
+}
+
+(**
+ * @returns list of x86 instructions resulted from compilation
+ *          of `s opr d` expression
+ * @type    [String, MemLoc, MemLoc] -> {Instr}
+*)
+fun compileBinop(opr, s, d) {
+  if opr.isSimpleArithOpr then 
+    binop(opr, s, d)
+  elif opr.isLogicalOpr then
+    {setZero(eax), Binop("cmp", s, eax), Set(suffix("!="), "%al"), -- %al := s != 0
+     setZero(edx), Binop("cmp", d, edx), Set(suffix("!="), "%dl"), -- %dl := d != 0
+     Binop(opr, edx, eax), Mov(eax, d)}
+  elif isComparisonOpr(opr) then
+    setZero(eax) : binop("cmp", s, d) +++ {Set(suffix(opr), "%al"), Mov(eax, d)}
+  else
+    case opr of
+      "/" -> {Mov(d, eax), Cltd, IDiv(s), Mov(eax, d)}
+    | "%" -> {Mov(d, eax), Cltd, IDiv(s), Mov(edx, d)}
+    | _ -> failure("Unknown operator: %s\n", opr)
+    esac
+  fi
+}
+
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
-  fun compile (env, code) {
-    foldl (
-      fun ([env, scode], i) {
-        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
-        case i of
-          READ ->
-            case env.allocate of
-              [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
-            esac             
-        | WRITE ->
-            case env.pop of
-              [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
-            esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+  foldl (fun ([env, code], i) {           
+    case i of
+      Read ->
+        case env.allocate of
+          [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
+        esac             
+    | Write ->
+        case env.pop of
+          [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
         esac
-      }, [env, {}], code)
-  }
-
-  compile (env, code) 
+    | Const(n) -> 
+        case env.allocate of
+          [s, env] -> [env, code : singleton(Mov(L(n), s))]
+        esac
+    | LD(var) ->
+        case env.addGlobal(var).allocate of
+          [s, env] -> [env, code : move(env.loc(var), s)]
+        esac
+    | ST(var) ->
+        case env.addGlobal(var).pop of
+          [s, env] -> [env, code : move(s, env.loc(var))]
+        esac
+    | Binop(opr) ->
+        case env.pop2 of
+          [s, d, env] -> [env.push(d), code : compileBinop(opr, s, d)]
+        esac
+    esac
+  }, [env, {}], code)
 }
 
--- A top-level codegeneration function. Takes a driver's environment and a stack machine program,
--- compiles the program into machine code, and compiles the machine code into an executable
-public fun compileX86 (args, code) {
+-- A top-level codegeneration function. Takes a stack machine program
+-- and returns x86 listing as a string
+public fun compileX86 (code) {
   case compile (initEnv (), code) of
     [env, code] ->
-       local asmFile = args.getBaseName ++ ".s",
-             runtime = case getEnv ("LAMA_RUNTIME") of
-                         #unboxed -> "../runtime/"
-                       | path     -> path
-                       esac ++ "/runtime.o";
-       
-       fwrite (asmFile,
-               map (insnString, 
-                    deepFlatten ({
-                      Meta ("\t.global\tmain\n"),
-                      dataSection (
-                        map (dataDef, getGlobals (env))
-                      ),
-                      codeSection ({
-                        Meta ("main:\n"),
-                        prologue (getStackSize (env)),
-                        code,
-                        epilogue ()})
-                    })).stringcat);
-                    
-       system ({"gcc -g -m32 -o ", args.getBaseName, " ", runtime, " ", asmFile}.stringcat)
+       map (insnString, 
+            deepFlatten ({
+              Meta ("\t.global\tmain\n"),
+              dataSection (
+                map (dataDef, getGlobals (env))
+              ),
+              codeSection ({
+                Meta ("main:\n"),
+                prologue (getStackSize (env)),
+                code,
+                epilogue ()})
+            })).stringcat
   esac
 }
