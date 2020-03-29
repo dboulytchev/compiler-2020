@@ -6,9 +6,9 @@ import List;
 import Fun;
 
 -- A parser of "something" in brackets; l, r are left and right
--- brackets as strings, p --- a parser of "something"
+-- brackets as parsers, p --- a parser of "something"
 fun inbr (l, p, r) {
-  s (l) |> lift (p |> bypass (s (r)))
+  l |> lift (p |> bypass (r))
 }
 
 local ops = {
@@ -16,7 +16,7 @@ local ops = {
   [Left, singleton("&&")],
   [Nona, {"==", "!=", "<=", "<", ">=", ">"}],
   [Left, {"+", "-"}],
-  [Left, {"*", "/", "%"}] 
+  [Left, {"*", "/", "%"}]
 };
 
 fun ops_gen(ops) {
@@ -51,8 +51,8 @@ local stmts = memo $ eta(
   stmt | (stmt |> fun (st) {
       (s(";") |> lift(stmts)) @ fun (seq) {Seq(st, seq)}
     })
-); 
+);
 
 -- Public top-level parser
 public parse = stmts;
-             
+
