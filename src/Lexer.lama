@@ -53,7 +53,7 @@ public fun s (t) {memo $ whiteSpace |> lift (token (t))}
 -- Some individual tokens
 public kRead    = s (rRead),
        kWrite   = s (rWrite),
-       kSkip    = s (rSkip),
+       kSkip    = s ("skip"),
        kIf      = s (rIf),
        kThen    = s (rThen),
        kElse    = s (rElse),
