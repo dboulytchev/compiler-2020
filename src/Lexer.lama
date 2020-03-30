@@ -55,14 +55,14 @@ public kRead    = s (rRead),
        kWrite   = s (rWrite),
        kSkip    = s (rSkip),
        kIf      = s (rIf),
-       kThen    = s (rThen),
+       kThen    = s ("then"),
        kElse    = s (rElse),
        kElif    = s (rElif),
        kFi      = s (rFi),
        kWhile   = s (rWhile),
        kDo      = s (rDo),
        kOd      = s (rOd),
-       kRepeat  = s (rRepeat),
+       kRepeat  = s ("repeat"),
        kUntil   = s (rUntil),
        kFor     = s (rFor),
        decimal  = s (rDecimal),
@@ -78,5 +78,7 @@ public kRead    = s (rRead),
                                      | a             -> a
                                      esac)
                                 }
-                              });
+                              }),
+       lParen = s("("),
+       rParen = s(")");
 

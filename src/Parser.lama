@@ -4,6 +4,7 @@ import Ostap;
 import Lexer;
 import List;
 import Fun;
+import Matcher;
 
 -- A parser of "something" in brackets; l, r are left and right
 -- brackets as parsers, p --- a parser of "something"
@@ -16,7 +17,7 @@ local ops = {
   [Left, singleton("&&")],
   [Nona, {"==", "!=", "<=", "<", ">=", ">"}],
   [Left, {"+", "-"}],
-  [Left, {"*", "/", "%"}]
+  [Left, {"*", "/", "%"}] 
 };
 
 fun ops_gen(ops) {
@@ -35,24 +36,96 @@ fun ops_gen(ops) {
 -- Primary expression
 local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
                             lident  @ fun (x) {Var (x)} |
-                            inbr ("(", exp, ")")),
+                            inbr (lParen, exp, rParen)),
       exp = memo $ eta (expr(ops_gen(ops), primary)(id));
 
+-- If expression
+local ifExprPart = 
+exp |> fun (e) {
+  kThen |> lift(
+    stmts |> fun (s1) {
+      kFi      @ lift (If (e, s1, Skip))
+    | elsePart @ fun (s2) { If (e, s1, s2) }
+    }
+  ) 
+};
+
+local elsePart = 
+memo $ eta (
+  kElse |> lift (
+    stmts |> fun (s2) {
+      kFi @ lift(s2)
+    }
+  )
+| kElif |> lift (ifExprPart)
+);
+
+local ifExpr =
+  kIf |> lift (ifExprPart);
+
+-- While expression
+local whileBase = memo $ eta (
+  kDo |> lift(
+    stmts |> fun (s) {
+      kOd @ lift (s)
+    }
+  )
+);
+
+local whileExpr = 
+kWhile |> lift (
+  exp |> fun (e) {
+    whileBase @ fun (s) { While(e, s) } 
+  }
+);
+
+-- For expression
+
+local forExpr = memo $ eta(
+  kFor |> lift(
+    stmts |> fun (init) {
+      s(",") |> lift(
+        exp |> fun (cond) {
+          s(",") |> lift(
+            stmts |> fun (step) {
+              whileBase @ fun (body) {Seq(init, While(cond, Seq(body, step)))}
+            } 
+          )
+        }
+      )
+    }
+  )
+);
+
+-- repeat until expression
+local repeatExpr = memo $ eta(
+  kRepeat |> lift(
+    stmts |> fun (s) {
+      kUntil |> lift(
+        exp @ fun(e) { Repeat(s, e) }
+      )
+    }
+  )
+);
+
 local stmt = memo $ eta (
-  kRead  |> lift(inbr("(", lident, ")") @ fun (x) {Read(x)})
-| kWrite |> lift(inbr("(", exp, ")") @ fun (x) {Write(x)})
+  kRead  |> lift(inbr(lParen, lident, rParen) @ fun (x) {Read(x)})
+| kWrite |> lift(inbr(lParen, exp, rParen) @ fun (x) {Write(x)})
 | lident |> fun (left) {
     (s(":=") |> lift(exp)) @ fun (e) {Assn(left, e)}
   }
 | kSkip @ lift(Skip)
+| ifExpr
+| whileExpr
+| forExpr
+| repeatExpr
 );
 
 local stmts = memo $ eta(
   stmt | (stmt |> fun (st) {
       (s(";") |> lift(stmts)) @ fun (seq) {Seq(st, seq)}
     })
-);
+); 
 
 -- Public top-level parser
 public parse = stmts;
-

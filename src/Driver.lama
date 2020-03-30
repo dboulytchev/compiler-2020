@@ -42,6 +42,7 @@ fun parseArgs (args) {
                case h of
                  "-i" -> setMode (Int)
                | "-s" -> setMode (SM)
+               | "-p" -> setMode(Parse)
                | fn   -> setInFile (fn)
                esac;
                rec (t)
@@ -56,7 +57,6 @@ fun parseArgs (args) {
 }
 
 local args = parseArgs (arrayList (sysargs).tl);
-
 -- The main part: parses input file, invokes interpreter/stack machine interpreter/x86
 -- code generator
 case parseString (parse |> bypass (end), fread (args.getInFile)) of
@@ -64,7 +64,10 @@ case parseString (parse |> bypass (end), fread (args.getInFile)) of
     case args.getMode of
       Comp -> compileX86 (args, compileSM (program))
     | mode ->
-       local input =
+      case mode of 
+        Parse -> printf("Parse result:\n%s\n", program.string)
+      | _     -> {
+        local input =
           reverse (fix (fun (f) {
                           fun (acc) {
                             case readLine () of
@@ -75,9 +78,11 @@ case parseString (parse |> bypass (end), fread (args.getInFile)) of
           
        iter (fun (x) {printf ("%d\n", x)},
              case mode of
-               Int -> evalStmt (input, program)
-             | SM  -> evalSM (input, compileSM (program))
+               Int   -> evalStmt (input, program)
+             | SM    -> evalSM (input, compileSM (program))
              esac)
+      }
+      esac
     esac
 | x@Fail (err, line, col) ->   
    failure ("%s at %d:%d\n", err.hd, line, col)
