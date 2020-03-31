@@ -28,6 +28,11 @@ fun eval ([st, w], stmt) {
         [val, w2] -> [st <- [x, val], w2]
       esac
     | Write(val) -> [st, writeWorld(evalExpr(st, val), w)]
+    | If(expr, stmt1, stmt2) -> if evalExpr(st, expr) != 0 then eval([st, w], stmt1) else eval([st, w], stmt2) fi
+    | While(expr, stmt1) -> if evalExpr(st, expr) != 0 then eval(eval([st, w], stmt1), stmt) else [st, w] fi
+    | Repeat(stmt1, expr) -> case eval([st, w], stmt1) of
+        [new_st, new_w] -> if evalExpr(new_st, expr) != 0 then [new_st, new_w] else eval([new_st, new_w], stmt) fi
+      esac
   esac
 }
 

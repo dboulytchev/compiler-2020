@@ -31,6 +31,18 @@ local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
 
 local exp = memo $ eta (expr(ops, primary)(id));
 
+local elifStmt = memo $ eta(
+    kElif |> lift(exp |> fun(cond) {
+      kThen |> lift(stmt |> fun(thenStmt) {
+        elifStmt @ fun(elseStmt) { If(cond, thenStmt, elseStmt) }
+      })
+    })
+  | kElse |> lift(stmt |> fun(elseStmt) {
+      kFi @ lift(elseStmt)
+    })
+  | kFi @ lift(Skip)
+);
+
 local substmt = memo $ eta (
     lident |> fun(x) {
       (s(":=") |> lift(exp)) @ fun(val) { Assn(x, val) }
@@ -38,6 +50,28 @@ local substmt = memo $ eta (
   | kSkip @ lift(Skip)
   | (kRead |> lift(inbr(lident))) @ fun(x) { Read(x) }
   | (kWrite |> lift(exp)) @ fun(val) { Write(val) }
+  | kWhile |> lift(exp |> fun(cond) {
+      kDo |> lift(stmt |> fun(loopStmt) {
+        kOd @ lift(While(cond, loopStmt))
+      })
+    })
+  | kRepeat |> lift(stmt |> fun(loopStmt) {
+      kUntil |> lift(exp @ fun(cond) { Repeat(loopStmt, cond) })
+    })
+  | kFor |> lift(stmt |> fun(init) {
+      s(",") |> lift(exp |> fun(cond) {
+        s(",") |> lift(stmt |> fun(step) {
+          kDo |> lift(stmt |> fun(loopStmt) {
+            kOd @ lift(Seq(init, While(cond, Seq(loopStmt, step))))
+          })
+        })
+      })
+    })
+  | kIf |> lift(exp |> fun(cond) {
+      kThen |> lift(stmt |> fun(thenStmt) {
+        elifStmt @ fun(elseStmt) { If(cond, thenStmt, elseStmt) }
+      })
+    })
 );
 
 local stmt = memo $ eta (
