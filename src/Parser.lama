@@ -30,12 +30,47 @@ local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
                             inbr (exp)),
       exp = memo $ eta (expr(operations, primary)(id));
 
+local elif_st = memo $ eta (kElif   |> lift(exp       |> fun(condition){
+                            kThen   |> lift(statement |> fun(then_statement){
+                            elif_st @ fun(else_statement) { If(condition, then_statement, else_statement)}
+                            })
+                            })
+                          | kElse   |> lift(statement |> fun(else_statement){
+                            kFi     @ lift(else_statement)
+                            })
+                          | kFi     @ lift(Skip) 
+);
+
 local stmt = memo $ eta (
       kSkip    @ lift(Skip)
     | lident  |> fun(val1) {(s(":=") |> lift(exp)) @ fun(val2) { Assn(val1, val2) }}
     | (kRead  |> lift(inbr(lident))) @ fun(val) { Read(val) }
     | (kWrite |> lift(exp)) @ fun(val) { Write(val) }
-);
+    | kIf     |> lift(exp       |> fun(condition)       { 
+      kThen   |> lift(statement |> fun(then_statement)  {
+      elif_st @ fun(else_statement) { If(condition, then_statement, else_statement)}
+      })
+      })
+    | kWhile  |> lift(exp       |> fun(condition)       {
+      kDo     |> lift(statement |> fun(loop_statement)  {
+      kOd     @  lift(While(condition, loop_statement))
+      })
+      })
+    | kRepeat |> lift(statement |> fun(loop_statement)  {
+      kUntil  |> lift(exp       @  fun(condition)       { 
+      Repeat(loop_statement, condition)})
+      })
+    | kFor    |> lift(statement |> fun(first_condition) {
+      s(",")  |> lift(exp       |> fun(second_condition){
+      s(",")  |> lift(statement |> fun(third_condition) {
+      kDo     |> lift(statement |> fun(loop_statement)  {
+      kOd     @  lift(Seq(first_condition, While(second_condition, 
+                      Seq(loop_statement, third_condition))))
+      })
+      })  
+      })
+      })
+); 
 
 local statement = memo $ eta (
   stmt | stmt |> fun (s1) {

@@ -12,19 +12,21 @@ string_12:	.string	"%"
 
 string_1:	.string	"&&"
 
-string_15:	.string	"("
+string_16:	.string	"("
 
-string_16:	.string	")"
+string_17:	.string	")"
 
 string_10:	.string	"*"
 
 string_8:	.string	"+"
 
+string_14:	.string	","
+
 string_9:	.string	"-"
 
 string_11:	.string	"/"
 
-string_14:	.string	":="
+string_15:	.string	":="
 
 string_13:	.string	";"
 
@@ -43,6 +45,8 @@ _init:	.int 0
 	.section custom_data,"aw",@progbits
 
 filler:	.fill	8, 4, 1
+
+global_elif_st:	.int	1
 
 global_exp:	.int	1
 
@@ -1233,9 +1237,9 @@ _continue:
 	movl	%eax,	%ebx
 # DROP / 
 
-# LDA (Global ("stmt")) / 
+# LDA (Global ("elif_st")) / 
 
-	leal	global_stmt,	%ebx
+	leal	global_elif_st,	%ebx
 # CLOSURE ("Lmemo", []) / 
 
 	pushl	%ebx
@@ -1272,9 +1276,9 @@ _continue:
 	movl	%eax,	%ebx
 # DROP / 
 
-# LDA (Global ("statement")) / 
+# LDA (Global ("stmt")) / 
 
-	leal	global_statement,	%ebx
+	leal	global_stmt,	%ebx
 # CLOSURE ("Lmemo", []) / 
 
 	pushl	%ebx
@@ -1289,6 +1293,45 @@ _continue:
 	pushl	%ebx
 	pushl	%ecx
 	pushl	$Llambda_3
+	pushl	$1
+	call	Bclosure
+	addl	$8,	%esp
+	movl	%eax,	%esi
+	popl	%ecx
+	popl	%ebx
+# CALL ("Li__Infix_36", 2, false) / 
+
+	pushl	%ebx
+	pushl	%esi
+	pushl	%ecx
+	call	Li__Infix_36
+	addl	$8,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# STI / 
+
+	movl	%ecx,	%eax
+	movl	%eax,	(%ebx)
+	movl	%eax,	%ebx
+# DROP / 
+
+# LDA (Global ("statement")) / 
+
+	leal	global_statement,	%ebx
+# CLOSURE ("Lmemo", []) / 
+
+	pushl	%ebx
+	pushl	$Lmemo
+	pushl	$1
+	call	Bclosure
+	addl	$8,	%esp
+	movl	%eax,	%ecx
+	popl	%ebx
+# CLOSURE ("Llambda_4", []) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	$Llambda_4
 	pushl	$1
 	call	Bclosure
 	addl	$8,	%esp
@@ -1339,18 +1382,18 @@ LinitParser_epilogue:
 
 	.set	LSinitParser_SIZE,	8
 
-# LABEL ("Llambda_3") / 
+# LABEL ("Llambda_4") / 
 
-Llambda_3:
+Llambda_4:
 
-# BEGIN ("Llambda_3", 1, 0, []) / 
+# BEGIN ("Llambda_4", 1, 0, []) / 
 
 	pushl	%ebp
 	movl	%esp,	%ebp
-	subl	$LLlambda_3_SIZE,	%esp
+	subl	$LLlambda_4_SIZE,	%esp
 	movl	%esp,	%edi
 	movl	$filler,	%esi
-	movl	$LSLlambda_3_SIZE,	%ecx
+	movl	$LSLlambda_4_SIZE,	%ecx
 	rep movsl	
 # LD (Global ("stmt")) / 
 
@@ -1358,11 +1401,11 @@ Llambda_3:
 # LD (Global ("stmt")) / 
 
 	movl	global_stmt,	%ecx
-# CLOSURE ("Llambda_4_2", []) / 
+# CLOSURE ("Llambda_5_2", []) / 
 
 	pushl	%ebx
 	pushl	%ecx
-	pushl	$Llambda_4_2
+	pushl	$Llambda_5_2
 	pushl	$1
 	call	Bclosure
 	addl	$8,	%esp
@@ -1399,27 +1442,27 @@ Llambda_3:
 # END / 
 
 	movl	%ebx,	%eax
-LLlambda_3_epilogue:
+LLlambda_4_epilogue:
 
 	movl	%ebp,	%esp
 	popl	%ebp
 	ret
-	.set	LLlambda_3_SIZE,	0
+	.set	LLlambda_4_SIZE,	0
 
-	.set	LSLlambda_3_SIZE,	0
+	.set	LSLlambda_4_SIZE,	0
 
-# LABEL ("Llambda_4_2") / 
+# LABEL ("Llambda_5_2") / 
 
-Llambda_4_2:
+Llambda_5_2:
 
-# BEGIN ("Llambda_4_2", 1, 0, []) / 
+# BEGIN ("Llambda_5_2", 1, 0, []) / 
 
 	pushl	%ebp
 	movl	%esp,	%ebp
-	subl	$LLlambda_4_2_SIZE,	%esp
+	subl	$LLlambda_5_2_SIZE,	%esp
 	movl	%esp,	%edi
 	movl	$filler,	%esi
-	movl	$LSLlambda_4_2_SIZE,	%ecx
+	movl	$LSLlambda_5_2_SIZE,	%ecx
 	rep movsl	
 # STRING (";") / 
 
@@ -1452,11 +1495,11 @@ Llambda_4_2:
 	call	Li__Infix_12462
 	addl	$8,	%esp
 	movl	%eax,	%ebx
-# CLOSURE ("Llambda_5_4", [Arg (0)]) / 
+# CLOSURE ("Llambda_6_4", [Arg (0)]) / 
 
 	pushl	%ebx
 	pushl	8(%ebp)
-	pushl	$Llambda_5_4
+	pushl	$Llambda_6_4
 	pushl	$3
 	call	Bclosure
 	addl	$12,	%esp
@@ -1472,28 +1515,28 @@ Llambda_4_2:
 # END / 
 
 	movl	%ebx,	%eax
-LLlambda_4_2_epilogue:
+LLlambda_5_2_epilogue:
 
 	movl	%ebp,	%esp
 	popl	%ebp
 	ret
-	.set	LLlambda_4_2_SIZE,	0
+	.set	LLlambda_5_2_SIZE,	0
 
-	.set	LSLlambda_4_2_SIZE,	0
+	.set	LSLlambda_5_2_SIZE,	0
 
-# LABEL ("Llambda_5_4") / 
+# LABEL ("Llambda_6_4") / 
 
-Llambda_5_4:
+Llambda_6_4:
 
-# BEGIN ("Llambda_5_4", 1, 0, [Arg (0)]) / 
+# BEGIN ("Llambda_6_4", 1, 0, [Arg (0)]) / 
 
 	pushl	%edx
 	pushl	%ebp
 	movl	%esp,	%ebp
-	subl	$LLlambda_5_4_SIZE,	%esp
+	subl	$LLlambda_6_4_SIZE,	%esp
 	movl	%esp,	%edi
 	movl	$filler,	%esi
-	movl	$LSLlambda_5_4_SIZE,	%ecx
+	movl	$LSLlambda_6_4_SIZE,	%ecx
 	rep movsl	
 # LD (Access (0)) / 
 
@@ -1516,28 +1559,28 @@ Llambda_5_4:
 # END / 
 
 	movl	%ebx,	%eax
-LLlambda_5_4_epilogue:
+LLlambda_6_4_epilogue:
 
 	movl	%ebp,	%esp
 	popl	%ebp
 	popl	%edx
 	ret
-	.set	LLlambda_5_4_SIZE,	0
+	.set	LLlambda_6_4_SIZE,	0
 
-	.set	LSLlambda_5_4_SIZE,	0
+	.set	LSLlambda_6_4_SIZE,	0
 
-# LABEL ("Llambda_2") / 
+# LABEL ("Llambda_3") / 
 
-Llambda_2:
+Llambda_3:
 
-# BEGIN ("Llambda_2", 1, 0, []) / 
+# BEGIN ("Llambda_3", 1, 0, []) / 
 
 	pushl	%ebp
 	movl	%esp,	%ebp
-	subl	$LLlambda_2_SIZE,	%esp
+	subl	$LLlambda_3_SIZE,	%esp
 	movl	%esp,	%edi
 	movl	$filler,	%esi
-	movl	$LSLlambda_2_SIZE,	%ecx
+	movl	$LSLlambda_3_SIZE,	%ecx
 	rep movsl	
 # LD (Global ("kSkip")) / 
 
@@ -1570,11 +1613,11 @@ Llambda_2:
 # LD (Global ("lident")) / 
 
 	movl	global_lident,	%ecx
-# CLOSURE ("Llambda_6_7", []) / 
+# CLOSURE ("Llambda_7_7", []) / 
 
 	pushl	%ebx
 	pushl	%ecx
-	pushl	$Llambda_6_7
+	pushl	$Llambda_7_7
 	pushl	$1
 	call	Bclosure
 	addl	$8,	%esp
@@ -1631,12 +1674,12 @@ Llambda_2:
 	popl	%ecx
 	popl	%ebx
 	movl	%eax,	%esi
-# CLOSURE ("Llambda_7_7", []) / 
+# CLOSURE ("Llambda_8_7", []) / 
 
 	pushl	%ebx
 	pushl	%ecx
 	pushl	%esi
-	pushl	$Llambda_7_7
+	pushl	$Llambda_8_7
 	pushl	$1
 	call	Bclosure
 	addl	$8,	%esp
@@ -1689,13 +1732,13 @@ Llambda_2:
 	popl	%ecx
 	popl	%ebx
 	movl	%eax,	%edi
-# CLOSURE ("Llambda_8_7", []) / 
+# CLOSURE ("Llambda_9_7", []) / 
 
 	pushl	%ebx
 	pushl	%ecx
 	pushl	%esi
 	pushl	%edi
-	pushl	$Llambda_8_7
+	pushl	$Llambda_9_7
 	pushl	$1
 	call	Bclosure
 	addl	$8,	%esp
@@ -1712,6 +1755,332 @@ Llambda_2:
 	pushl	-4(%ebp)
 	pushl	%edi
 	call	Li__Infix_64
+	addl	$8,	%esp
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	%edi
+# LD (Global ("kIf")) / 
+
+	movl	global_kIf,	%eax
+	movl	%eax,	-4(%ebp)
+# LD (Global ("exp")) / 
+
+	movl	global_exp,	%eax
+	movl	%eax,	-8(%ebp)
+# CLOSURE ("Llambda_10_7", []) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	$Llambda_10_7
+	pushl	$1
+	call	Bclosure
+	addl	$8,	%esp
+	movl	%eax,	-12(%ebp)
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-12(%ebp)
+	pushl	-8(%ebp)
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-8(%ebp)
+# CALL ("Llift", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-8(%ebp)
+	call	Llift
+	addl	$4,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-8(%ebp)
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-8(%ebp)
+	pushl	-4(%ebp)
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-4(%ebp)
+# LD (Global ("kWhile")) / 
+
+	movl	global_kWhile,	%eax
+	movl	%eax,	-8(%ebp)
+# LD (Global ("exp")) / 
+
+	movl	global_exp,	%eax
+	movl	%eax,	-12(%ebp)
+# CLOSURE ("Llambda_11_7", []) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	$Llambda_11_7
+	pushl	$1
+	call	Bclosure
+	addl	$8,	%esp
+	movl	%eax,	-16(%ebp)
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-16(%ebp)
+	pushl	-12(%ebp)
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-12(%ebp)
+# CALL ("Llift", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-12(%ebp)
+	call	Llift
+	addl	$4,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-12(%ebp)
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-12(%ebp)
+	pushl	-8(%ebp)
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-8(%ebp)
+# LD (Global ("kRepeat")) / 
+
+	movl	global_kRepeat,	%eax
+	movl	%eax,	-12(%ebp)
+# LD (Global ("statement")) / 
+
+	movl	global_statement,	%eax
+	movl	%eax,	-16(%ebp)
+# CLOSURE ("Llambda_12_7", []) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	$Llambda_12_7
+	pushl	$1
+	call	Bclosure
+	addl	$8,	%esp
+	movl	%eax,	-20(%ebp)
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-20(%ebp)
+	pushl	-16(%ebp)
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-16(%ebp)
+# CALL ("Llift", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-16(%ebp)
+	call	Llift
+	addl	$4,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-16(%ebp)
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-16(%ebp)
+	pushl	-12(%ebp)
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-12(%ebp)
+# LD (Global ("kFor")) / 
+
+	movl	global_kFor,	%eax
+	movl	%eax,	-16(%ebp)
+# LD (Global ("statement")) / 
+
+	movl	global_statement,	%eax
+	movl	%eax,	-20(%ebp)
+# CLOSURE ("Llambda_13_7", []) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	$Llambda_13_7
+	pushl	$1
+	call	Bclosure
+	addl	$8,	%esp
+	movl	%eax,	-24(%ebp)
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-24(%ebp)
+	pushl	-20(%ebp)
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-20(%ebp)
+# CALL ("Llift", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-20(%ebp)
+	call	Llift
+	addl	$4,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-20(%ebp)
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-20(%ebp)
+	pushl	-16(%ebp)
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-16(%ebp)
+# CALL ("Li__Infix_124", 2, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-16(%ebp)
+	pushl	-12(%ebp)
+	call	Li__Infix_124
+	addl	$8,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-12(%ebp)
+# CALL ("Li__Infix_124", 2, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-12(%ebp)
+	pushl	-8(%ebp)
+	call	Li__Infix_124
+	addl	$8,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-8(%ebp)
+# CALL ("Li__Infix_124", 2, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	-8(%ebp)
+	pushl	-4(%ebp)
+	call	Li__Infix_124
+	addl	$8,	%esp
+	popl	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	-4(%ebp)
+# CALL ("Li__Infix_124", 2, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	-4(%ebp)
+	pushl	%edi
+	call	Li__Infix_124
 	addl	$8,	%esp
 	popl	%esi
 	popl	%ecx
@@ -1758,14 +2127,822 @@ Llambda_2:
 # END / 
 
 	movl	%ebx,	%eax
-LLlambda_2_epilogue:
+LLlambda_3_epilogue:
 
 	movl	%ebp,	%esp
 	popl	%ebp
 	ret
-	.set	LLlambda_2_SIZE,	4
+	.set	LLlambda_3_SIZE,	24
 
-	.set	LSLlambda_2_SIZE,	1
+	.set	LSLlambda_3_SIZE,	6
+
+# LABEL ("Llambda_13_7") / 
+
+Llambda_13_7:
+
+# BEGIN ("Llambda_13_7", 1, 0, []) / 
+
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_13_7_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_13_7_SIZE,	%ecx
+	rep movsl	
+# STRING (",") / 
+
+	movl	$string_14,	%ebx
+	pushl	%ebx
+	call	Bstring
+	addl	$4,	%esp
+	movl	%eax,	%ebx
+# CALL ("Ls", 1, false) / 
+
+	pushl	%ebx
+	call	Ls
+	addl	$4,	%esp
+	movl	%eax,	%ebx
+# LD (Global ("exp")) / 
+
+	movl	global_exp,	%ecx
+# CLOSURE ("Llambda_14_9", [Arg (0)]) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	8(%ebp)
+	pushl	$Llambda_14_9
+	pushl	$3
+	call	Bclosure
+	addl	$12,	%esp
+	movl	%eax,	%esi
+	popl	%ecx
+	popl	%ebx
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%ebx
+	pushl	%esi
+	pushl	%ecx
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# CALL ("Llift", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	call	Llift
+	addl	$4,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# CALL ("Li__Infix_12462", 2, true) / 
+
+	pushl	%ecx
+	pushl	%ebx
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	movl	%eax,	%ebx
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_13_7_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	ret
+	.set	LLlambda_13_7_SIZE,	0
+
+	.set	LSLlambda_13_7_SIZE,	0
+
+# LABEL ("Llambda_14_9") / 
+
+Llambda_14_9:
+
+# BEGIN ("Llambda_14_9", 1, 0, [Arg (0)]) / 
+
+	pushl	%edx
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_14_9_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_14_9_SIZE,	%ecx
+	rep movsl	
+# STRING (",") / 
+
+	movl	$string_14,	%ebx
+	pushl	%edx
+	pushl	%ebx
+	call	Bstring
+	addl	$4,	%esp
+	popl	%edx
+	movl	%eax,	%ebx
+# CALL ("Ls", 1, false) / 
+
+	pushl	%edx
+	pushl	%ebx
+	call	Ls
+	addl	$4,	%esp
+	popl	%edx
+	movl	%eax,	%ebx
+# LD (Global ("statement")) / 
+
+	movl	global_statement,	%ecx
+# CLOSURE ("Llambda_15_11", [Access (0); Arg (0)]) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	12(%ebp)
+	pushl	4(%edx)
+	pushl	$Llambda_15_11
+	pushl	$5
+	call	Bclosure
+	addl	$16,	%esp
+	movl	%eax,	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	4(%ebp),	%edx
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%edx
+	pushl	%ebx
+	pushl	%esi
+	pushl	%ecx
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%ebx
+	popl	%edx
+	movl	%eax,	%ecx
+# CALL ("Llift", 1, false) / 
+
+	pushl	%edx
+	pushl	%ebx
+	pushl	%ecx
+	call	Llift
+	addl	$4,	%esp
+	popl	%ebx
+	popl	%edx
+	movl	%eax,	%ecx
+# CALL ("Li__Infix_12462", 2, true) / 
+
+	pushl	%edx
+	pushl	%ecx
+	pushl	%ebx
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%edx
+	movl	%eax,	%ebx
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_14_9_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	popl	%edx
+	ret
+	.set	LLlambda_14_9_SIZE,	0
+
+	.set	LSLlambda_14_9_SIZE,	0
+
+# LABEL ("Llambda_15_11") / 
+
+Llambda_15_11:
+
+# BEGIN ("Llambda_15_11", 1, 0, [Access (0); Arg (0)]) / 
+
+	pushl	%edx
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_15_11_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_15_11_SIZE,	%ecx
+	rep movsl	
+# LD (Global ("kDo")) / 
+
+	movl	global_kDo,	%ebx
+# LD (Global ("statement")) / 
+
+	movl	global_statement,	%ecx
+# CLOSURE ("Llambda_16_13", [Access (0); Access (1); Arg (0)]) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	12(%ebp)
+	pushl	8(%edx)
+	pushl	4(%edx)
+	pushl	$Llambda_16_13
+	pushl	$7
+	call	Bclosure
+	addl	$20,	%esp
+	movl	%eax,	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	4(%ebp),	%edx
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%edx
+	pushl	%ebx
+	pushl	%esi
+	pushl	%ecx
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%ebx
+	popl	%edx
+	movl	%eax,	%ecx
+# CALL ("Llift", 1, false) / 
+
+	pushl	%edx
+	pushl	%ebx
+	pushl	%ecx
+	call	Llift
+	addl	$4,	%esp
+	popl	%ebx
+	popl	%edx
+	movl	%eax,	%ecx
+# CALL ("Li__Infix_12462", 2, true) / 
+
+	pushl	%edx
+	pushl	%ecx
+	pushl	%ebx
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%edx
+	movl	%eax,	%ebx
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_15_11_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	popl	%edx
+	ret
+	.set	LLlambda_15_11_SIZE,	0
+
+	.set	LSLlambda_15_11_SIZE,	0
+
+# LABEL ("Llambda_16_13") / 
+
+Llambda_16_13:
+
+# BEGIN ("Llambda_16_13", 1, 0, [Access (0); Access (1); Arg (0)]) / 
+
+	pushl	%edx
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_16_13_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_16_13_SIZE,	%ecx
+	rep movsl	
+# LD (Global ("kOd")) / 
+
+	movl	global_kOd,	%ebx
+# LD (Access (0)) / 
+
+	movl	4(%edx),	%ecx
+# LD (Access (1)) / 
+
+	movl	8(%edx),	%esi
+# LD (Arg (0)) / 
+
+	movl	12(%ebp),	%edi
+# LD (Access (2)) / 
+
+	movl	12(%edx),	%eax
+	movl	%eax,	-4(%ebp)
+# SEXP ("Seq", 2) / 
+
+	movl	$184657,	-8(%ebp)
+	pushl	%edx
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	-8(%ebp)
+	pushl	-4(%ebp)
+	pushl	%edi
+	pushl	$7
+	call	Bsexp
+	addl	$16,	%esp
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	popl	%edx
+	movl	%eax,	%edi
+# SEXP ("While", 2) / 
+
+	movl	$824218373,	-4(%ebp)
+	pushl	%edx
+	pushl	%ebx
+	pushl	%ecx
+	pushl	-4(%ebp)
+	pushl	%edi
+	pushl	%esi
+	pushl	$7
+	call	Bsexp
+	addl	$16,	%esp
+	popl	%ecx
+	popl	%ebx
+	popl	%edx
+	movl	%eax,	%esi
+# SEXP ("Seq", 2) / 
+
+	movl	$184657,	%edi
+	pushl	%edx
+	pushl	%ebx
+	pushl	%edi
+	pushl	%esi
+	pushl	%ecx
+	pushl	$7
+	call	Bsexp
+	addl	$16,	%esp
+	popl	%ebx
+	popl	%edx
+	movl	%eax,	%ecx
+# CALL ("Llift", 1, false) / 
+
+	pushl	%edx
+	pushl	%ebx
+	pushl	%ecx
+	call	Llift
+	addl	$4,	%esp
+	popl	%ebx
+	popl	%edx
+	movl	%eax,	%ecx
+# CALL ("Li__Infix_64", 2, true) / 
+
+	pushl	%edx
+	pushl	%ecx
+	pushl	%ebx
+	call	Li__Infix_64
+	addl	$8,	%esp
+	popl	%edx
+	movl	%eax,	%ebx
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_16_13_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	popl	%edx
+	ret
+	.set	LLlambda_16_13_SIZE,	8
+
+	.set	LSLlambda_16_13_SIZE,	2
+
+# LABEL ("Llambda_12_7") / 
+
+Llambda_12_7:
+
+# BEGIN ("Llambda_12_7", 1, 0, []) / 
+
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_12_7_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_12_7_SIZE,	%ecx
+	rep movsl	
+# LD (Global ("kUntil")) / 
+
+	movl	global_kUntil,	%ebx
+# LD (Global ("exp")) / 
+
+	movl	global_exp,	%ecx
+# CLOSURE ("Llambda_17_17", [Arg (0)]) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	8(%ebp)
+	pushl	$Llambda_17_17
+	pushl	$3
+	call	Bclosure
+	addl	$12,	%esp
+	movl	%eax,	%esi
+	popl	%ecx
+	popl	%ebx
+# CALL ("Li__Infix_64", 2, false) / 
+
+	pushl	%ebx
+	pushl	%esi
+	pushl	%ecx
+	call	Li__Infix_64
+	addl	$8,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# CALL ("Llift", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	call	Llift
+	addl	$4,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# CALL ("Li__Infix_12462", 2, true) / 
+
+	pushl	%ecx
+	pushl	%ebx
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	movl	%eax,	%ebx
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_12_7_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	ret
+	.set	LLlambda_12_7_SIZE,	0
+
+	.set	LSLlambda_12_7_SIZE,	0
+
+# LABEL ("Llambda_17_17") / 
+
+Llambda_17_17:
+
+# BEGIN ("Llambda_17_17", 1, 0, [Arg (0)]) / 
+
+	pushl	%edx
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_17_17_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_17_17_SIZE,	%ecx
+	rep movsl	
+# LD (Access (0)) / 
+
+	movl	4(%edx),	%ebx
+# LD (Arg (0)) / 
+
+	movl	12(%ebp),	%ecx
+# SEXP ("Repeat", 2) / 
+
+	movl	$739574081,	%esi
+	pushl	%edx
+	pushl	%esi
+	pushl	%ecx
+	pushl	%ebx
+	pushl	$7
+	call	Bsexp
+	addl	$16,	%esp
+	popl	%edx
+	movl	%eax,	%ebx
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_17_17_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	popl	%edx
+	ret
+	.set	LLlambda_17_17_SIZE,	0
+
+	.set	LSLlambda_17_17_SIZE,	0
+
+# LABEL ("Llambda_11_7") / 
+
+Llambda_11_7:
+
+# BEGIN ("Llambda_11_7", 1, 0, []) / 
+
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_11_7_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_11_7_SIZE,	%ecx
+	rep movsl	
+# LD (Global ("kDo")) / 
+
+	movl	global_kDo,	%ebx
+# LD (Global ("statement")) / 
+
+	movl	global_statement,	%ecx
+# CLOSURE ("Llambda_18_21", [Arg (0)]) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	8(%ebp)
+	pushl	$Llambda_18_21
+	pushl	$3
+	call	Bclosure
+	addl	$12,	%esp
+	movl	%eax,	%esi
+	popl	%ecx
+	popl	%ebx
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%ebx
+	pushl	%esi
+	pushl	%ecx
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# CALL ("Llift", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	call	Llift
+	addl	$4,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# CALL ("Li__Infix_12462", 2, true) / 
+
+	pushl	%ecx
+	pushl	%ebx
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	movl	%eax,	%ebx
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_11_7_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	ret
+	.set	LLlambda_11_7_SIZE,	0
+
+	.set	LSLlambda_11_7_SIZE,	0
+
+# LABEL ("Llambda_18_21") / 
+
+Llambda_18_21:
+
+# BEGIN ("Llambda_18_21", 1, 0, [Arg (0)]) / 
+
+	pushl	%edx
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_18_21_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_18_21_SIZE,	%ecx
+	rep movsl	
+# LD (Global ("kOd")) / 
+
+	movl	global_kOd,	%ebx
+# LD (Access (0)) / 
+
+	movl	4(%edx),	%ecx
+# LD (Arg (0)) / 
+
+	movl	12(%ebp),	%esi
+# SEXP ("While", 2) / 
+
+	movl	$824218373,	%edi
+	pushl	%edx
+	pushl	%ebx
+	pushl	%edi
+	pushl	%esi
+	pushl	%ecx
+	pushl	$7
+	call	Bsexp
+	addl	$16,	%esp
+	popl	%ebx
+	popl	%edx
+	movl	%eax,	%ecx
+# CALL ("Llift", 1, false) / 
+
+	pushl	%edx
+	pushl	%ebx
+	pushl	%ecx
+	call	Llift
+	addl	$4,	%esp
+	popl	%ebx
+	popl	%edx
+	movl	%eax,	%ecx
+# CALL ("Li__Infix_64", 2, true) / 
+
+	pushl	%edx
+	pushl	%ecx
+	pushl	%ebx
+	call	Li__Infix_64
+	addl	$8,	%esp
+	popl	%edx
+	movl	%eax,	%ebx
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_18_21_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	popl	%edx
+	ret
+	.set	LLlambda_18_21_SIZE,	0
+
+	.set	LSLlambda_18_21_SIZE,	0
+
+# LABEL ("Llambda_10_7") / 
+
+Llambda_10_7:
+
+# BEGIN ("Llambda_10_7", 1, 0, []) / 
+
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_10_7_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_10_7_SIZE,	%ecx
+	rep movsl	
+# LD (Global ("kThen")) / 
+
+	movl	global_kThen,	%ebx
+# LD (Global ("statement")) / 
+
+	movl	global_statement,	%ecx
+# CLOSURE ("Llambda_19_25", [Arg (0)]) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	8(%ebp)
+	pushl	$Llambda_19_25
+	pushl	$3
+	call	Bclosure
+	addl	$12,	%esp
+	movl	%eax,	%esi
+	popl	%ecx
+	popl	%ebx
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%ebx
+	pushl	%esi
+	pushl	%ecx
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# CALL ("Llift", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	call	Llift
+	addl	$4,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# CALL ("Li__Infix_12462", 2, true) / 
+
+	pushl	%ecx
+	pushl	%ebx
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	movl	%eax,	%ebx
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_10_7_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	ret
+	.set	LLlambda_10_7_SIZE,	0
+
+	.set	LSLlambda_10_7_SIZE,	0
+
+# LABEL ("Llambda_19_25") / 
+
+Llambda_19_25:
+
+# BEGIN ("Llambda_19_25", 1, 0, [Arg (0)]) / 
+
+	pushl	%edx
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_19_25_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_19_25_SIZE,	%ecx
+	rep movsl	
+# LD (Global ("elif_st")) / 
+
+	movl	global_elif_st,	%ebx
+# CLOSURE ("Llambda_20_27", [Access (0); Arg (0)]) / 
+
+	pushl	%ebx
+	pushl	12(%ebp)
+	pushl	4(%edx)
+	pushl	$Llambda_20_27
+	pushl	$5
+	call	Bclosure
+	addl	$16,	%esp
+	movl	%eax,	%ecx
+	popl	%ebx
+	movl	4(%ebp),	%edx
+# CALL ("Li__Infix_64", 2, true) / 
+
+	pushl	%edx
+	pushl	%ecx
+	pushl	%ebx
+	call	Li__Infix_64
+	addl	$8,	%esp
+	popl	%edx
+	movl	%eax,	%ebx
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_19_25_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	popl	%edx
+	ret
+	.set	LLlambda_19_25_SIZE,	0
+
+	.set	LSLlambda_19_25_SIZE,	0
+
+# LABEL ("Llambda_20_27") / 
+
+Llambda_20_27:
+
+# BEGIN ("Llambda_20_27", 1, 0, [Access (0); Arg (0)]) / 
+
+	pushl	%edx
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_20_27_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_20_27_SIZE,	%ecx
+	rep movsl	
+# LD (Access (0)) / 
+
+	movl	4(%edx),	%ebx
+# LD (Access (1)) / 
+
+	movl	8(%edx),	%ecx
+# LD (Arg (0)) / 
+
+	movl	12(%ebp),	%esi
+# SEXP ("If", 3) / 
+
+	movl	$2246,	%edi
+	pushl	%edx
+	pushl	%edi
+	pushl	%esi
+	pushl	%ecx
+	pushl	%ebx
+	pushl	$9
+	call	Bsexp
+	addl	$20,	%esp
+	popl	%edx
+	movl	%eax,	%ebx
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_20_27_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	popl	%edx
+	ret
+	.set	LLlambda_20_27_SIZE,	0
+
+	.set	LSLlambda_20_27_SIZE,	0
+
+# LABEL ("Llambda_9_7") / 
+
+Llambda_9_7:
+
+# BEGIN ("Llambda_9_7", 1, 0, []) / 
+
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_9_7_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_9_7_SIZE,	%ecx
+	rep movsl	
+# LD (Arg (0)) / 
+
+	movl	8(%ebp),	%ebx
+# SEXP ("Write", 1) / 
+
+	movl	$826840325,	%ecx
+	pushl	%ecx
+	pushl	%ebx
+	pushl	$5
+	call	Bsexp
+	addl	$12,	%esp
+	movl	%eax,	%ebx
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_9_7_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	ret
+	.set	LLlambda_9_7_SIZE,	0
+
+	.set	LSLlambda_9_7_SIZE,	0
 
 # LABEL ("Llambda_8_7") / 
 
@@ -1783,9 +2960,9 @@ Llambda_8_7:
 # LD (Arg (0)) / 
 
 	movl	8(%ebp),	%ebx
-# SEXP ("Write", 1) / 
+# SEXP ("Read", 1) / 
 
-	movl	$826840325,	%ecx
+	movl	$11554884,	%ecx
 	pushl	%ecx
 	pushl	%ebx
 	pushl	$5
@@ -1817,46 +2994,9 @@ Llambda_7_7:
 	movl	$filler,	%esi
 	movl	$LSLlambda_7_7_SIZE,	%ecx
 	rep movsl	
-# LD (Arg (0)) / 
-
-	movl	8(%ebp),	%ebx
-# SEXP ("Read", 1) / 
-
-	movl	$11554884,	%ecx
-	pushl	%ecx
-	pushl	%ebx
-	pushl	$5
-	call	Bsexp
-	addl	$12,	%esp
-	movl	%eax,	%ebx
-# END / 
-
-	movl	%ebx,	%eax
-LLlambda_7_7_epilogue:
-
-	movl	%ebp,	%esp
-	popl	%ebp
-	ret
-	.set	LLlambda_7_7_SIZE,	0
-
-	.set	LSLlambda_7_7_SIZE,	0
-
-# LABEL ("Llambda_6_7") / 
-
-Llambda_6_7:
-
-# BEGIN ("Llambda_6_7", 1, 0, []) / 
-
-	pushl	%ebp
-	movl	%esp,	%ebp
-	subl	$LLlambda_6_7_SIZE,	%esp
-	movl	%esp,	%edi
-	movl	$filler,	%esi
-	movl	$LSLlambda_6_7_SIZE,	%ecx
-	rep movsl	
 # STRING (":=") / 
 
-	movl	$string_14,	%ebx
+	movl	$string_15,	%ebx
 	pushl	%ebx
 	call	Bstring
 	addl	$4,	%esp
@@ -1885,11 +3025,11 @@ Llambda_6_7:
 	call	Li__Infix_12462
 	addl	$8,	%esp
 	movl	%eax,	%ebx
-# CLOSURE ("Llambda_9_13", [Arg (0)]) / 
+# CLOSURE ("Llambda_21_35", [Arg (0)]) / 
 
 	pushl	%ebx
 	pushl	8(%ebp)
-	pushl	$Llambda_9_13
+	pushl	$Llambda_21_35
 	pushl	$3
 	call	Bclosure
 	addl	$12,	%esp
@@ -1905,28 +3045,28 @@ Llambda_6_7:
 # END / 
 
 	movl	%ebx,	%eax
-LLlambda_6_7_epilogue:
+LLlambda_7_7_epilogue:
 
 	movl	%ebp,	%esp
 	popl	%ebp
 	ret
-	.set	LLlambda_6_7_SIZE,	0
+	.set	LLlambda_7_7_SIZE,	0
 
-	.set	LSLlambda_6_7_SIZE,	0
+	.set	LSLlambda_7_7_SIZE,	0
 
-# LABEL ("Llambda_9_13") / 
+# LABEL ("Llambda_21_35") / 
 
-Llambda_9_13:
+Llambda_21_35:
 
-# BEGIN ("Llambda_9_13", 1, 0, [Arg (0)]) / 
+# BEGIN ("Llambda_21_35", 1, 0, [Arg (0)]) / 
 
 	pushl	%edx
 	pushl	%ebp
 	movl	%esp,	%ebp
-	subl	$LLlambda_9_13_SIZE,	%esp
+	subl	$LLlambda_21_35_SIZE,	%esp
 	movl	%esp,	%edi
 	movl	$filler,	%esi
-	movl	$LSLlambda_9_13_SIZE,	%ecx
+	movl	$LSLlambda_21_35_SIZE,	%ecx
 	rep movsl	
 # LD (Access (0)) / 
 
@@ -1949,15 +3089,410 @@ Llambda_9_13:
 # END / 
 
 	movl	%ebx,	%eax
-LLlambda_9_13_epilogue:
+LLlambda_21_35_epilogue:
 
 	movl	%ebp,	%esp
 	popl	%ebp
 	popl	%edx
 	ret
-	.set	LLlambda_9_13_SIZE,	0
+	.set	LLlambda_21_35_SIZE,	0
 
-	.set	LSLlambda_9_13_SIZE,	0
+	.set	LSLlambda_21_35_SIZE,	0
+
+# LABEL ("Llambda_2") / 
+
+Llambda_2:
+
+# BEGIN ("Llambda_2", 1, 0, []) / 
+
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_2_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_2_SIZE,	%ecx
+	rep movsl	
+# LD (Global ("kElif")) / 
+
+	movl	global_kElif,	%ebx
+# LD (Global ("exp")) / 
+
+	movl	global_exp,	%ecx
+# CLOSURE ("Llambda_22_38", []) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	$Llambda_22_38
+	pushl	$1
+	call	Bclosure
+	addl	$8,	%esp
+	movl	%eax,	%esi
+	popl	%ecx
+	popl	%ebx
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%ebx
+	pushl	%esi
+	pushl	%ecx
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# CALL ("Llift", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	call	Llift
+	addl	$4,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%ecx
+	pushl	%ebx
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	movl	%eax,	%ebx
+# LD (Global ("kElse")) / 
+
+	movl	global_kElse,	%ecx
+# LD (Global ("statement")) / 
+
+	movl	global_statement,	%esi
+# CLOSURE ("Llambda_23_38", []) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	$Llambda_23_38
+	pushl	$1
+	call	Bclosure
+	addl	$8,	%esp
+	movl	%eax,	%edi
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%edi
+	pushl	%esi
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	%esi
+# CALL ("Llift", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	call	Llift
+	addl	$4,	%esp
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	%esi
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%ebx
+	pushl	%esi
+	pushl	%ecx
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# LD (Global ("kFi")) / 
+
+	movl	global_kFi,	%esi
+# SEXP ("Skip", 0) / 
+
+	movl	$11842128,	%edi
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	pushl	$3
+	call	Bsexp
+	addl	$8,	%esp
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	%edi
+# CALL ("Llift", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%esi
+	pushl	%edi
+	call	Llift
+	addl	$4,	%esp
+	popl	%esi
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	%edi
+# CALL ("Li__Infix_64", 2, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	%edi
+	pushl	%esi
+	call	Li__Infix_64
+	addl	$8,	%esp
+	popl	%ecx
+	popl	%ebx
+	movl	%eax,	%esi
+# CALL ("Li__Infix_124", 2, false) / 
+
+	pushl	%ebx
+	pushl	%esi
+	pushl	%ecx
+	call	Li__Infix_124
+	addl	$8,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# CALL ("Li__Infix_124", 2, false) / 
+
+	pushl	%ecx
+	pushl	%ebx
+	call	Li__Infix_124
+	addl	$8,	%esp
+	movl	%eax,	%ebx
+# LD (Arg (0)) / 
+
+	movl	8(%ebp),	%ecx
+# CALLC (1, true) / 
+
+	movl	%ecx,	8(%ebp)
+	movl	%ebx,	%edx
+	movl	(%edx),	%eax
+	movl	%ebp,	%esp
+	popl	%ebp
+	jmp	*%eax
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_2_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	ret
+	.set	LLlambda_2_SIZE,	0
+
+	.set	LSLlambda_2_SIZE,	0
+
+# LABEL ("Llambda_23_38") / 
+
+Llambda_23_38:
+
+# BEGIN ("Llambda_23_38", 1, 0, []) / 
+
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_23_38_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_23_38_SIZE,	%ecx
+	rep movsl	
+# LD (Global ("kFi")) / 
+
+	movl	global_kFi,	%ebx
+# LD (Arg (0)) / 
+
+	movl	8(%ebp),	%ecx
+# CALL ("Llift", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	call	Llift
+	addl	$4,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# CALL ("Li__Infix_64", 2, true) / 
+
+	pushl	%ecx
+	pushl	%ebx
+	call	Li__Infix_64
+	addl	$8,	%esp
+	movl	%eax,	%ebx
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_23_38_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	ret
+	.set	LLlambda_23_38_SIZE,	0
+
+	.set	LSLlambda_23_38_SIZE,	0
+
+# LABEL ("Llambda_22_38") / 
+
+Llambda_22_38:
+
+# BEGIN ("Llambda_22_38", 1, 0, []) / 
+
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_22_38_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_22_38_SIZE,	%ecx
+	rep movsl	
+# LD (Global ("kThen")) / 
+
+	movl	global_kThen,	%ebx
+# LD (Global ("statement")) / 
+
+	movl	global_statement,	%ecx
+# CLOSURE ("Llambda_24_42", [Arg (0)]) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	pushl	8(%ebp)
+	pushl	$Llambda_24_42
+	pushl	$3
+	call	Bclosure
+	addl	$12,	%esp
+	movl	%eax,	%esi
+	popl	%ecx
+	popl	%ebx
+# CALL ("Li__Infix_12462", 2, false) / 
+
+	pushl	%ebx
+	pushl	%esi
+	pushl	%ecx
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# CALL ("Llift", 1, false) / 
+
+	pushl	%ebx
+	pushl	%ecx
+	call	Llift
+	addl	$4,	%esp
+	popl	%ebx
+	movl	%eax,	%ecx
+# CALL ("Li__Infix_12462", 2, true) / 
+
+	pushl	%ecx
+	pushl	%ebx
+	call	Li__Infix_12462
+	addl	$8,	%esp
+	movl	%eax,	%ebx
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_22_38_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	ret
+	.set	LLlambda_22_38_SIZE,	0
+
+	.set	LSLlambda_22_38_SIZE,	0
+
+# LABEL ("Llambda_24_42") / 
+
+Llambda_24_42:
+
+# BEGIN ("Llambda_24_42", 1, 0, [Arg (0)]) / 
+
+	pushl	%edx
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_24_42_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_24_42_SIZE,	%ecx
+	rep movsl	
+# LD (Global ("elif_st")) / 
+
+	movl	global_elif_st,	%ebx
+# CLOSURE ("Llambda_25_44", [Access (0); Arg (0)]) / 
+
+	pushl	%ebx
+	pushl	12(%ebp)
+	pushl	4(%edx)
+	pushl	$Llambda_25_44
+	pushl	$5
+	call	Bclosure
+	addl	$16,	%esp
+	movl	%eax,	%ecx
+	popl	%ebx
+	movl	4(%ebp),	%edx
+# CALL ("Li__Infix_64", 2, true) / 
+
+	pushl	%edx
+	pushl	%ecx
+	pushl	%ebx
+	call	Li__Infix_64
+	addl	$8,	%esp
+	popl	%edx
+	movl	%eax,	%ebx
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_24_42_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	popl	%edx
+	ret
+	.set	LLlambda_24_42_SIZE,	0
+
+	.set	LSLlambda_24_42_SIZE,	0
+
+# LABEL ("Llambda_25_44") / 
+
+Llambda_25_44:
+
+# BEGIN ("Llambda_25_44", 1, 0, [Access (0); Arg (0)]) / 
+
+	pushl	%edx
+	pushl	%ebp
+	movl	%esp,	%ebp
+	subl	$LLlambda_25_44_SIZE,	%esp
+	movl	%esp,	%edi
+	movl	$filler,	%esi
+	movl	$LSLlambda_25_44_SIZE,	%ecx
+	rep movsl	
+# LD (Access (0)) / 
+
+	movl	4(%edx),	%ebx
+# LD (Access (1)) / 
+
+	movl	8(%edx),	%ecx
+# LD (Arg (0)) / 
+
+	movl	12(%ebp),	%esi
+# SEXP ("If", 3) / 
+
+	movl	$2246,	%edi
+	pushl	%edx
+	pushl	%edi
+	pushl	%esi
+	pushl	%ecx
+	pushl	%ebx
+	pushl	$9
+	call	Bsexp
+	addl	$20,	%esp
+	popl	%edx
+	movl	%eax,	%ebx
+# END / 
+
+	movl	%ebx,	%eax
+LLlambda_25_44_epilogue:
+
+	movl	%ebp,	%esp
+	popl	%ebp
+	popl	%edx
+	ret
+	.set	LLlambda_25_44_SIZE,	0
+
+	.set	LSLlambda_25_44_SIZE,	0
 
 # LABEL ("Llambda_1") / 
 
@@ -2042,10 +3577,10 @@ Llambda_0:
 # LD (Global ("decimal")) / 
 
 	movl	global_decimal,	%ebx
-# CLOSURE ("Llambda_10_17", []) / 
+# CLOSURE ("Llambda_26_48", []) / 
 
 	pushl	%ebx
-	pushl	$Llambda_10_17
+	pushl	$Llambda_26_48
 	pushl	$1
 	call	Bclosure
 	addl	$8,	%esp
@@ -2061,11 +3596,11 @@ Llambda_0:
 # LD (Global ("lident")) / 
 
 	movl	global_lident,	%ecx
-# CLOSURE ("Llambda_11_17", []) / 
+# CLOSURE ("Llambda_27_48", []) / 
 
 	pushl	%ebx
 	pushl	%ecx
-	pushl	$Llambda_11_17
+	pushl	$Llambda_27_48
 	pushl	$1
 	call	Bclosure
 	addl	$8,	%esp
@@ -2133,18 +3668,18 @@ LLlambda_0_epilogue:
 
 	.set	LSLlambda_0_SIZE,	0
 
-# LABEL ("Llambda_11_17") / 
+# LABEL ("Llambda_27_48") / 
 
-Llambda_11_17:
+Llambda_27_48:
 
-# BEGIN ("Llambda_11_17", 1, 0, []) / 
+# BEGIN ("Llambda_27_48", 1, 0, []) / 
 
 	pushl	%ebp
 	movl	%esp,	%ebp
-	subl	$LLlambda_11_17_SIZE,	%esp
+	subl	$LLlambda_27_48_SIZE,	%esp
 	movl	%esp,	%edi
 	movl	$filler,	%esi
-	movl	$LSLlambda_11_17_SIZE,	%ecx
+	movl	$LSLlambda_27_48_SIZE,	%ecx
 	rep movsl	
 # LD (Arg (0)) / 
 
@@ -2161,27 +3696,27 @@ Llambda_11_17:
 # END / 
 
 	movl	%ebx,	%eax
-LLlambda_11_17_epilogue:
+LLlambda_27_48_epilogue:
 
 	movl	%ebp,	%esp
 	popl	%ebp
 	ret
-	.set	LLlambda_11_17_SIZE,	0
+	.set	LLlambda_27_48_SIZE,	0
 
-	.set	LSLlambda_11_17_SIZE,	0
+	.set	LSLlambda_27_48_SIZE,	0
 
-# LABEL ("Llambda_10_17") / 
+# LABEL ("Llambda_26_48") / 
 
-Llambda_10_17:
+Llambda_26_48:
 
-# BEGIN ("Llambda_10_17", 1, 0, []) / 
+# BEGIN ("Llambda_26_48", 1, 0, []) / 
 
 	pushl	%ebp
 	movl	%esp,	%ebp
-	subl	$LLlambda_10_17_SIZE,	%esp
+	subl	$LLlambda_26_48_SIZE,	%esp
 	movl	%esp,	%edi
 	movl	$filler,	%esi
-	movl	$LSLlambda_10_17_SIZE,	%ecx
+	movl	$LSLlambda_26_48_SIZE,	%ecx
 	rep movsl	
 # LD (Arg (0)) / 
 
@@ -2204,14 +3739,14 @@ Llambda_10_17:
 # END / 
 
 	movl	%ebx,	%eax
-LLlambda_10_17_epilogue:
+LLlambda_26_48_epilogue:
 
 	movl	%ebp,	%esp
 	popl	%ebp
 	ret
-	.set	LLlambda_10_17_SIZE,	0
+	.set	LLlambda_26_48_SIZE,	0
 
-	.set	LSLlambda_10_17_SIZE,	0
+	.set	LSLlambda_26_48_SIZE,	0
 
 # LABEL ("Lbinop") / 
 
@@ -2235,11 +3770,11 @@ Lbinop:
 	call	Ls
 	addl	$4,	%esp
 	movl	%eax,	%ebx
-# CLOSURE ("Llambda_12_23", [Arg (0)]) / 
+# CLOSURE ("Llambda_28_54", [Arg (0)]) / 
 
 	pushl	%ebx
 	pushl	8(%ebp)
-	pushl	$Llambda_12_23
+	pushl	$Llambda_28_54
 	pushl	$3
 	call	Bclosure
 	addl	$12,	%esp
@@ -2265,19 +3800,19 @@ LLbinop_epilogue:
 
 	.set	LSLbinop_SIZE,	0
 
-# LABEL ("Llambda_12_23") / 
+# LABEL ("Llambda_28_54") / 
 
-Llambda_12_23:
+Llambda_28_54:
 
-# BEGIN ("Llambda_12_23", 2, 0, [Arg (0)]) / 
+# BEGIN ("Llambda_28_54", 2, 0, [Arg (0)]) / 
 
 	pushl	%edx
 	pushl	%ebp
 	movl	%esp,	%ebp
-	subl	$LLlambda_12_23_SIZE,	%esp
+	subl	$LLlambda_28_54_SIZE,	%esp
 	movl	%esp,	%edi
 	movl	$filler,	%esi
-	movl	$LSLlambda_12_23_SIZE,	%ecx
+	movl	$LSLlambda_28_54_SIZE,	%ecx
 	rep movsl	
 # LD (Access (0)) / 
 
@@ -2304,15 +3839,15 @@ Llambda_12_23:
 # END / 
 
 	movl	%ebx,	%eax
-LLlambda_12_23_epilogue:
+LLlambda_28_54_epilogue:
 
 	movl	%ebp,	%esp
 	popl	%ebp
 	popl	%edx
 	ret
-	.set	LLlambda_12_23_SIZE,	0
+	.set	LLlambda_28_54_SIZE,	0
 
-	.set	LSLlambda_12_23_SIZE,	0
+	.set	LSLlambda_28_54_SIZE,	0
 
 # LABEL ("Linbr") / 
 
@@ -2329,7 +3864,7 @@ Linbr:
 	rep movsl	
 # STRING ("(") / 
 
-	movl	$string_15,	%ebx
+	movl	$string_16,	%ebx
 	pushl	%ebx
 	call	Bstring
 	addl	$4,	%esp
@@ -2345,7 +3880,7 @@ Linbr:
 	movl	8(%ebp),	%ecx
 # STRING (")") / 
 
-	movl	$string_16,	%esi
+	movl	$string_17,	%esi
 	pushl	%ebx
 	pushl	%ecx
 	pushl	%esi
