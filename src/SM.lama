@@ -85,6 +85,7 @@ public fun compileSM (stmt) {
       | Write (x)    -> { compileExpr (x), singleton(WRITE) }
       | Seq (x1, x2) -> { compile (x1), compile (x2) }
       | Assn (x, e)  -> { compileExpr (e), singleton(ST (x)) }
+      | Skip         -> { }
       esac 
     }
 
