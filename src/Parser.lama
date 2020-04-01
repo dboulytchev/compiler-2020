@@ -20,31 +20,28 @@ fun binopRule (op) {
 -- for Ostap's expr()    
 local binopList = 
     {
-    -- Binary
     [Left, singleton (binopRule ("!!"))],
     [Left, singleton (binopRule ("&&"))],
-    -- Logical
     [Nona, { binopRule ("=="), binopRule ("<="), binopRule ("<"), binopRule (">="), binopRule (">"),
              binopRule ("!=") }],
-    -- Arithmetic
     [Left, { binopRule ("+"), binopRule ("-") }],
     [Left, { binopRule ("*"), binopRule ("/"), binopRule ("%") }]
     };
 
 -- Primary expression
-local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
-                            lident  @ fun (x) {Var (x)}               |
+local primary = memo $ eta (decimal @ fun (x) { Const (stringInt (x)) } |
+                            lident  @ fun (x) { Var (x) }               |
                             inbr ("(", exp, ")")),
       exp     = memo $ eta (expr(binopList, primary)(id));
 
 local stmtSingle = memo $ eta (
                          kRead  |> lift(inbr("(", lident, ")") @ fun (x) { Read (x) } )           |  
                          kWrite |> lift(exp @ fun (x) { Write (x) } )                             |
-                         lident  |> fun (x) { s(":=") |> lift(exp @ fun (val) { Assn (x, val) }) } |
-                         kSkip   @ lift (Skip)),                                                       
-      stmt       = memo $ eta (listBy (stmtSingle, s (";")) @ fun (cmd) { 
-                                        foldr (fun (acc, item) { Seq (item, acc) }, Skip, cmd) 
-                                    });
+                         lident |> fun (x) { s(":=") |> lift(exp @ fun (val) { Assn (x, val) }) } |
+                         kSkip  @ lift (Skip)),                                                       
+      stmt       = memo $ eta (stmtSingle |
+                               stmtSingle |> fun (s1) { 
+                                    (s(";") |> lift (stmt)) @ fun (s2) { Seq (s1, s2) } } );
                          
 -- Public top-level parser
 public parse = stmt;
