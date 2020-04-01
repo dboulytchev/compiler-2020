@@ -11,15 +11,41 @@ fun inbr (l, p, r) {
   s (l) |> lift (p |> bypass (s (r)))
 }
 
+-- Rule generator for the second rule of Ostap's expr()
+fun binopRule (op) { 
+  [s (op), fun (l, r) {Binop (op, l, r)}]
+}
+
+-- List of available binary operations with rules
+-- for Ostap's expr()    
+local binopList = 
+    {
+    -- Binary
+    [Left, singleton (binopRule ("!!"))],
+    [Left, singleton (binopRule ("&&"))],
+    -- Logical
+    [Nona, { binopRule ("=="), binopRule ("<="), binopRule ("<"), binopRule (">="), binopRule (">"),
+             binopRule ("!=") }],
+    -- Arithmetic
+    [Left, { binopRule ("+"), binopRule ("-") }],
+    [Left, { binopRule ("*"), binopRule ("/"), binopRule ("%") }]
+    };
+
 -- Primary expression
 local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
-                            lident  @ fun (x) {Var (x)} |
+                            lident  @ fun (x) {Var (x)}               |
                             inbr ("(", exp, ")")),
-      exp = memo $ eta (failure ("expression parsing not implemented\n"));
+      exp     = memo $ eta (expr(binopList, primary)(id));
 
-local stmt = memo $ eta (failure ("statement parsing not implemented\n"));
-   
-
+local stmtSingle = memo $ eta (
+                         kRead  |> lift(inbr("(", lident, ")") @ fun (x) { Read (x) } )           |  
+                         kWrite |> lift(exp @ fun (x) { Write (x) } )                             |
+                         lident  |> fun (x) { s(":=") |> lift(exp @ fun (val) { Assn (x, val) }) } |
+                         kSkip   @ lift (Skip)),                                                       
+      stmt       = memo $ eta (listBy (stmtSingle, s (";")) @ fun (cmd) { 
+                                        foldr (fun (acc, item) { Seq (item, acc) }, Skip, cmd) 
+                                    });
+                         
 -- Public top-level parser
 public parse = stmt;
              
