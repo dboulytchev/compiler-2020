@@ -21,12 +21,16 @@ import World;
 
 fun eval (c@[state, world], stmt) {
   case stmt of
-    Seq (a, b)  -> eval (eval (c, a), b)
-  | Read (a)    -> local ret = readWorld (world); 
-                   [state <- [a, ret[0]], ret[1]]
-  | Write (e)   -> [state, writeWorld (evalExpr (state, e), world)]
-  | Assn (a, b) -> [state <- [a, evalExpr (state, b)], world]
-  | _           -> c
+    Assn (a, b)    -> [state <- [a, evalExpr (state, b)], world]
+  | Seq (a, b)     -> eval (eval (c, a), b)
+  | Skip           -> c
+  | Read (a)       -> local ret = readWorld (world); 
+                      [state <- [a, ret[0]], ret[1]]
+  | Write (e)      -> [state, writeWorld (evalExpr (state, e), world)]
+  | If (e, s1, s2) -> if evalExpr (state, e) != 0 then eval (c, s1) else eval (c, s2) fi
+  | While (e, s)   -> if evalExpr (state, e) != 0 then eval (eval (c, s), stmt) else c fi
+  | Repeat (s, e)  -> local ret = eval (c, s);
+                      if evalExpr (ret[0], e) == 0 then eval (ret, stmt) else ret fi
   esac
 }
 
