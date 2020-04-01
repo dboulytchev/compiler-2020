@@ -259,6 +259,15 @@ fun move (from, to) {
   fi
 }
 
+-- Generates a binary operation, using
+-- intermediate register for operands if needed
+fun binop (op, l, r) {
+  if memOpnd (l) && memOpnd (r)
+  then {Mov (r, eax), Binop (op, l, eax)}
+  else singleton (Binop (op, l, r))
+  fi
+}
+
 -- Gets a suffix for Set instruction from
 -- source language comparison operator
 fun suffix (op) {
@@ -291,7 +300,9 @@ fun compile (env, code) {
 
   -- Compiles comparison operators to x86
   fun compileComp (op, l, r) {
-    { Mov (L(0), eax), Binop ("cmp", l, r), Set (op.suffix, "%al"), Mov (eax, r) }
+    { Mov (L(0), eax), Mov (r, edx),
+      Binop ("cmp", l, edx), Set (op.suffix, "%al"), 
+      Mov (eax, r) }
   }
 
   -- Compiles boolean operators to x86
