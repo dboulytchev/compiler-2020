@@ -276,19 +276,72 @@ fun suffix (op) {
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
   fun compile (env, code) {
+    fun simple_binop(first, second, s, op) {
+      {Mov(second, eax), Binop(op, first, eax), Mov(eax, s)}
+    }
+
+    fun div_binop(first, second, s) {
+      {Mov(second, eax), Cltd, IDiv (first), Mov(eax, s)}
+    }
+
+    fun mod_binop(first, second, s) {
+      {Mov(second, eax), Cltd, IDiv(first), Mov(edx, s)}
+    }
+
+    fun compare_binop(first, second, s, op) {
+      {Mov(second, eax), Binop("^", edx, edx), Binop("cmp", first, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
+    }
+
+    fun logic_binop(first, second, s, op) {
+      {
+        Binop("^", eax, eax), Binop("^", edx, edx),
+        Binop("cmp", first, eax), Set(suffix("!="), "%al"),
+        Binop("cmp", second, edx), Set(suffix("!="), "%dl"),
+        Binop(op, eax, edx), Mov(edx, s)
+      }
+    }
     foldl (
-      fun ([env, scode], i) {
-        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+      fun ([env, code], i) {           
         case i of
-          READ ->
-            case env.allocate of
-              [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
+          READ           -> case env.allocate of
+              [s, env]   -> [env, code : {Call ("Lread"), Mov (eax, s)}]
             esac             
-        | WRITE ->
-            case env.pop of
-              [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
+        | WRITE          -> case env.pop of
+              [s, env]   -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | CONST (val)    -> case env.allocate of
+                [s, env] -> [env, code : singleton(Mov(L(val), s))]
+                esac
+        | LD    (val)    -> case env.addGlobal(val).allocate of
+                [s, env] -> [env, code : move(env.loc(val), s)]
+                esac
+        | ST    (val)    -> case env.addGlobal(val).pop of
+                [s, env] -> [env, code : move(s, env.loc(val))]
+                esac
+        | BINOP (op)     -> case env.pop2 of
+                                 [first, second, env] ->
+                                 case env.allocate of
+                                      [s, env] -> [env, code :
+                                      case op of
+                                            "+"  -> simple_binop(first, second, s, op)
+                                          | "-"  -> simple_binop(first, second, s, op)
+                                          | "*"  -> simple_binop(first, second, s, op)
+                                          | "/"  -> div_binop(first, second, s)
+                                          | "%"  -> mod_binop(first, second, s)
+                                          | "<"  -> compare_binop(first, second, s, op)
+                                          | "<=" -> compare_binop(first, second, s, op)
+                                          | ">"  -> compare_binop(first, second, s, op)
+                                          | ">=" -> compare_binop(first, second, s, op)
+                                          | "==" -> compare_binop(first, second, s, op)
+                                          | "!=" -> compare_binop(first, second, s, op)
+                                          | "&&" -> logic_binop(first, second, s, op)
+                                          | "!!" -> logic_binop(first, second, s, op)
+                                      esac
+                                      ]
+                                 esac
+                            esac
+        | _              -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
+
         esac
       }, [env, {}], code)
   }
