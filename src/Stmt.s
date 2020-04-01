@@ -1706,9 +1706,9 @@ L95:
 	call	Barray
 	addl	$12,	%esp
 	movl	%eax,	%ebx
-# LD (Local (2)) / 
+# LD (Local (3)) / 
 
-	movl	-12(%ebp),	%ecx
+	movl	-16(%ebp),	%ecx
 # CALL ("Leval", 2, false) / 
 
 	pushl	%ecx
@@ -1837,9 +1837,9 @@ L103:
 # LD (Local (5)) / 
 
 	movl	-24(%ebp),	%ebx
-# LD (Local (3)) / 
+# LD (Local (2)) / 
 
-	movl	-16(%ebp),	%ecx
+	movl	-12(%ebp),	%ecx
 # CALL ("LevalExpr", 2, false) / 
 
 	pushl	%ecx

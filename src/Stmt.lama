@@ -34,7 +34,7 @@ fun eval ([state, world], stmt) {
   | While  (expr, st1)      -> if evalExpr(state, expr) != 0
                                then eval(eval([state, world], st1), stmt)
                                else [state, world] fi
-  | Repeat (expr, st1)      -> case eval([state, world], st1) of
+  | Repeat (st1, expr)      -> case eval([state, world], st1) of
                                [new_state, new_world] -> if evalExpr(new_state, expr) != 0
                                then [new_state, new_world]
                                else eval([new_state, new_world], stmt) fi
