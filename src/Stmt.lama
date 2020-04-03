@@ -7,17 +7,22 @@ import World;
 -- Evaluates a statement "stmt" in a configuration "c".
 -- A configuration is a pair of a state "s" and a world "w".
 -- Returns a final configuration (if any)
---
--- A statement is represented by a data structure of the following shape:
---
--- stmt = Assn   (string, expr)     |
---        Seq    (stmt, stmt)       |
---        Skip                      |
---        Read   (string)           |
---        Write  (expr)             |
 
 fun eval (c, stmt) {
-  failure ("Stmt eval not implemented\n")
+
+    local state = c[0];
+    local world = c[1];
+
+    case stmt of
+      Assn(str, expr) -> -> [state <- [str, evalExpr(state, expr)], world] 
+    | Seq (stmtA, stmtB)->eval(eval([state, world], stmtA), stmtB)
+    | Skip -> [state, world] -- без изменений
+    | Read(str) ->
+      case readWorld(world) of 
+        [value, restWorld] -> [state, world], restWorld]
+      esac
+    | Write (expr) -> [state, writeWorld(evalExpr(state,expr), world)
+    esac
 }
 
 -- Evaluates a program with a given input and returns an output
