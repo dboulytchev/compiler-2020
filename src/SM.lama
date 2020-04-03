@@ -10,7 +10,6 @@ import Util;
 fun eval (c, insns) {
      -- конфигурация стековой машины stack + state + world
    local stack = c[0];
-
     -- конфигурация семантики
     local state = c[1];  -- состояние
     local world = c[2]; -- мир (входные-выходные потоки)
