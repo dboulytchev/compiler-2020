@@ -8,42 +8,41 @@ import Util;
 
 
 fun eval (c, insns) {
-     -- конфигурация стековой машины stack + state + world
-   local stack = c[0];
-    -- конфигурация семантики
-    local state = c[1];  -- состояние
-    local world = c[2]; -- мир (входные-выходные потоки)
+  -- конфигурация стековой машины stack + state + world
+  local stack = c[0];
+  -- конфигурация семантики
+  local state = c[1];  -- состояние
+  local world = c[2]; -- мир (входные-выходные потоки)
     
   -- 5 конструкций стековой машины
   -- коструктор списка в ламе "правша" 
   case insns of
 
-	  CONST (x) : next -> eval ([x : stack, state, world], next)
+  CONST (x) : next -> eval ([x : stack, state, world], next)
 
-	| BINOP (opnd) : next -> 
+  | BINOP (opnd) : next -> 
 			case stack of
-				r : l : rest -> eval([evalBinop(opnd, l, r):rest, state, world], next)
+		  	r : l : rest -> eval([evalBinop(opnd, l, r):rest, state, world], next)
       | _ -> failure( " incorrect `BINOP` " ) 
 			esac
 
-	| LD (x) : next -> 
+  | LD (x) : next -> 
 			eval ([st(x) : stack, state, world], next)
 
   | ST (x) : next -> 
     case stack of
       first : rest -> 
-        eval ([rest, state <- [x, first], world], next)
+      eval ([rest, state <- [x, first], world], next)
     | _ -> failure( "incorrect `ST`" )
     esac
 
-	| READ : next ->
+  | READ : next ->
 			case readWorld (world) of
-				[first, restWorld] -> 
-					eval ([first : stack, state, restWorld], next)
+      [first, restWorld] -> eval ([first : stack, state, restWorld], next)
       | _ -> failure( "incorrect `READ` " )
 			esac
 
-	| WRITE : next ->
+  | WRITE : next ->
 			case stack of
 				first : rest -> eval([rest, state, writeWorld(first, world)], next)
 			esac
