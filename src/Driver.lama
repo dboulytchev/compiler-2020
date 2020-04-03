@@ -86,7 +86,7 @@ case parseString (parse |> bypass (end), fread (args.getInFile)) of
                             | arg      -> f (stringInt (arg) : acc) esac
                           }
                         }) ({}));
-          
+        
        iter (fun (x) {printf ("%d\n", x)},
              case mode of
                Int -> evalStmt (input, program)

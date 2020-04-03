@@ -284,7 +284,8 @@ fun compile (env, code) {
   fun compile (env, code) {
     foldl (
       fun ([env, scode], i) {
-        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+        local sscode = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+        local code = sscode;
         case i of
           READ ->
             case env.allocate of
@@ -330,6 +331,11 @@ fun compile (env, code) {
                     fi]
                 esac
             esac
+        | LABEL (l)       -> [env, code : (Label (l) : {})]
+        | JMP   (l)       -> [env, code : (Jmp   (l) : {})]
+        | CJMP  (cond, l) -> case env.pop of
+                               [x, env] -> [env, code : {move (x, eax), Binop ("!!", eax, eax), CJmp (cond, l)}]
+                             esac
         esac
       }, [env, {}], code)
   }
