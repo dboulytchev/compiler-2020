@@ -277,10 +277,55 @@ fun suffix (op) {
 fun compile (env, code) {
   fun compile (env, code) {
     foldl (
-      fun ([env, scode], i) {
-        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+      fun ([env, code], i) {
+
+        fun binary(instrGenerator) {
+          case env.pop2 of 
+              [a, b, env] -> case env.allocate of 
+                                 [target, env] -> [env, code : instrGenerator(a, b, target)]
+                             esac
+          esac
+        }
+
+        fun basicArith(op) {
+           binary(fun (a, b, target) {
+                {Mov(b, eax), Binop(op, a, eax), Mov(eax, target)}
+            })
+        }
+
+        fun divmod(isRemainder) {
+            binary(fun (a, b, target) {
+                {Mov(b, eax), Cltd, IDiv(a), Mov(if isRemainder then edx else eax fi, target)}
+            })
+        }
+
+        fun compare(op) {
+            binary(fun (a, b, target) {
+                {
+                    Mov(b, edx), 
+                    Binop("^", eax, eax), 
+                    Binop("cmp", a, edx),
+                    Set(suffix(op), "%al"),
+                    Mov(eax, target)
+                }
+            })
+        }
+
+        fun logical(op) {
+            binary(fun (a, b, target) {
+                {
+                     Binop("^", edx, edx),
+                     Binop("^", eax, eax), 
+                     Binop("cmp", a, eax), Set(suffix("!="), "%al"),
+                     Binop("cmp", b, edx), Set(suffix("!="), "%dl"),
+                     Binop(op, eax, edx),
+                     Mov(edx, target)
+                }
+            })
+        }
+
         case i of
-          READ ->
+         READ ->
             case env.allocate of
               [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
             esac             
@@ -288,7 +333,32 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | ST (name) -> 
+            case env.addGlobal(name).pop of 
+                [s, env] -> [env, code : move(s, env.loc(name))]
+            esac
+        | LD (name) ->
+            case env.addGlobal(name).allocate of
+                [s, env] -> [env, code : move(env.loc(name), s)]
+            esac
+        | CONST(value) ->
+            case env.allocate of
+                [s, env] -> [env, code : singleton(Mov(L(value), s))]
+            esac
+        | BINOP("*") -> basicArith("*")
+        | BINOP("+") -> basicArith("+")
+        | BINOP("-") -> basicArith("-")
+        | BINOP("/") -> divmod(0)
+        | BINOP("%") -> divmod(1) 
+        | BINOP("<") -> compare("<")
+        | BINOP("<=") -> compare("<=")
+        | BINOP(">") -> compare(">")
+        | BINOP(">=") -> compare(">=")
+        | BINOP("==") -> compare("==")
+        | BINOP("!=") -> compare("!=")
+        | BINOP("&&") -> logical("&&")
+        | BINOP("!!") -> logical("!!") 
+        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
   }
