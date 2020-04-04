@@ -1,0 +1,73 @@
+-- Stack machine.
+
+import List;
+import World;
+import State;
+import Expr;
+import Util;
+
+
+fun eval (c, insns) {
+  -- конфигурация стековой машины stack + state + world
+  local stack = c[0];
+  -- конфигурация семантики
+  local state = c[1];  -- состояние
+  local world = c[2]; -- мир (входные-выходные потоки)
+    
+  -- 5 конструкций стековой машины
+  -- коструктор списка в ламе "правша" 
+  case insns of
+
+  CONST (x) : next -> eval ([x : stack, state, world], next)
+
+  | BINOP (opnd) : next -> 
+			case stack of
+		  	r : l : rest -> eval([evalBinop(opnd, l, r):rest, state, world], next)
+      | _ -> failure( " incorrect `BINOP` " ) 
+			esac
+
+  | LD (x) : next -> 
+			eval ([st(x) : stack, state, world], next)
+
+  | ST (x) : next -> 
+    case stack of
+      first : rest -> 
+      eval ([rest, state <- [x, first], world], next)
+    | _ -> failure( "incorrect `ST`" )
+    esac
+
+  | READ : next ->
+			case readWorld (world) of
+      [first, restWorld] -> eval ([first : stack, state, restWorld], next)
+      | _ -> failure( "incorrect `READ` " )
+			esac
+
+  | WRITE : next ->
+			case stack of
+				first : rest -> eval([rest, state, writeWorld(first, world)], next)
+			esac
+
+	| {} -> c
+	esac
+}
+
+public fun evalSM (input, insns) {
+  eval ([{}, emptyState, createWorld (input)], insns)[2].getOutput
+}
+
+fun compileExpr (expr) {
+    case expr of 
+    Const(x) -> singleton(CONST(value))
+  | Var(x) -> singleton(LD(name))
+  | Binop(opnd, l, r) -> flatten({compileExpr(l), compileExpr(r), singleton(BINOP(opnd))})
+  esac
+}
+
+public fun compileSM (stmt) {
+    case stmt of
+    Read(x) -> {READ, ST(x) }
+  | Write(vx) -> deepFlatten ({compileExpr(vx), singleton(WRITE)})
+  | Assn(x, vx) -> deepFlatten ({compileExpr(vx), singleton(ST(x))})
+  | Seq(stmtA, stmtB) -> deepFlatten ({compileSM(stmtA), compileSM(stmtB)})
+  esac
+}

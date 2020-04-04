@@ -1,0 +1,34 @@
+-- Expression evaluator
+
+import List;
+import State;
+
+
+public fun evalExpr (st, expr) {
+  -- упорядоченные деревья выражений
+  case expr of
+    Var(x) -> st(x)  -- возвращается состояние
+  | Const(x) -> x -- константа
+  | Binop(opnd, l, r ) -> evalBinop(opnd, evalExpr(st,l), evalExpr(st, r)) -- всё равно в каком порядке располагать рекурсивные вызовы
+  | _ -> failure( "incorrect expression" )
+  esac 
+}
+
+-- 13 операций
+public fun evalBinop (opnd, l, r){
+  case opnd of
+    "+"  -> l + r
+  | "-"  -> l - r
+  | "*"  -> l * r
+  | "/"  -> l / r
+  | "%"  -> l % r
+  | "==" -> l == r
+  | "!=" -> l != r
+  | "<"  -> l < r
+  | "<=" -> l <= r
+  | ">"  -> l > r
+  | ">=" -> l >= r
+  | "!!" -> l !! r
+  | "&&" -> l && r
+	esac
+}
