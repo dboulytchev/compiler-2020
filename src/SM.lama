@@ -54,9 +54,6 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-
--- Stack machine interpreter. Takes an SM-configuration and a program,
--- returns a final configuration
 fun eval (env, [stack, st, w], insns) {
 	case insns of
 		  CONST(c):other -> eval(env, [c:stack, st, w], other)
@@ -73,6 +70,18 @@ fun eval (env, [stack, st, w], insns) {
 		| WRITE:other -> case stack of
 				head:rest -> eval(env, [rest, st, writeWorld(head, w)], other)
 			esac
+    | LABEL(l):other -> eval(env, [stack, st, w], other)
+    | JMP(l):other -> eval(env, [stack, st, w], fromLabel(env, l))
+    | CJMP(c, l):other -> case c of 
+        "z" -> case stack of
+              0:rest -> eval(env, [rest, st, w], fromLabel(env, l))
+            | _:rest -> eval(env, [rest, st, w], other)
+          esac
+      | "nz" -> case stack of
+              0:rest -> eval(env, [rest, st, w], other)
+            | _:rest -> eval(env, [rest, st, w], fromLabel(env, l))
+          esac
+      esac
 		| {} -> [stack, st, w]
 	esac
 }
@@ -127,14 +136,67 @@ fun compileExpr (expr) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  fun compile(stmt) {
-    case stmt of
-        Assn(x, val) -> { compileExpr(val), singleton(ST(x)) }
-      | Read(x) -> { READ, ST(x) }
-      | Write(val) -> { compileExpr(val), singleton(WRITE) }
-      | Seq(stmt1, stmt2) -> { compileSM(stmt1), compileSM(stmt2) }
-      | Skip -> {}
+  fun compileIf(env, expr, stmt1, stmt2) {
+    case genLabels(env, 2) of [lStmt1, lEnd, env2] ->
+      case compile(stmt1, env2) of [res1, env3] ->
+        case compile(stmt2, env3) of [res2, env4] -> 
+          [{
+            compileExpr(expr),
+            CJMP("nz", lStmt1),
+            res2,
+            JMP(lEnd),
+            LABEL(lStmt1),
+            res1,
+            LABEL(lEnd)
+          }, env4]
+        esac
+      esac
     esac
   }
-  deepFlatten(compile(stmt))
+
+  fun compileWhile(env, expr, stmt) {
+    case genLabels(env, 2) of [lExpr, lStmt, env2] ->
+      case compile(stmt, env2) of [res, env3] ->
+        [{
+          JMP(lExpr),
+          LABEL(lStmt),
+          res,
+          LABEL(lExpr),
+          compileExpr(expr),
+          CJMP("nz", lStmt)
+        }, env3]
+      esac
+    esac
+  }
+
+  fun compileRepeat(env, stmt, expr) {
+    case genLabel(env) of [lStmt, env2] ->
+      case compile(stmt, env2) of [res, env3] ->
+        [{
+          LABEL(lStmt),
+          res,
+          compileExpr(expr),
+          CJMP("z", lStmt)
+        }, env3]
+      esac
+    esac
+  }
+
+  fun compile(stmt, env) {
+    case stmt of
+        Assn(x, val) -> [{ compileExpr(val), singleton(ST(x)) }, env]
+      | Read(x) -> [{ READ, ST(x) }, env]
+      | Write(val) -> [{ compileExpr(val), singleton(WRITE) }, env]
+      | Seq(stmt1, stmt2) -> case compile(stmt1, env) of
+          [res1, env2] -> case compile(stmt2, env2) of
+            [res2, env3] -> [{res1, res2}, env3]
+          esac
+        esac
+      | If(expr, stmt1, stmt2) -> compileIf(env, expr, stmt1, stmt2)
+      | While(expr, stmt1) -> compileWhile(env, expr, stmt1)
+      | Repeat(stmt1, expr) -> compileRepeat(env, stmt1, expr)
+      | Skip -> [{}, env]
+    esac
+  }
+  deepFlatten(compile(stmt, initCompEnv())[0])
 }
