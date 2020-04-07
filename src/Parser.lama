@@ -7,8 +7,8 @@ import Fun;
 
 -- A parser of "something" in brackets; l, r are left and right
 -- brackets as strings, p --- a parser of "something"
-fun inbr (p) {
-  s ("(") |> lift (p |> bypass (s (")")))
+fun inbr (l, p, r) {
+   l |> lift (p |> bypass (r))
 }
 
 fun binop(op) { 
@@ -27,7 +27,7 @@ local operations = {
 -- Primary expression
 local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
                             lident  @ fun (x) {Var (x)} |
-                            inbr (exp)),
+                            inbr (s ("("), exp, s (")"))),
       exp = memo $ eta (expr(operations, primary)(id));
 
 local elif_st = memo $ eta (kElif   |> lift(exp       |> fun(condition){
@@ -44,7 +44,7 @@ local elif_st = memo $ eta (kElif   |> lift(exp       |> fun(condition){
 local stmt = memo $ eta (
       kSkip    @ lift(Skip)
     | lident  |> fun(val1) {(s(":=") |> lift(exp)) @ fun(val2) { Assn(val1, val2) }}
-    | (kRead  |> lift(inbr(lident))) @ fun(val) { Read(val) }
+    | (kRead  |> lift(inbr(s("("), lident, s(")")))) @ fun(val) { Read(val) }
     | (kWrite |> lift(exp)) @ fun(val) { Write(val) }
     | kIf     |> lift(exp       |> fun(condition)       { 
       kThen   |> lift(statement |> fun(then_statement)  {
