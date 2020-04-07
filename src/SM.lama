@@ -54,8 +54,27 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval (env, c, insns) {
-  failure ("SM eval not implemented\n")
+
+-- Stack machine interpreter. Takes an SM-configuration and a program,
+-- returns a final configuration
+fun eval (env, [stack, st, w], insns) {
+	case insns of
+		  CONST(c):other -> eval(env, [c:stack, st, w], other)
+		| BINOP(op):other -> case stack of
+				r:l:rest -> eval(env, [evalBinop(op, l, r):rest, st, w], other)
+			esac
+		| LD(x):other -> eval(env, [st(x):stack, st, w], other)
+		| ST(x):other -> case stack of
+				head:rest -> eval(env, [rest, st <- [x, head], w], other)
+			esac
+		| READ:other -> case readWorld(w) of
+				[val, w2] -> eval(env, [val:stack, st, w2], other)
+			esac
+		| WRITE:other -> case stack of
+				head:rest -> eval(env, [rest, st, writeWorld(head, w)], other)
+			esac
+		| {} -> [stack, st, w]
+	esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -97,12 +116,25 @@ fun genLabels (env, n) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+      Const(c) -> singleton(CONST(c))
+    | Var(x) -> singleton(LD(x))
+    | Binop(op, l, r) -> { compileExpr(l), compileExpr(r), BINOP(op) }
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  fun compile(stmt) {
+    case stmt of
+        Assn(x, val) -> { compileExpr(val), singleton(ST(x)) }
+      | Read(x) -> { READ, ST(x) }
+      | Write(val) -> { compileExpr(val), singleton(WRITE) }
+      | Seq(stmt1, stmt2) -> { compileSM(stmt1), compileSM(stmt2) }
+      | Skip -> {}
+    esac
+  }
+  deepFlatten(compile(stmt))
 }
