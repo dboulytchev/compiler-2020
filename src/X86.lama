@@ -279,6 +279,38 @@ fun compile (env, code) {
     foldl (
       fun ([env, scode], i) {
         local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+
+fun simpleBinop (op) {
+            case env.pop2 of 
+              [x, y, env] -> case env.allocate of
+                               [s, env] -> [env, code : {Mov (y, eax), Binop (op, x, eax), Mov (eax, s)}]
+                             esac
+            esac
+        }      
+
+        fun compareBinop (op) {
+          case env.pop2 of 
+            [x, y, env] -> 
+              case env.allocate of
+                [s, env] -> [env, code : {Mov (y, edx), Binop ("^", eax, eax), Binop ("cmp", x, edx),
+                                          Set (suffix(op), "%al"), Mov (eax, s)}]
+              esac
+          esac
+        }  
+
+        fun logicBinop (op) {
+            case env.pop2 of 
+              [x, y, env] -> 
+                case env.allocate of
+                  [s, env] -> [env, code : {
+                        Mov (y, edx), Binop ("^", eax, eax), Binop ("cmp", L (0), edx), Set (suffix("!="), "%al"), Push (eax),
+                        Mov (x, edx), Binop ("^", eax, eax), Binop ("cmp", L (0), edx), Set (suffix("!="), "%al"), Pop (edx),
+                        Binop ("+", edx, eax), move(eax, edx), Binop ("^", eax, eax), Binop ("cmp", L (op), edx),
+                        Set (suffix(">"), "%al"), Mov (eax, s)}]
+                esac
+            esac
+        }
+
         case i of
           READ ->
             case env.allocate of
@@ -288,7 +320,41 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | LD (x) ->
+            case env.addGlobal(x).allocate of
+              [s, env] -> [env, code : move(env.loc(x), s)]
+            esac
+        | ST (x) ->
+            case env.addGlobal(x).pop of
+              [s, env] -> [env, code : move(s, env.loc(x))]
+            esac
+        | CONST (x) ->
+            case env.allocate of
+              [s, env] -> [env, code : singleton(Mov(L (x), s))]
+            esac
+        | BINOP ("+") -> simpleBinop("+")   
+        | BINOP ("-") -> simpleBinop("-")
+        | BINOP ("*") -> simpleBinop("*")
+        | BINOP ("/") -> 
+            case env.pop2 of 
+              [x, y, env] -> case env.allocate of
+                               [s, env] -> [env, code : {Mov (y, eax), Cltd, IDiv (x), Mov (eax, s)}]
+                             esac
+            esac
+        | BINOP ("%") -> 
+            case env.pop2 of 
+              [x, y, env] -> case env.allocate of
+                               [s, env] -> [env, code : {Mov (y, eax), Cltd, IDiv (x), Mov (edx, s)}]
+                             esac
+            esac
+        | BINOP ("<") -> compareBinop("<")
+        | BINOP ("<=") -> compareBinop("<=")
+        | BINOP ("==") -> compareBinop("==")
+        | BINOP ("!=") -> compareBinop("!=")
+        | BINOP (">") -> compareBinop(">")
+        | BINOP (">=") -> compareBinop(">=")
+        | BINOP ("&&") -> logicBinop(1)
+        | BINOP ("!!") -> logicBinop(0)
         esac
       }, [env, {}], code)
   }
