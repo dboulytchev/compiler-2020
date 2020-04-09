@@ -15,7 +15,7 @@ import World;
 --        Skip                      |
 --        Read   (string)           |
 --        Write  (expr)             |
---        if     (expr, stmt, stmt) |
+--        If     (expr, stmt, stmt) |
 --        While  (expr, stmt)       |
 --        Repeat (stmt, expr)
 
@@ -32,8 +32,9 @@ fun eval (state@[st, w], stmt) {
               case eval(state, s) of
                 new_state@[new_st, _] -> 
                   if evalExpr(new_st, e) == 0
-                  then eval(new_state, stmt)
-                  else new_state fi
+                    then eval(new_state, stmt)
+                    else new_state
+                  fi
               esac
     esac
 }

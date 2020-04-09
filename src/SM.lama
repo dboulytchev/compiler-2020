@@ -54,33 +54,46 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-public fun eval ([stack, st, w], insts) {
+public fun eval (env, state@[stack, st, w], insts) {
     case insts of
         inst:p ->
             case inst of
-                BINOP(op) ->
-                    case stack of
-                        y:x:zs -> eval([evalBinop(op, x, y):zs, st, w], p)
-                    |   _      -> failure("BINOP: required stack size >= 2\n")
-                    esac
-            |   CONST(c) -> eval([c:stack, st, w], p)
-            |   READ ->
-                    case readWorld(w) of
-                        [val, w_new] -> eval([val:stack, st, w_new], p)
-                    esac
-            |   WRITE ->
-                    case stack of
-                        head:tail -> eval([tail, st, writeWorld(head, w)], p)
-                    |   _        -> failure("WRITE: required stack size >= 1\n")
-                    esac
-            |   LD(x) -> eval([st(x):stack, st, w], p)
+              BINOP(op) ->
+                case stack of
+                  y:x:zs -> eval(env, [evalBinop(op, x, y):zs, st, w], p)
+                | _      -> failure("BINOP: required stack size >= 2\n")
+                esac
+            | CONST(c) -> eval(env, [c:stack, st, w], p)
+            | READ ->
+                case readWorld(w) of
+                  [val, w_new] -> eval(env, [val:stack, st, w_new], p)
+                esac
+            |  WRITE ->
+                case stack of
+                  head:tail -> eval(env, [tail, st, writeWorld(head, w)], p)
+                |   _       -> failure("WRITE: required stack size >= 1\n")
+                esac
+            |   LD(x) -> eval(env, [st(x):stack, st, w], p)
             |   ST(x) ->
-                    case stack of
-                        head:tail -> eval([tail, st <- [x, head], w], p)
-                    |   _         -> failure("WRITE: required stack size >= 1\n")
+                  case stack of
+                    head:tail -> eval(env, [tail, st <- [x, head], w], p)
+                  | _         -> failure("WRITE: required stack size >= 1\n")
+                  esac
+            | LABEL(_) -> eval(env, state, p)
+            | JMP(l)   -> eval(env, state, env.fromLabel(l))
+            | CJMP(c, l) ->
+                case stack of
+                  x:tail ->
+                    case assoc({["z", 0], ["nz", 1]}, c) of Some(y) ->
+                      if (x >= 1) == y
+                        then eval(env, state, env.fromLabel(l))
+                        else eval(env, state, p)
+                      fi
                     esac
+                | _ -> failure("CJMP: required stack size >= 1")
+                esac
             esac
-    |   {} -> [stack, st, w]
+    | {} -> [stack, st, w]
     esac
 }
 
@@ -137,14 +150,45 @@ public fun compileExpr (expr) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-    fun compile (stmt) {
+    fun compile (env, stmt) {
         case stmt of
-            Skip -> singleton()
-        |   Assn(x, e) -> {compileExpr(e), ST(x)}
-        |   Read(x) -> {READ, ST(x)}
-        |   Write(e) -> {compileExpr(e), WRITE}
-        |   Seq(s1, s2) -> {compileSM(s1), compileSM(s2)}
+          Skip ->        [env, {}]
+        | Assn(x, e) ->  [env, {compileExpr(e), ST(x)}]
+        | Read(x) ->     [env, {READ, ST(x)}]
+        | Write(e) ->    [env, {compileExpr(e), WRITE}]
+        | Seq(s1, s2) ->
+            case compile(env, s1) of [env1, p1] ->
+              case compile(env1, s2) of
+                [env2, p2] -> [env2, {p1, p2}]
+              esac
+            esac
+        | If(e, s1, s2) ->
+            case env.genLabels(2) of [l_false, l_end, env] ->
+              case compile(env, s1) of [env, p1] ->
+                case compile(env, s2) of [env, p2] ->
+                  case compileExpr(e) of pe ->
+                    [env, {pe, CJMP("z", l_false), p1, JMP(l_end), LABEL(l_false), p2, LABEL(l_end)}]
+                  esac
+                esac
+              esac
+            esac
+        | While(e, s) ->
+            case env.genLabels(2) of [l_body, l_condition, env] ->
+              case compile(env, s) of [env, body] ->
+                case compileExpr(e) of condition ->
+                  [env, {JMP(l_condition), LABEL(l_body), body, LABEL(l_condition), condition, CJMP("nz", l_body)}]
+                esac
+              esac
+            esac
+        | Repeat(s, e) ->
+            case env.genLabel of [l_body, env] ->
+              case compile(env, s) of [env, body] ->
+                case compileExpr(e) of condition ->
+                  [env, {LABEL(l_body), body, condition, CJMP("z", l_body)}]
+                esac
+              esac
+            esac
         esac
     }
-    deepFlatten(compile(stmt))
+    deepFlatten(compile(initCompEnv(), stmt)[1])
 }

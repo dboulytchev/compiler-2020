@@ -94,7 +94,7 @@ case parseString (parse |> bypass (end), fread (args.getInFile)) of
        iter (fun (x) {printf ("%d\n", x)},
              case mode of
                Int   -> evalStmt (input, program)
-             | SM    -> evalSM (input, compileSM (program))
+             | SM    -> evalSM (input, peepSM (args, compileSM (program)))
              esac)
       }
       esac
