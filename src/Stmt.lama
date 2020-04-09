@@ -14,7 +14,7 @@ fun eval (c, stmt) {
     local world = c[1];
 
     case stmt of
-      Assn(str, expr) -> -> [state <- [str, evalExpr(state, expr)], world] 
+      Assn(str, expr) -> [state <- [str, evalExpr(state, expr)], world] 
     | Seq (stmtA, stmtB)->eval(eval([state, world], stmtA), stmtB)
     | Skip -> [state, world] -- без изменений
     | Read(str) ->
