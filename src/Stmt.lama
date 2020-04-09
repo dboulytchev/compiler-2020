@@ -16,7 +16,6 @@ import World;
 --        Read   (string)           |
 --        Write  (expr)             |
 
-<<<<<<< HEAD
 fun eval (c@[s, w], stmt) {
 	case stmt of
 		Assn    (x, e) -> [s <- [x, evalExpr (s, e)], w]
@@ -27,10 +26,6 @@ fun eval (c@[s, w], stmt) {
 		| Write    (e) -> [s, writeWorld (evalExpr (s, e), w)]
 		| Skip         -> c
 	esac
-=======
-fun eval (c, stmt) {
-  failure ("Stmt eval not implemented\n")
->>>>>>> upstream/A02-straight-line-x86
 }
 
 -- Evaluates a program with a given input and returns an output
