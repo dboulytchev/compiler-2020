@@ -19,14 +19,31 @@ import World;
 --        While  (expr, stmt)       |
 --        Repeat (stmt, expr)
 
-fun eval (c, stmt) {
+fun eval (c@[state, world], stmt) {
   case stmt of
     Skip -> c
-  | Assn(varStr, expr) -> [state <- [varStr, evalExpr(state, expr)], world]
+  | Assn(varStr, expr) -> 
+      [state <- [varStr, evalExpr(state, expr)], world]
   | Read(varStr) ->
-      case readWorld(world) of [n, w] -> [state <- [varStr, n], w] esac
-  | Write(expr) -> [state, writeWorld(evalExpr(state, expr), world)]
-  | Seq(s1, s2) -> eval(eval(c, s1), s2)
+      case readWorld(world) of 
+        [n, w] -> [state <- [varStr, n], w] 
+      esac
+  | Write(expr) -> 
+      [state, writeWorld(evalExpr(state, expr), world)]
+  | Seq(s1, s2) -> 
+      eval(eval(c, s1), s2)
+  | If(e, s1, s2) -> 
+      if   evalExpr(state, e) != 0
+      then eval(c, s1)
+      else eval(c, s2)
+      fi
+  | cycle@While(cond, body) ->
+      if   evalExpr(state, cond) != 0
+      then eval(eval(c, body), cycle)
+      else c
+      fi
+  | Repeat(body, cond) -> 
+      eval(eval(c, body), While(Binop("==", cond, Const(0)), body))
   esac
 }
 
