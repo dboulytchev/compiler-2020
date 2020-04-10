@@ -51,11 +51,13 @@ fun compileExpr (expr) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  case stmt of
+  fun compile(stmt) {
+      case stmt of
         Read(x)         ->  { READ, ST(x) }
     |   Write(value)    ->  { compileExpr(value), singleton(WRITE) }
     |   Assn(x, value)  ->  { compileExpr(value), singleton(ST(x)) }
     |   Seq(stmt1,stmt2)->  { compileSM(stmt1), compileSM(stmt2) }
-  esac
-  deepFlatten (compileSM (stmt))
+      esac
+    }
+    deepFlatten(compile(stmt))
 }
