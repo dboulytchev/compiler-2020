@@ -1,27 +1,44 @@
--- Stack machine.
-
-import List;
-import World;
-import State;
-import Expr;
-import Util;
+@@ -8,8 +8,28 @@ import Util;
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
 fun eval (c, insns) {
   failure ("SM eval not implemented\n")
+fun eval ([sk,st,w], ins) {
+  case ins of
+       CONST(c) : in -> eval([c: sk,st,w],in)
+     | READ : in ->
+     case 
+       readWorld(w) of [v,nw] -> eval([v:sk,st,nw],in)
+     esac
+     | WRITE : in ->
+     case 
+      sk of head : t -> eval ([t, st, writeWorld(head,w)],in)
+     esac
+     | ST(x) : in ->
+     case
+      sk of head : t -> eval([t,st <- [x,head],w], in)
+     esac
+     | LD(x) : in -> eval([st(x):sk,st,w],in)
+     | BINOP(b) : in ->
+     case sk of right : left : t -> eval([evalBinop(b,left,right): t,st,w], in)
+     esac
+     | {} -> [sk,st,w]
+  esac
+
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
-public fun evalSM (input, insns) {
-  eval ([{}, emptyState, createWorld (input)], insns)[2].getOutput
-}
-
--- Compiles an expression into a stack machine code.
+@@ -21,12 +41,25 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
   failure ("compileExpr not implemented\n")
+  case expr of
+      Const(x) -> singleton(CONST(x))
+    | Var(x) -> singleton(LD(x))
+    | Binop(b,left,right) -> {compileExpr(left),compileExpr(right),BINOP(b)}
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
@@ -29,4 +46,13 @@ fun compileExpr (expr) {
 -- instructions.
 public fun compileSM (stmt) {
   failure ("compileSM not implemented\n")
+  fun compile(stmt){
+    case stmt of
+         Read(x) -> {READ, ST(x)}
+      |  Write(e) -> {compileExpr(e), WRITE}
+      |  Assn(x,e) -> {compileExpr(e), ST(x)}
+      |  Seq(s1,s2) -> {compile(s1), compile(s2)}
+    esac
+ }
+  deepFlatten (compile(stmt))
 }
