@@ -37,13 +37,10 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  deepFlatten(doCompileExpr(expr))	
-}
-fun doCompileExpr (expr) {
-  case expr of
-      Const(n) -> singleton(CONST(n))
-    | Var(x) -> singleton(LD(x))
-    | Binop(operator, leftPath, rightPath) -> {doCompileExpr(leftPath), doCompileExpr(rightPath), BINOP(operator)}
+  case expr of 
+    Const (n) -> singleton (CONST (n))
+  | Var (x) -> singleton (LD (x))
+  | Binop (op, lhs, rhs) -> {compileExpr (lhs), compileExpr (rhs), BINOP (op)}
   esac
 }
 
