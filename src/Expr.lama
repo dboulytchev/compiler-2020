@@ -17,12 +17,12 @@ public fun evalExpr (st, expr) {
     case expr of
         Const(n) -> n
       | Var(v)   -> st(v)
-      | Binop(oprStr, l, r) -> stringToOpr(oprStr)(evalExpr(st, l), evalExpr(st, r))
+      | Binop(oprStr, l, r) -> evalBinop(oprStr)(evalExpr(st, l), evalExpr(st, r))
       | _      -> failure ("Expresion is not implemented\n")
     esac
 }
 
-public fun stringToOpr(oprStr) {
+public fun evalBinop(oprStr) {
   case oprStr of
     "+"  -> infix +
   | "-"  -> infix -
