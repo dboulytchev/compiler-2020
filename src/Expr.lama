@@ -14,5 +14,27 @@ import State;
 --        Binop (string, expr, expr)
 
 public fun evalExpr (st, expr) {
-  failure ("evalExpr not implemented\n")
+  case expr of
+    Const(n) -> n
+    | Var(x) -> st(x)
+    | Binop(operator, leftPath, rightPath) -> calculateBinop(operator, evalExpr(st, leftPath), evalExpr(st, rightPath))
+  esac
+}
+
+public fun calculateBinop (operator, leftPath, rightPath) {
+  case operator of
+    "+" -> leftPath + rightPath
+    | "-" -> leftPath - rightPath
+    | "*" -> leftPath * rightPath
+    | "/" -> leftPath / rightPath
+    | "%" -> leftPath % rightPath
+    | "==" -> leftPath == rightPath
+    | "!=" -> leftPath != rightPath
+    | "<" -> leftPath < rightPath
+    | "<=" -> leftPath <= rightPath
+    | ">" -> leftPath > rightPath
+    | ">=" -> leftPath >= rightPath
+    | "&&" -> leftPath && rightPath
+    | "!!" -> leftPath !! rightPath
+  esac
 }

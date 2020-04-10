@@ -8,8 +8,24 @@ import Util;
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (c@[stack, st, w], insns) {
+  case insns of
+      {} -> c
+    | READ : insns -> case readWorld(w) of
+        [n, w] -> eval([n:stack, st, w], insns)
+      esac
+    | WRITE : insns -> case stack of
+        n : stack -> eval([stack, st, writeWorld(n, w)], insns)
+      esac
+    | CONST(n) : insns -> eval([n : stack, st, w], insns)
+    | BINOP(operator) : insns -> case stack of
+        x : y : stack -> eval([calculateBinop(operator, y, x) : stack, st, w], insns)
+      esac
+    | LD(x) : insns -> eval([st(x) : stack, st, w], insns)
+    | ST(x) : insns -> case stack of
+        n : stack -> eval([stack, st <- [x, n], w], insns)
+      esac	
+    esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -21,12 +37,29 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  deepFlatten(doCompileExpr(expr))	
+}
+fun doCompileExpr (expr) {
+  case expr of
+      Const(n) -> singleton(CONST(n))
+    | Var(x) -> singleton(LD(x))
+    | Binop(operator, leftPath, rightPath) -> {doCompileExpr(leftPath), doCompileExpr(rightPath), BINOP(operator)}
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
-public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+public fun compileSM(stmt) {
+  deepFlatten(doCompileSM(stmt))
+}
+
+fun doCompileSM(stmt) {
+  case stmt of
+      Skip -> {}
+    | Read(x) -> {READ, ST(x)}
+    | Write(e) -> {compileExpr(e), WRITE}
+    | Assn(x, e) -> {compileExpr(e), ST(x)}
+    | Seq(s1, s2) -> {doCompileSM(s1), doCompileSM(s2)}
+  esac
 }
