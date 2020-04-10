@@ -32,7 +32,6 @@ public fun evalBinop(op, lhs, rhs) {
   esac
 }
 
-
 public fun evalExpr (st, expr) {
   case expr of
     Const (n) -> n
