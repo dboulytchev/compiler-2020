@@ -14,28 +14,28 @@ import State;
 --        Binop (string, expr, expr)
 
 public fun evalExpr (st, expr) {
-    case expr of
-        Const(n) -> n
-      | Var(v)   -> st(v)
-      | Binop(oprStr, l, r) -> evalBinop(oprStr)(evalExpr(st, l), evalExpr(st, r))
-      | _      -> failure ("Expresion is not implemented\n")
-    esac
-}
-
-public fun evalBinop(oprStr) {
-  case oprStr of
-    "+"  -> infix +
-  | "-"  -> infix -
-  | "*"  -> infix *
-  | "/"  -> infix /
-  | "%"  -> infix %
-  | "==" -> infix ==
-  | "!=" -> infix !=
-  | "<"  -> infix <
-  | "<=" -> infix <=
-  | ">"  -> infix >
-  | ">=" -> infix >=
-  | "&&" -> infix &&
-  | "!!" -> infix !!
+  case expr of
+    Const(x) -> x
+    | Var(x) -> st(x)
+    | Binop(operation, left, right) -> evalBinop(operation, evalExpr(st, left), evalExpr(st, right))
+    | _      -> failure ("Expresion is not implemented\n")
   esac
 }
+
+public fun evalBinop(operation, left, right) {
+    case operation of
+          "+"    ->  left + right
+        | "-"    ->  left - right
+        | "*"    ->  left * right
+        | "/"    ->  left / right
+        | "%"    ->  left % right
+        | "<"    ->  left < right
+        | ">"    ->  left > right
+        | "<="   ->  left <= right
+        | ">="   ->  left >= right
+        | "=="   ->  left == right
+        | "!="   ->  left != right
+        | "!!"   ->  left !! right
+        | "&&"   ->  left && right
+    esac
+  }
