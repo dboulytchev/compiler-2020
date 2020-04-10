@@ -6,71 +6,54 @@ import State;
 import Expr;
 import Util;
 
-
-fun eval (c, insns) {
-  -- конфигурация стековой машины stack + state + world
-  local stack = c[0];
-  -- конфигурация семантики
-  local state = c[1];  -- состояние
-  local world = c[2]; -- мир (входные-выходные потоки)
-    
-  -- 5 конструкций стековой машины
-  -- коструктор списка в ламе "правша" 
-  case insns of
-
-  CONST (x) : next -> eval ([x : stack, state, world], next)
-
-  | BINOP (opnd) : next -> 
-			case stack of
-		  	r : l : rest -> eval([evalBinop(opnd, l, r):rest, state, world], next)
-      | _ -> failure( " incorrect `BINOP` " ) 
-			esac
-
-  | LD (x) : next -> 
-			eval ([st(x) : stack, state, world], next)
-
-  | ST (x) : next -> 
-    case stack of
-      first : rest -> 
-      eval ([rest, state <- [x, first], world], next)
-    | _ -> failure( "incorrect `ST`" )
-    esac
-
-  | READ : next ->
-			case readWorld (world) of
-      [first, restWorld] -> eval ([first : stack, state, restWorld], next)
-      | _ -> failure( "incorrect `READ` " )
-			esac
-
-  | WRITE : next ->
-			case stack of
-				first : rest -> eval([rest, state, writeWorld(first, world)], next)
-			esac
-
-	| {} -> c
-	esac
+-- Stack machine interpreter. Takes an SM-configuration and a program,
+-- returns a final configuration
+fun eval (c@[stack, state, world], insns) {
+  case insns of 
+    {} -> c
+  | i : insns ->
+      eval (
+        case i of 
+          READ -> case readWorld(world) of [n, world] -> [n : stack, state, world] esac
+        | WRITE -> case stack of n: stack -> [stack, state, writeWorld(n, world)] esac
+        | BINOP(op) -> case stack of x : y : stack -> [callBinOp(op, y, x) : stack, state, world] esac
+        | CONST(n) -> [n : stack, state, world]
+        | LD(x) -> [state(x) : stack, state, world]
+        | ST(x) -> case stack of n : stack -> [stack, state <- [x,n], world] esac
+        esac,
+        insns
+       )
+  esac
 }
 
+-- Runs a stack machine for a given input and a given program, returns an output
 public fun evalSM (input, insns) {
   eval ([{}, emptyState, createWorld (input)], insns)[2].getOutput
 }
 
+-- Compiles an expression into a stack machine code.
+-- Takes an expression, returns a list (of, possibly, lists)
+-- of stack machine instructions
 fun compileExpr (expr) {
-    case expr of 
-    Const(x) -> singleton(CONST(x))
-  | Var(x) -> singleton(LD(x))
-  | Binop(opnd, l, r) -> flatten({compileExpr(l), compileExpr(r), singleton(BINOP(opnd))})
+  case expr of
+    Var(x) -> singleton(LD(x))
+  | Const(n) -> singleton(CONST(n))
+  | Binop(op, left, right) -> {compileExpr(left), compileExpr(right), BINOP(op)}
   esac
 }
 
+-- Compiles a statement into a stack machine code.
+-- Takes a statement, returns a list of stack machine
+-- instructions.
 public fun compileSM (stmt) {
-    compile(stmt){
+  fun compile (stmt){
     case stmt of
-    Read(x) -> {READ, ST(x) }
-  | Write(vx) ->  {compileExpr(vx), singleton(WRITE)}
-  | Assn(x, vx) -> {compileExpr(vx), singleton(ST(x))}
-  | Seq(stmtA, stmtB) -> {compileSM(stmtA), compileSM(stmtB)}
+      Skip -> {}
+    | Assn(x, expr) -> {compileExpr(expr), ST(x)}
+    | Write(expr) -> {compileExpr(expr), WRITE}
+    | Read(x) -> {READ, ST(x)}
+    | Seq(state1, state2) -> {compile(state1), compile(state2)}
     esac
-    }
-    deepFlatten(compile(stmt))
+  }
+  deepFlatten(compile(stmt))
 }
