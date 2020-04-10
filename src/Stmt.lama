@@ -9,8 +9,8 @@ import World;
 -- Returns a final configuration (if any)
 fun eval (c@[s, w], stmt) {
   case stmt of
-	Skip -> c
-	| Assn (x, e) -> [s <- [x, evalExpr(s, e)], w]
+    Skip -> c
+    | Assn (x, e) -> [s <- [x, evalExpr(s, e)], w]
     | Read (x) -> case readWorld(w) of 
         [z, neww] -> [s <- [x, z], neww]
       esac

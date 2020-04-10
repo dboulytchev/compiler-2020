@@ -8,7 +8,7 @@ import State;
 -- returns integer value
 public fun evalExpr (st, expr) {
   case expr of
-	Const(n) -> n
+    Const(n) -> n
     | Var(x) -> st(x)
     | Binop(op, l, r) -> evalBinop(op, evalExpr(st, l), evalExpr(st, r))
   esac
