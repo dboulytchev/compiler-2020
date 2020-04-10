@@ -13,7 +13,6 @@ import State;
 --        Const (int)                |
 --        Binop (string, expr, expr)
 
-
 public fun evalBinop(op, lhs, rhs) {
   case op of
     "+" -> lhs + rhs
@@ -31,7 +30,6 @@ public fun evalBinop(op, lhs, rhs) {
   | "!!" -> lhs !! rhs
   esac
 }
-
 
 public fun evalExpr (st, expr) {
   case expr of
