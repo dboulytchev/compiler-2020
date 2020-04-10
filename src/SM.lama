@@ -8,33 +8,20 @@ import Util;
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval ([sk, st, w], insns) {
-	case insns of
-		CONST (c) : ins -> eval ([c : sk, st, w], ins)
-
-		| READ : ins ->
-			case
-        readWorld (w) of	[v, nw] -> eval ([v : sk, st, nw], ins)
-			esac
-
-		| WRITE : ins ->
-			case
-        sk of	head : t ->	eval ([t, st, writeWorld (head, w)], ins)
-			esac
-
-		| ST (x) : ins -> 
-			case
-        sk of	head : t -> eval ([t, st <- [x, head], w], ins)
-			esac
-
-		| LD (x) : ins -> eval ([st (x) : sk, st, w], ins)
-
-		| BINOP (o) : ins -> 
-			case
-        sk of	r : l : t -> eval ([evalBinop (o, l, r) : t, st, w], ins)
-			esac
-		| {} -> [sk, st, w]
-	esac
+fun eval (configuration@[stack, state, world], instructions) { -- understandable names please
+  case instructions of
+    CONST (value) : tail -> eval ([value : stack, state, world], tail)
+  | LD (name) : tail -> eval ([state (name) : stack, state, world], tail)
+  | ST (name) : tail -> case stack of value : other -> eval ([other, state <- [name, value], world], tail) esac
+  | READ : tail -> case readWorld (world) of [value, newworld] -> eval ([value : stack, state, newworld], tail) esac
+  | WRITE : tail -> case stack of value : other -> eval ([other, state, writeWorld (value, world)], tail) esac
+  | BINOP (operand) : tail -> case stack of 
+                                value1 : value2 : other -> 
+                                  local expressionResult = evalExpr(state, Binop (operand, Const (value2), Const (value1)));
+                                  eval ([expressionResult : other, state, world], tail)
+                              esac
+  | {} -> configuration
+  esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -45,22 +32,27 @@ public fun evalSM (input, insns) {
 -- Compiles an expression into a stack machine code.
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
-fun compileExpr (expr) {
-  case expr of
-    Const (x) -> singleton (CONST (x))
-  | Var (x) -> singleton (LD (x))
-  | Binop (o, l, r) -> deepFlatten (compileExpr (l) +++ compileExpr(r) +++ singleton (BINOP (o)))
+fun compileExpr (expression) {
+  case expression of
+    Var (name) -> LD (name) : {}
+  | Const (value) -> CONST (value) : {}
+  | Binop (operand, expression1, expression2) -> {compileExpr (expression1), compileExpr (expression2), ( BINOP (operand) : {} )}
   esac
+  
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
-public fun compileSM (stmt) {
-  case stmt of
-    Assn (x, e) -> deepFlatten (compileExpr (e) +++ singleton (ST (x)))
-  | Read (x) -> { READ, ST (x) }
-  | Write (x) -> deepFlatten (compileExpr (x) +++ singleton (WRITE))
-  | Seq (s1, s2) -> deepFlatten (compileSM (s1) +++ compileSM (s2))
-  esac 
+public fun compileSM (statement) {
+  fun innerCompileSM (statement) {
+    case statement of
+      Assn (name, expression) -> {compileExpr (expression), ( ST (name) : {} )}
+    | Seq (statement1, statement2) -> {innerCompileSM (statement1), innerCompileSM (statement2)}
+    | Skip -> {}
+    | Read (name) -> READ : ST (name) : {}
+    | Write (expression) -> {compileExpr (expression),  ( WRITE : {} )}
+    esac
+  }
+  statement.innerCompileSM.deepFlatten
 }
