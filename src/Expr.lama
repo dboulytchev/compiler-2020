@@ -1,6 +1,7 @@
 -- Expression evaluator
 
 import List;
+import Collection;
 import State;
 
 
@@ -14,24 +15,28 @@ import State;
 --        Binop (string, expr, expr)
 
 public fun evalExpr (state, expression) {
+  local operandsMap = listMap ( 
+    ["+", infix +]:
+    ["-", infix -]:
+    ["*", infix *]:
+    ["/", infix /]:
+    ["%", infix %]:
+    ["==", infix ==]:
+    ["!=", infix !=]:
+    ["<=", infix <=]:
+    ["<", infix <]:
+    [">=", infix >=]:
+    [">", infix >]:
+    ["&&", infix &&]:
+    ["!!", infix !!]:{}
+  );
   case expression of
     Var (name) -> state (name)
   | Const (value) -> value
   | Binop (operand, expression1, expression2) -> 
-    case operand of
-      "+" -> evalExpr (state, expression1) + evalExpr (state, expression2)
-    | "-" -> evalExpr (state, expression1) - evalExpr (state, expression2)
-    | "*" -> evalExpr (state, expression1) * evalExpr (state, expression2)
-    | "/" -> evalExpr (state, expression1) / evalExpr (state, expression2)
-    | "%" -> evalExpr (state, expression1) % evalExpr (state, expression2)
-    | "==" -> evalExpr (state, expression1) == evalExpr (state, expression2)
-    | "!=" -> evalExpr (state, expression1) != evalExpr (state, expression2)
-    | "<=" -> evalExpr (state, expression1) <= evalExpr (state, expression2)
-    | "<" -> evalExpr (state, expression1) < evalExpr (state, expression2)
-    | ">=" -> evalExpr (state, expression1) >= evalExpr (state, expression2)
-    | ">" -> evalExpr (state, expression1) > evalExpr (state, expression2)
-    | "&&" -> evalExpr (state, expression1) && evalExpr (state, expression2)
-    | "!!" -> evalExpr (state, expression1) !! evalExpr (state, expression2)
+    case findMap(operandsMap, operand) of
+      Some (operandF) -> operandF (evalExpr (state, expression1), evalExpr (state, expression2))
+    | None -> failure (stringcat ("Unknown operand " : operand : "\n" : {}))
     esac
   esac
 }

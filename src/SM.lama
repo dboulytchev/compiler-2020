@@ -36,19 +36,23 @@ fun compileExpr (expression) {
   case expression of
     Var (name) -> LD (name) : {}
   | Const (value) -> CONST (value) : {}
-  | Binop (operand, expression1, expression2) -> compileExpr (expression1) +++ compileExpr (expression2)  +++ ( BINOP (operand) : {} )
+  | Binop (operand, expression1, expression2) -> {compileExpr (expression1), compileExpr (expression2), ( BINOP (operand) : {} )}
   esac
+  
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (statement) {
-  case statement of
-    Assn (name, expression) -> compileExpr (expression) +++ ( ST (name) : {} )
-  | Seq (statement1, statement2) -> compileSM (statement1) +++ compileSM (statement2)
-  | Skip -> {}
-  | Read (name) -> READ : ST (name) : {}
-  | Write (expression) -> compileExpr (expression) +++  ( WRITE : {} )
-  esac
+  fun innerCompileSM (statement) {
+    case statement of
+      Assn (name, expression) -> {compileExpr (expression), ( ST (name) : {} )}
+    | Seq (statement1, statement2) -> {innerCompileSM (statement1), innerCompileSM (statement2)}
+    | Skip -> {}
+    | Read (name) -> READ : ST (name) : {}
+    | Write (expression) -> {compileExpr (expression),  ( WRITE : {} )}
+    esac
+  }
+  statement.innerCompileSM.deepFlatten
 }
