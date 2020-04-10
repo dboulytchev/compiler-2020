@@ -1,4 +1,7 @@
-@@ -7,5 +7,26 @@ import State;
+@@ -1,11 +1,32 @@
+-- Expression evaluator
+import List;
+import State;
 -- The evaluator itself: takes a state and an expression,
 -- returns integer value
 public fun evalExpr (st, expr) {
@@ -25,4 +28,4 @@ public fun evalBinop(b,left,right){
   | "!!" -> left !! right
   | "&&" -> left && right
   esac
-}
+  }
