@@ -22,7 +22,7 @@ fun eval (c@[state, world], stmt) {
   | Seq(stmt1 , stmt2) -> eval(eval(c, stmt1), stmt2)
   | Skip -> c
   | Read(str) -> case readWorld(world) of
-                   [n, world] -> [state <- [x, n], world]
+                   [n, world] -> [state <- [str, n], world]
                  esac
   | Write(expr) -> [state, writeWorld(evalExpr(state, expr), world)]
   esac
