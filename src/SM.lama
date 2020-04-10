@@ -38,12 +38,25 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+      Const (c) -> { CONST (c) }
+    | Var (x) -> { LD (x) }
+    | Binop (op, l, r) -> { compileExpr(l), compileExpr(r), BINOP (op) }
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  fun compile (stmt) {
+    case stmt of
+        Skip -> {}
+      | Read (x) -> { READ, ST (x) }
+      | Write (e) -> { compileExpr(e), WRITE }
+      | Assn (x, e) -> { compileExpr(e), ST (x) }
+      | Seq (l, r) -> { compile(l), compile(r) }
+    esac
+  }
+  stmt.compile.deepFlatten
 }
