@@ -3,21 +3,21 @@
 import List;
 import State;
 
-public fun evalBinop (op, l, r) {
+public fun evalBinop (op, val_l, val_r) {
     case op of
-        "+" -> l + r
-    |   "-" -> l - r
-    |   "*" -> l * r
-    |   "/" -> l / r
-    |   "%" -> l % r
-    |   "==" -> l == r
-    |   "!=" -> l != r
-    |   "<" -> l < r
-    |   "<=" -> l <= r
-    |   ">" -> l > r
-    |   ">=" -> l >= r
-    |   "&&" -> l && r
-    |   "!!" -> l !! r
+        "+" -> val_l + val_r
+    |   "-" -> val_l - val_r
+    |   "*" -> val_l * val_r
+    |   "/" -> val_l / val_r
+    |   "%" -> val_l % val_r
+    |   "==" -> val_l == val_r
+    |   "!=" -> val_l != val_r
+    |   "<" -> val_l < val_r
+    |   "<=" -> val_l <= val_r
+    |   ">" -> val_l > val_r
+    |   ">=" -> val_l >= val_r
+    |   "&&" -> val_l && val_r
+    |   "!!" -> val_l !! val_r
     esac
 }
 
@@ -35,6 +35,6 @@ public fun evalExpr (st, expr) {
    case expr of
         Const (x) -> x
     |   Var (x) -> st(x)
-    |   Binop(op, l, r) -> evalBinop(op, evalExpr(st, l), evalExpr(st, r))
+    |   Binop(op, expr_l, expr_r) -> evalBinop(op, evalExpr(st, expr_l), evalExpr(st, expr_r))
     esac
 }
