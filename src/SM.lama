@@ -7,8 +7,6 @@ import Util;
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
 fun eval ([sk,st,w], ins) {
   case ins of
        CONST(c) : in -> eval([c: sk,st,w],in)
@@ -40,8 +38,6 @@ public fun evalSM (input, insns) {
 -- Compiles an expression into a stack machine code.
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
-fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
   case expr of
       Const(x) -> singleton(CONST(x))
     | Var(x) -> singleton(LD(x))
@@ -52,8 +48,6 @@ fun compileExpr (expr) {
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
-public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
   fun compile(stmt){
     case stmt of
          Read(x) -> {READ, ST(x)}
