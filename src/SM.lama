@@ -56,10 +56,10 @@ public fun compileSM(stmt) {
 
 fun doCompileSM(stmt) {
   case stmt of
-      Skip -> {}
+      Assn(x, e) -> {compileExpr(e), ST(x)}
+    | Seq(s1, s2) -> {doCompileSM(s1), doCompileSM(s2)}
+    | Skip -> {}
     | Read(x) -> {READ, ST(x)}
     | Write(e) -> {compileExpr(e), WRITE}
-    | Assn(x, e) -> {compileExpr(e), ST(x)}
-    | Seq(s1, s2) -> {doCompileSM(s1), doCompileSM(s2)}
   esac
 }

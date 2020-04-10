@@ -15,7 +15,7 @@ import State;
 
 public fun evalExpr (st, expr) {
   case expr of
-    Const(n) -> n
+      Const(n) -> n
     | Var(x) -> st(x)
     | Binop(operator, leftPath, rightPath) -> calculateBinop(operator, evalExpr(st, leftPath), evalExpr(st, rightPath))
   esac
@@ -23,7 +23,7 @@ public fun evalExpr (st, expr) {
 
 public fun calculateBinop (operator, leftPath, rightPath) {
   case operator of
-    "+" -> leftPath + rightPath
+      "+" -> leftPath + rightPath
     | "-" -> leftPath - rightPath
     | "*" -> leftPath * rightPath
     | "/" -> leftPath / rightPath

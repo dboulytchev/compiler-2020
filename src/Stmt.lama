@@ -19,12 +19,12 @@ import World;
 fun eval (c@[s, w], stmt) {
   case stmt of
       Skip -> c
+    | Seq(s1, s2) -> eval(eval([s, w], s1), s2)
     | Read(x) -> case readWorld(w) of 
         [z, neww] -> [s <- [x, z], neww]
       esac
     | Write(e) -> [s, writeWorld(evalExpr(s, e), w)]
     | Assn(x, e) -> [s <- [x, evalExpr(s, e)], w]
-    | Seq(s1, s2) -> eval(eval([s, w], s1), s2)
   esac
 }
 
