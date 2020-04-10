@@ -8,6 +8,7 @@ import World;
 import State;
 import Expr;
 import Util;
+import Ref;
 
 -- Stack code printer. Takes a list of SM instructions, return its
 -- string representation.
@@ -52,21 +53,56 @@ fun fromLabel (env, lab) {
   env [0] (lab)
 }
 
+fun isEmpty(lst) {
+  case lst of
+    {} -> true
+  | _  -> false
+  esac 
+}
+
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval (env, c, insns) {
-  foldl(fun (c@[stack, state, world], instr) {
-    case [stack, instr] of
-      [x : y : s, BINOP(oprStr)] -> [stringToOpr(oprStr)(y, x) : s, state, world]
-    | [s        , CONST(n)     ] -> [n : s, state, world]
-    | [s        , READ         ] -> case readWorld(world) of 
-                                      [n, w] -> [n : s, state, w] 
-                                    esac
-    | [z : s    , WRITE        ] -> [s, state, writeWorld(z, world)]
-    | [s        , LD(var)      ] -> [state(var) : s, state, world]
-    | [z : s    , ST(var)      ] -> [s, state <- [var, z], world]
-    esac
-  }, c, insns)
+fun eval (env, conf, insns) {
+  local stack = conf[0];
+  local state = conf[1];
+  local world = conf[2];
+
+  -- Unpleasant C-style because otherwise app runs out of memory :c
+  while insns.isEmpty != true do
+    local nextInsns = tl(insns);
+    case [stack, hd(insns)] of
+      [x : y : s, BINOP(oprStr)] -> 
+        stack := stringToOpr(oprStr)(y, x) : s
+    | [s, READ] -> 
+        case readWorld(world) of 
+          [n, w] -> 
+            stack := n : s;
+            world := w
+        esac
+    | [s, CONST(n)] -> 
+        stack := n : s
+    | [z : s, WRITE] -> 
+        stack := s; 
+        world := writeWorld(z, world)
+    | [s, LD(var)] -> 
+        stack := state(var) : s
+    | [z : s, ST(var)] -> 
+        stack := s; 
+        state := state <- [var, z]
+    | [_, LABEL(var)] -> 
+        skip                            
+    | [_, JMP(lab)] -> 
+        nextInsns := env.fromLabel(lab)
+    | [z : s, CJMP(by, lab)] -> 
+        if case by of "z" -> z == 0 | "nz" -> z != 0 esac
+        then nextInsns := env.fromLabel(lab); stack := s
+        else stack := s
+        fi
+    esac;
+    insns := nextInsns
+  od;
+
+  [stack, state, world]
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -76,8 +112,12 @@ public fun evalSM (input, insns) {
 
 -- Compilation environment: generates labels
 fun makeCompEnv (n) {
+  local cnt = ref(n);
+
   [fun () {
-     [sprintf ("L%d", n), makeCompEnv (n+1)]
+    local res = sprintf ("L%d", deref(cnt));
+    cnt ::= deref(cnt) + 1;
+    res
   }]
 }
 
@@ -90,28 +130,31 @@ fun genLabel (env) {
   env [0] ()
 }
 
--- Utility function: generates n labels
-fun genLabels (env, n) {
-  fun inner (env, n) {
-    if n == 0
-    then singleton (env)
-    else case env.genLabel of
-           [lab, env] -> lab : inner (env, n-1)
-         esac
-    fi
-  }
+-- -- Utility function: generates n labels
+-- fun genLabels (env, n) {
+--   fun inner (env, n) {
+--     if n == 0
+--     then singleton (env)
+--     else case env.genLabel of
+--            [lab, env] -> lab : inner (env, n-1)
+--          esac
+--     fi
+--   }
 
-  listArray (inner (env, n))
-}
+--   listArray (inner (env, n))
+-- }
+
+-- flipped list constructor
+infixl :> after : (tail, head) { head : tail }
 
 -- Compiles an expression into a stack machine code.
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr, acc) {
   case expr of
-    Const(n) -> CONST(n) : acc
-  | Var(x)   -> LD(x) : acc
-  | Binop(opr, l, r) -> BINOP(opr) : compileExpr(r, compileExpr(l, acc))
+    Const(n) -> acc :> CONST(n)
+  | Var(x)   -> acc :> LD(x)
+  | Binop(opr, l, r) -> compileExpr(r, compileExpr(l, acc)) :> BINOP(opr)
   esac
 }
 
@@ -119,14 +162,53 @@ fun compileExpr (expr, acc) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  fun compileSM (stmt, acc) {
-    case stmt of
-      Skip -> acc
-    | Assn(varStr, expr) -> ST(varStr) : compileExpr(expr, acc)
-    | Read(varStr) -> ST(varStr) : READ : acc
-    | Write(expr)  -> WRITE : compileExpr(expr, acc)
-    | Seq(s1, s2)  -> compileSM(s2, compileSM(s1, acc))
+  local env = initCompEnv();
+
+  infix +> at :> (tail, head) {
+    case head of
+      Expr(e) -> compileExpr(e, tail)
+    | Stmt(s) -> compileSMTo(s, tail)
     esac
   }
-  reverse(compileSM(stmt, {}))
+
+  fun compileSMTo(stmt, acc) {
+    case stmt of
+      Skip -> acc
+    | Assn(varStr, expr) -> acc +> Expr(expr) :> ST(varStr)
+    | Read(varStr) -> acc :> READ :> ST(varStr)
+    | Write(expr)  -> acc +> Expr(expr) :> WRITE
+    | Seq(s1, s2)  -> acc +> Stmt(s1) +> Stmt(s2)
+    | If(e, s1, s2) ->
+        local elseLab = genLabel(env);
+        local outLab  = genLabel(env);
+        acc                
+        +> Expr(e)     
+        :> CJMP("z", elseLab)
+        +> Stmt(s1)      
+        :> JMP(outLab)        
+        :> LABEL(elseLab)     
+        +> Stmt(s2)      
+        :> LABEL(outLab)
+    | While(cond, body) ->
+        local condLab = genLabel(env);
+        local bodyLab = genLabel(env);
+        acc
+        :> JMP(condLab)
+        :> LABEL(bodyLab)
+        +> Stmt(body)
+        :> LABEL(condLab)
+        +> Expr(cond)
+        :> CJMP("nz", bodyLab)
+    | Repeat(body, cond) ->
+        local bodyLab = genLabel(env);
+        acc
+        :> LABEL(bodyLab)
+        +> Stmt(body)
+        +> Expr(cond)
+        :> CJMP("z", bodyLab)
+        +> Expr(cond)
+    esac
+  }
+
+  reverse(compileSMTo(stmt, {}))
 }
