@@ -16,7 +16,7 @@ import World;
 --        Read   (string)           |
 --        Write  (expr)             |
 
-fun eval (c @ [state, world], stmt {
+fun eval (c @ [state, world], stmt) {
   case stmt of
       Skip -> c
     | Read (x) -> case readWorld (world) of
