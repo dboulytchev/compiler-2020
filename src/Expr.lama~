@@ -8,9 +8,9 @@ import State;
 -- returns integer value
 public fun evalExpr (st, expr) {
  case expr of
-      Const(x) -> x
-     |Var(x) -> st(x)
-     |Binop(opr , l , r) -> evaluateBINOP(opr, evalExpr(st,l) , evalExpr(st,r))
+      const(x) -> x
+     |var(x) -> st(x)
+     |binop(opr , l , r) ->evaluateBINOP(opr, evalExpr(st,l) , evalExpr(st,r)
   esac
 }
 
