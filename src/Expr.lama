@@ -28,4 +28,3 @@ public fun evalBinop(b,left,right){
   | "&&" -> left && right
   esac
 }
-
