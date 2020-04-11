@@ -26,6 +26,7 @@ fun eval ([st, w], stmt) {
     | Write(val) -> [st, writeWorld(evalExpr(st, val), w)]
     | Assn(x, val) -> [st <- [x, evalExpr(st, val)], w]
   esac
+}
 
 
 -- Evaluates a program with a given input and returns an output
