@@ -1,4 +1,5 @@
--- Parser 
+-- Parser
+
 import Ostap;
 import Lexer;
 import List;
@@ -12,7 +13,7 @@ fun inbr (l, p, r) {
   s (l) |> lift (p |> bypass (s (r)))
 }
 
-fun bin (o) { 
+fun bin (o) {
   [s(o), fun(l, r) { Binop (o, l, r) }]
 }
 
@@ -31,7 +32,7 @@ local ops = { [Left, singleton (bin ("!!"))],
                        bin ("%")}]};
 
 -- Primary expression
-local primary = memo $ eta (decimal @ fun (x) { Const (stringInt (x)) } |
+local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
                             lident  @ fun (x) {Var (x)} |
                             inbr ("(", exp, ")"));
 
@@ -48,4 +49,3 @@ local stmt = memo $ eta (st |
 
 -- Public top-level parser
 public parse = stmt;
-

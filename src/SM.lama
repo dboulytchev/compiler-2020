@@ -54,7 +54,7 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-   case expr of
+  case expr of
     Const (x) -> singleton (CONST (x))
   | Var (x) -> singleton (LD (x))
   | Binop (o, l, r) -> { compileExpr (l), compileExpr(r), BINOP (o) }
@@ -65,7 +65,7 @@ fun compileExpr (expr) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
- fun compile (stmt) {
+  fun compile (stmt) {
     case stmt of
       Assn (x, e) -> { compileExpr (e), ST (x) }
     | Read (x) -> { READ, ST (x) }
