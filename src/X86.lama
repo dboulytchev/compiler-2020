@@ -276,21 +276,78 @@ fun suffix (op) {
 fun compile (env, code) {
   fun compile (env, code) {
     foldl (
-      fun ([env, code], i) {           
-        case i of
+      fun ([env, code], i) {  
+        fun processBinop(op, x, y, s) {
+          case op of 
+            "+"  -> simpleBinop ("+")
+            | "-"  -> simpleBinop ("-")
+            | "*"  -> simpleBinop ("*")
+            | "<"  -> compareBinop ("<")
+            | "<=" -> compareBinop ("<=")
+            | "==" -> compareBinop ("==")
+            | "!=" -> compareBinop ("!=")
+            | ">"  -> compareBinop (">")
+            | ">=" -> compareBinop (">=")
+            | "&&" -> logicBinop (1)
+            | "!!" -> logicBinop (0)
+            | "/"  -> divBinop ()
+            | "%"  -> modBinop ()
+          esac
+
+	  fun simpleBinop (op) {
+            {Mov (y, eax), Binop (op, x, eax), Mov (eax, s)}
+          }
+
+          fun logicBinop (op) {
+            { Mov (y, edx), Binop ("^", eax, eax), Binop ("cmp", L (0), edx), Set (suffix("!="), "%al"), Push (eax),
+              Mov (x, edx), Binop ("^", eax, eax), Binop ("cmp", L (0), edx), Set (suffix("!="), "%al"), Pop (edx),
+              Binop ("+", edx, eax), move(eax, edx), Binop ("^", eax, eax), Binop ("cmp", L (op), edx),
+              Set (suffix(">"), "%al"), Mov (eax, s) }
+          }
+	  fun compareBinop (op) {
+            {Mov (y, edx), Binop ("^", eax, eax), Binop ("cmp", x, edx),
+                Set (suffix(op), "%al"), Mov (eax, s)}
+          }
+          
+          fun modBinop () {
+            {Mov (y, eax), Cltd, IDiv (x), Mov (edx, s)}
+          }
+
+	  fun divBinop () {
+            {Mov (y, eax), Cltd, IDiv (x), Mov (eax, s)}
+          }
+        }
+ 	case i of
           READ ->
             case env.allocate of
-              [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
+          	 [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
             esac             
         | WRITE ->
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
+	| LD (x) ->
+            case env.addGlobal(x).allocate of
+              [s, env] -> [env, code : move(env.loc(x), s)]
+            esac
+        | ST (x) ->
+            case env.addGlobal(x).pop of
+              [s, env] -> [env, code : move(s, env.loc(x))]
+            esac
+        | CONST (x) ->
+            case env.allocate of
+              [s, env] -> [env, code : singleton(Mov(L (x), s))]
+            esac
+        | BINOP (op) -> 
+	    case env.pop2 of 
+              [x, y, env] -> 
+		case env.allocate of
+                    [s, env] -> [env, code : processBinop(op, x, y, s)]
+                esac
+            esac
         esac
       }, [env, {}], code)
   }
-
   compile (env, code) 
 }
 
@@ -310,6 +367,7 @@ public fun compileX86 (code) {
                 prologue (getStackSize (env)),
                 code,
                 epilogue ()})
-            })).stringcat
+	    })).stringcat
   esac
 }
+
