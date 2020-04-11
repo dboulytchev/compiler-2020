@@ -275,8 +275,42 @@ fun suffix (op) {
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
   fun compile (env, code) {
+
+
     foldl (
-      fun ([env, code], i) {           
+      fun ([env, code], i) {
+     
+
+      	  fun simpleBINOP(op) {
+	  case env.pop2 of
+	       [x,y,env] -> case env.allocate of
+	       		 [s,env] -> [env,code : {Mov(y, eax), Binop(op,x,eax) , Mov(eax,s)}]
+			 esac
+	 esac
+	 }
+
+         fun compareBINOP(op){
+	 case env.pop2 of
+	      [x,y,env] -> case env.allocate of
+	      		[s,env] -> [env,code:{Mov(y,edx),Binop("^",eax,eax), Binop("cmp" ,x ,edx),Set(suffix(op), "%al"), Mov(eax,s)}]
+			esac
+		esac
+		}
+		
+     fun logicBinop (op) {
+           case env.pop2 of
+             [x, y, env] ->
+               case env.allocate of
+                 [s, env] -> [env, code : {
+                       Mov (y, edx), Binop ("^", eax, eax), Binop ("cmp", L (0), edx), Set (suffix("!="), "%al"), Push (eax),
+                       Mov (y, edx), Binop ("^", eax, eax), Binop ("cmp", L (0), edx), Set (suffix("!="), "%al"), Pop (edx),
+                       Binop ("+", edx, eax), move(eax, edx), Binop ("^", eax, eax), Binop ("cmp", L (op), edx),
+                       Set (suffix(">"), "%al"), Mov (eax,s)}]
+               esac
+          esac
+       }                    
+
+
         case i of
           READ ->
             case env.allocate of
@@ -286,7 +320,42 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
+	| LD(x) ->
+	       case env.addGlobal(x).allocate of
+	       	    [s,env] -> [env, code : move(env.loc(x), s)]
+		    esac
+	| ST(x) ->
+	       case env.addGlobal(x).pop of
+	       	    [s,env] -> [env,code : move(s,env.loc(x))]
+		    esac
+	| CONST(x) ->
+		  case env.allocate of
+		       [s,env] -> [env,code :singleton(Mov(L(x) , s))]
+		       esac
+	| BINOP("+") -> simpleBINOP("+")
+	| BINOP("-") -> simpleBINOP("-")
+        | BINOP("*") -> simpleBINOP("*")
+	| BINOP("/") ->
+		    case env.pop2 of
+		    	 [x,y,env] -> case env.allocate of
+			 	   [s,env] -> [env, code:{Mov(y,eax),Cltd, IDiv(x) ,Mov(eax,s)}]
+				   esac
+				esac
+	|BINOP("%") ->
+		    case env.pop2 of
+		    	 [x,y,env] -> case env.allocate of
+			 	   [s,env] -> [env, code: {Mov(y, eax), Cltd,IDiv(x) , Mov(edx,s)}]
+				   esac
+				esac
+	|BINOP("==") -> compareBINOP("==")
+	|BINOP("!=") -> compareBINOP("!=")
+	|BINOP("<") -> compareBINOP("<")
+	|BINOP(">") -> compareBINOP(">")
+	|BINOP("<=") -> compareBINOP("<=")
+	|BINOP(">=") -> compareBINOP(">=")
+	|BINOP("!!") -> compareBINOP("!!")
+	|BINOP("&&") -> compareBINOP("&&")
+        | {} -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
   }
