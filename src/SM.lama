@@ -1,9 +1,6 @@
 -- Stack machine.
 
-import Array;
 import List;
-import Fun;
-import Collection;
 import World;
 import State;
 import Expr;
@@ -13,15 +10,12 @@ import Util;
 -- string representation.
 public fun showSMInsn (i) {
   case i of
-    READ         -> sprintf ("READ")
-  | WRITE        -> sprintf ("WRITE")
-  | BINOP (s)    -> sprintf ("BINOP %s", s)
-  | LD    (x)    -> sprintf ("LD %s", x)
-  | ST    (x)    -> sprintf ("ST %s", x)
-  | CONST (n)    -> sprintf ("CONST %d", n)
-  | LABEL (s)    -> sprintf ("LABEL %s", s)
-  | JMP   (l)    -> sprintf ("JMP %s", l)
-  | CJMP  (c, l) -> sprintf ("CJMP %s, %s", c, l)
+    READ      -> sprintf ("READ")
+  | WRITE     -> sprintf ("WRITE")
+  | BINOP (s) -> sprintf ("BINOP %s", s)
+  | LD    (x) -> sprintf ("LD %s", x)
+  | ST    (x) -> sprintf ("ST %s", x)
+  | CONST (n) -> sprintf ("CONST %d", n)
   esac
 }
 
@@ -29,80 +23,51 @@ public fun showSM (prg) {
   map (fun (i) {showSMInsn (i) ++ "\n"}, prg).stringcat
 }
 
--- Evaluation environment: keeps a mapping between labels and (sub)programs
-fun initEvalEnv (insns) {
-  local map =
-    fix (fun (rec) {
-          fun ([m, insns]) {
-            case insns of
-              {}               -> m
-            | LABEL (lab) : tl -> rec ([addMap (m, lab, insns), tl])
-            | _ : tl           -> rec ([m, tl])
-            esac
-          }
-        }) $ [emptyMap (), insns];
-  
-  [fun (l) {
-     case findMap (map, l) of Some (insns) -> insns esac
-  }]
-}
-
--- Accessor function
-fun fromLabel (env, lab) {
-  env [0] (lab)
-}
-
--- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
+-- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (env, c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (conf, insns) {
+  foldl(fun (c@[stack, state, world], instr) {
+    case [stack, instr] of
+      [x : y : s, BINOP(oprStr)] -> [stringToOpr(oprStr)(y, x) : s, state, world]
+    | [s        , CONST(n)     ] -> [n : s, state, world]
+    | [s        , READ         ] -> case readWorld(world) of 
+                                      [n, w] -> [n : s, state, w] 
+                                    esac
+    | [z : s    , WRITE        ] -> [s, state, writeWorld(z, world)]
+    | [s        , LD(var)      ] -> [state(var) : s, state, world]
+    | [z : s    , ST(var)      ] -> [s, state <- [var, z], world]
+    esac
+  }, conf, insns)
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
 public fun evalSM (input, insns) {
-  eval (initEvalEnv (insns), [{}, emptyState, createWorld (input)], insns)[2].getOutput
-}
-
--- Compilation environment: generates labels
-fun makeCompEnv (n) {
-  [fun () {
-     [sprintf ("L%d", n), makeCompEnv (n+1)]
-  }]
-}
-
-fun initCompEnv () {
-  makeCompEnv (0)
-}
-
--- Accessor function: generates one label
-fun genLabel (env) {
-  env [0] ()
-}
-
--- Utility function: generates n labels
-fun genLabels (env, n) {
-  fun inner (env, n) {
-    if n == 0
-    then singleton (env)
-    else case env.genLabel of
-           [lab, env] -> lab : inner (env, n-1)
-         esac
-    fi
-  }
-
-  listArray (inner (env, n))
+  eval ([{}, emptyState, createWorld (input)], insns)[2].getOutput
 }
 
 -- Compiles an expression into a stack machine code.
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
-fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+fun compileExpr (expr, acc) {
+  case expr of
+    Const(n) -> CONST(n) : acc
+  | Var(x)   -> LD(x) : acc
+  | Binop(opr, l, r) -> BINOP(opr) : compileExpr(r, compileExpr(l, acc))
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  fun compileSM (stmt, acc) {
+    case stmt of
+      Skip -> acc
+    | Assn(varStr, expr) -> ST(varStr) : compileExpr(expr, acc)
+    | Read(varStr) -> ST(varStr) : READ : acc
+    | Write(expr)  -> WRITE : compileExpr(expr, acc)
+    | Seq(s1, s2)  -> compileSM(s2, compileSM(s1, acc))
+    esac
+  }
+  reverse(compileSM(stmt, {}))
 }
