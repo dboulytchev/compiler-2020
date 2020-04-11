@@ -8,8 +8,24 @@ import Util;
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval ([stack, state, world], insns) {
+  case insns of
+    BINOP (op) :  reminder -> case stack of
+                                   right : left : stackReminder -> eval([binOp(op, left, right) : stackReminder, state, world], reminder)
+                              esac
+  | CONST (val) : reminder -> eval([val:stack, state, world], reminder)
+  | READ        : reminder -> case readWorld(world) of
+                                   [val, worldResult] -> eval([val:stack, state, worldResult], reminder)
+                              esac
+  | WRITE       : reminder -> case stack of
+                                   val : stackReminder -> eval([stackReminder, state, writeWorld(val, world)], reminder)
+                              esac
+  | LD    (val) : reminder -> eval([state(val):stack, state, world], reminder)
+  | ST    (val) : reminder -> case stack of
+                                   x : stackReminder -> eval([stackReminder, state <- [val, x], world], reminder)
+                              esac
+  | _                      -> [stack, state, world]
+  esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -21,12 +37,23 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+    Binop (op, left, right) -> {compileExpr(left), compileExpr(right), BINOP (op)}
+  | Const (val)             -> singleton(CONST (val))
+  | Var   (val)             -> singleton(LD (val))
+  | _                       -> failure ("compileExpr not implemented\n")
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  case stmt of
+    Read  (val)       -> {READ, ST (val)}
+  | Write (expr)      -> deepFlatten({compileExpr(expr), WRITE})
+  | Seq   (x1, x2)    -> deepFlatten({compileSM (x1), compileSM (x2)})
+  | Assn  (val, expr) -> deepFlatten({compileExpr(expr), ST (val)})
+  | _                 -> failure ("compileSM not implemented\n")
+  esac
 }
