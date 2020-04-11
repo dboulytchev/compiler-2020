@@ -8,8 +8,24 @@ import Util;
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (c@[stack, st, w], insns) {
+  case insns of
+    CONST(c):other  -> eval([c:stack, st, w], other)
+  | BINOP(op):other -> case stack of
+                         r:l:rest -> eval([evalBinop(op, l, r):rest, st, w], other)
+                       esac
+  | LD(x):other     -> eval([st(x):stack, st, w], other)
+  | ST(x):other     -> case stack of
+                         head:rest -> eval([rest, st <- [x, head], w], other)
+                       esac
+  | READ:other      -> case readWorld(w) of
+                         [val, w2] -> eval([val:stack, st, w2], other)
+                       esac
+  | WRITE:other     -> case stack of
+                         head:rest -> eval([rest, st, writeWorld(head, w)], other)
+                       esac
+  | {}              -> c
+  esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -21,12 +37,21 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+    Const(c) -> singleton(CONST(c))
+  | Var(x) -> singleton(LD(x))
+  | Binop(op, l, r) -> flatten({ compileExpr(l), compileExpr(r), singleton(BINOP(op)) })
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  case stmt of
+    Read(x) -> { READ, ST(x) }
+  | Write(val) -> deepFlatten({ compileExpr(val), singleton(WRITE) })
+  | Assn(x, val) -> deepFlatten({ compileExpr(val), singleton(ST(x)) })
+  | Seq(stmt1, stmt2) -> deepFlatten({ compileSM(stmt1), compileSM(stmt2) })
+  esac
 }
