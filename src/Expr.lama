@@ -18,7 +18,6 @@ public fun evalExpr (st, expr) {
         Const(n) -> n
       | Var(v)   -> st(v)
       | Binop(oprStr, l, r) -> stringToOpr(oprStr)(evalExpr(st, l), evalExpr(st, r))
-      | _      -> failure ("Expresion is not implemented\n")
     esac
 }
 

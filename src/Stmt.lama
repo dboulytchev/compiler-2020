@@ -16,9 +16,7 @@ import World;
 --        Read   (string)           |
 --        Write  (expr)             |
 
-fun eval (c, stmt) {
-  local state = c[0];
-  local world = c[1];
+fun eval ([state, world], stmt) {
   case stmt of
         Skip            ->  c
     |   Read(x)         ->  case readWorld(world) of

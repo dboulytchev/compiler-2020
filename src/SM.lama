@@ -8,26 +8,23 @@ import Util;
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  local stack = c[0];
-    local state = c[1];
-    local world = c[2];
-    case insns of
-          CONST(c):other            ->  eval([c:stack, state, world], other)
-        | BINOP(operation):other    ->  case stack of
-                                            right:left:rest -> eval([evalBinop(operation, left, right):rest, state, world], other)
-                                        esac
-        | LD(x):other               ->  eval([state(x):stack, state, world], other)
-        | ST(x):other               ->  case stack of
-                                            head:rest -> eval([rest, state <- [x, head], world], other)
-                                        esac
-        | READ:other                ->  case readWorld(world) of
-                                            [value, newWorld] -> eval([value:stack, state, newWorld], other)
-                                        esac
-        | WRITE:other               ->  case stack of
-                                            head:rest -> eval([rest, state, writeWorld(head, world)], other)
-                                        esac
-        | {}                        ->  c
+fun eval ([stack, state, world], insns) {
+  case insns of
+        CONST(c):other            ->  eval([c:stack, state, world], other)
+      | BINOP(operation):other    ->  case stack of
+                                          right:left:rest -> eval([evalBinop(operation, left, right):rest, state, world], other)
+                                      esac
+      | LD(x):other               ->  eval([state(x):stack, state, world], other)
+      | ST(x):other               ->  case stack of
+                                          head:rest -> eval([rest, state <- [x, head], world], other)
+                                      esac
+      | READ:other                ->  case readWorld(world) of
+                                          [value, newWorld] -> eval([value:stack, state, newWorld], other)
+                                      esac
+      | WRITE:other               ->  case stack of
+                                          head:rest -> eval([rest, state, writeWorld(head, world)], other)
+                                      esac
+      | {}                        ->  c
     esac
 }
 
@@ -51,11 +48,13 @@ fun compileExpr (expr) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  case stmt of
+  fun compile(stmt) {
+    case stmt of
         Read(x)         ->  { READ, ST(x) }
     |   Write(value)    ->  { compileExpr(value), singleton(WRITE) }
     |   Assn(x, value)  ->  { compileExpr(value), singleton(ST(x)) }
     |   Seq(stmt1,stmt2)->  { compileSM(stmt1), compileSM(stmt2) }
   esac
-  deepFlatten (compileSM (stmt))
+  }
+  deepFlatten (compile (stmt))
 }
