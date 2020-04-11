@@ -29,11 +29,13 @@ fun eval ([state, world], stmt) {
                       else 
                           [state, world]
                       fi
-  | Repeat (e, s) ->  case eval ([state, world], s) of 
-                          [newState, newWorld] -> if evalExpr (newState, e) != 0 then
-                                                      eval([newState, newWorld], stmt)
-                                                  fi
-                      esac
+  | Repeat (s, e)  ->  case eval ([state, world], s) of 
+                           [newState, newWorld] -> if evalExpr (newState, e) != 0 then
+                                                      [newState, newWorld]
+                                                   else
+                                                       eval([newState, newWorld], stmt)
+                                                   fi
+                       esac
   | _              -> [state, world]
   esac
 }
