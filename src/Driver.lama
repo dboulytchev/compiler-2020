@@ -26,7 +26,7 @@ fun parseArgs (args) {
       SM -> smDump ::= true
     esac
   }
-  
+
   fun setMode (m) {
     case deref (mode) of
       Comp -> mode ::= m
@@ -49,6 +49,7 @@ fun parseArgs (args) {
                case h of
                  "-i"  -> setMode (Int)
                | "-s"  -> setMode (SM)
+               | "-p" -> setMode(Parse)
                | "-ds" -> setDump (SM)
                | fn    -> setInFile (fn)
                esac;
@@ -78,7 +79,10 @@ case parseString (parse |> bypass (end), fread (args.getInFile)) of
     case args.getMode of
       Comp -> compileX86 (args, peepSM (args, compileSM (program)))
     | mode ->
-       local input =
+      case mode of
+        Parse -> printf("Parse result:\n%s\n", program.string)
+      | _     -> {
+        local input =
           reverse (fix (fun (f) {
                           fun (acc) {
                             case readLine () of
@@ -89,9 +93,11 @@ case parseString (parse |> bypass (end), fread (args.getInFile)) of
           
        iter (fun (x) {printf ("%d\n", x)},
              case mode of
-               Int -> evalStmt (input, program)
-             | SM  -> evalSM   (input, peepSM (args, compileSM (program)))
+               Int   -> evalStmt (input, program)
+             | SM    -> evalSM (input, peepSM (args, compileSM (program)))
              esac)
+      }
+      esac
     esac
 | x@Fail (err, line, col) ->   
    failure ("%s at %d:%d\n", err.hd, line, col)

@@ -15,25 +15,28 @@ import World;
 --        Skip                      |
 --        Read   (string)           |
 --        Write  (expr)             |
---        if     (expr, stmt, stmt) |
+--        If     (expr, stmt, stmt) |
 --        While  (expr, stmt)       |
 --        Repeat (stmt, expr)
 
-fun eval ([st, w], stmt) {
-  case stmt of
-      Assn(x, val) -> [st <- [x, evalExpr(st, val)], w]
-    | Seq(stmt1, stmt2) -> eval(eval([st, w], stmt1), stmt2)
-    | Skip -> [st, w]
-    | Read(x) -> case readWorld(w) of 
-        [val, w2] -> [st <- [x, val], w2]
-      esac
-    | Write(val) -> [st, writeWorld(evalExpr(st, val), w)]
-    | If(expr, stmt1, stmt2) -> if evalExpr(st, expr) != 0 then eval([st, w], stmt1) else eval([st, w], stmt2) fi
-    | While(expr, stmt1) -> if evalExpr(st, expr) != 0 then eval(eval([st, w], stmt1), stmt) else [st, w] fi
-    | Repeat(stmt1, expr) -> case eval([st, w], stmt1) of
-        [new_st, new_w] -> if evalExpr(new_st, expr) != 0 then [new_st, new_w] else eval([new_st, new_w], stmt) fi
-      esac
-  esac
+fun eval (state@[st, w], stmt) {
+    case stmt of
+            Read(x) -> case readWorld(w) of [val, new_w] -> [st <- [x, val], new_w] esac
+        |   Write(e) -> [st, writeWorld(evalExpr(st, e), w)]
+        |   Assn(x, e) -> [st <- [x, evalExpr(st, e)], w]
+        |   Seq(s1, s2) -> eval(eval(state, s1), s2)
+        |   Skip -> state
+        |   If(e, s1, s2) -> if evalExpr(st, e) then eval(state, s1) else eval(state, s2) fi
+        |   While(e, s) -> if evalExpr(st, e) then eval(eval(state, s), stmt) else state fi
+        |   Repeat(s, e) -> 
+              case eval(state, s) of
+                new_state@[new_st, _] -> 
+                  if evalExpr(new_st, e) == 0
+                    then eval(new_state, stmt)
+                    else new_state
+                  fi
+              esac
+    esac
 }
 
 -- Evaluates a program with a given input and returns an output

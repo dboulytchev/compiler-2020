@@ -204,7 +204,7 @@ fun getStackSize (env) {
 }
 
 -- Creates an initial environment
-fun initEnv () {
+public fun initEnv () {
   makeEnv (0, emptySet (), {})
 }
 
@@ -278,35 +278,27 @@ fun suffix (op) {
   esac
 }
 
+
+local binop_groups = {
+  ["+",  ASM],
+  ["-",  ASM],
+  ["*",  ASM],
+  ["/",  DIV],
+  ["%",  DIV],
+  ["==", CMP],
+  ["!=", CMP],
+  ["<",  CMP],
+  ["<=", CMP],
+  [">",  CMP],
+  [">=", CMP],
+  ["&&", BLN],
+  ["!!", BLN]
+};
+
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
-fun compile (env, code) {
+public fun compile (env, code) {
   fun compile (env, code) {
-     fun basic(s1, s2, s, op) {
-      {Mov(s2, eax), Binop(op, s1, eax), Mov(eax, s)}
-    }
-
-    fun delete(s1, s2, s) {
-      {Mov(s2, eax), Cltd, IDiv (s1), Mov(eax, s)}
-    }
-
-    fun div(s1, s2, s) {
-      {Mov(s2, eax), Cltd, IDiv(s1), Mov(edx, s)}
-    }
-
-    fun compare(s1, s2, s, op) {
-      {Mov(s2, eax), Binop("^", edx, edx), Binop("cmp", s1, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
-    }
-
-    fun logical(s1, s2, s, op) {
-      {
-        Binop("^", eax, eax), Binop("^", edx, edx),
-        Binop("cmp", s1, eax), Set(suffix("!="), "%al"),
-        Binop("cmp", s2, edx), Set(suffix("!="), "%dl"),
-        Binop(op, eax, edx), Mov(edx, s)
-      }
-    }
-
     foldl (
       fun ([env, scode], i) {
         local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
@@ -319,47 +311,44 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | LD(x) ->
-            case env.addGlobal(x).allocate of
-              [s, env] -> [env, code : move(env.loc(x), s)]
-            esac
-        | ST(x) ->
-            case env.addGlobal(x).pop of
-              [s, env] -> [env, code : move(s, env.loc(x))]
-            esac
         | CONST(c) ->
             case env.allocate of
-              [s, env] -> [env, code : {Mov(L(c), s)}]
+              [s, env] -> [env, code : singleton(Mov (L (c), s))]
+            esac
+        | ST(x) ->
+            case env.pop of
+              [head, env] -> [env.addGlobal(x), code : move(head, env.loc(x))]
+            esac
+        | LD(x) ->
+            case env.allocate of
+              [s, env] -> [env, code : {move(env.loc(x), s)}]
             esac
         | BINOP(op) ->
             case env.pop2 of
-              [s1, s2, env] ->
-                case env.allocate of
-                  [s, env] -> [env, code : 
-                    case op of
-                        "+" -> basic(s1, s2, s, op)
-                      | "-" -> basic(s1, s2, s, op)
-                      | "*" -> basic(s1, s2, s, op)
-                      | "&&" -> logical(s1, s2, s, op)
-                      | "!!" -> logical(s1, s2, s, op)
-                      | "/" -> delete(s1, s2, s)
-                      | "%" -> div(s1, s2, s)
-                      | ">" -> compare(s1, s2, s, op)
-                      | ">=" -> compare(s1, s2, s, op)
-                      | "==" -> compare(s1, s2, s, op)
-                      | "!=" -> compare(s1, s2, s, op)
-                      | "<=" -> compare(s1, s2, s, op)
-                      | "<" -> compare(s1, s2, s, op)
-                    esac
-                  ]
+              [x, y, env] ->
+                case env.push(y) of env ->
+                  case assoc(binop_groups, op) of
+                    Some(group) ->
+                      case group of
+                        ASM -> [env, code: {Mov (y, eax), Binop (op, x, eax), Mov (eax, y)}]
+                      | DIV -> [env, code: {Push (ebx), Mov (y, eax), Cltd, Mov (x, ebx), IDiv (ebx), Pop (ebx),
+                                            Mov(case op of "/" -> eax | "%" -> edx esac, y)}]
+                      | CMP -> [env, code: {Binop("^", edx, edx), Mov(x, eax), Binop("cmp", eax, y),
+                                            Set(suffix(op), "%dl"), Mov(edx, y)}]
+                      | BLN -> [env, code: {Binop("^", eax, eax), Binop("cmp", y, eax), Set(suffix("!="), "%al"),
+                                            Binop("^", edx, edx), Binop("cmp", x, edx), Set(suffix("!="), "%dl"),
+                                            Binop(op, edx, eax), Mov(eax, y)}]
+                      esac
+                  esac
                 esac
             esac
         | LABEL(l) -> [env, code : singleton(Label(l))]
-        | JMP(l) -> [env, code : singleton(Jmp(l))]
+        | JMP(l)   -> [env, code : singleton(Jmp(l))]
         | CJMP(c, l) ->
-            case env.pop of
-              [s, env] -> [env, code : {Binop("cmp", L(0), s), CJmp(c, l)}]
-            esac
+          case env.pop of 
+            [head, env] -> [env, code : {Binop("cmp", L(0), head), CJmp(c, l)}]
+          esac
+        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
   }
@@ -377,9 +366,9 @@ public fun compileX86 (args, code) {
                          #unboxed -> "../runtime/"
                        | path     -> path
                        esac ++ "/runtime.o";
-       
+
        fwrite (asmFile,
-               map (insnString, 
+               map (insnString,
                     deepFlatten ({
                       Meta ("\t.global\tmain\n"),
                       dataSection (
@@ -391,7 +380,7 @@ public fun compileX86 (args, code) {
                         code,
                         epilogue ()})
                     })).stringcat);
-                    
+
        system ({"gcc -g -m32 -o ", args.getBaseName, " ", runtime, " ", asmFile}.stringcat)
   esac
 }
