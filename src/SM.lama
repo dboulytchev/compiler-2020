@@ -26,7 +26,26 @@ public fun showSM (prg) {
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
 fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+    local stack = c[0];
+    local state = c[1];
+    local world = c[2];
+    case insns of
+          CONST(c):other            ->  eval([c:stack, state, world], other)
+        | BINOP(operation):other    ->  case stack of
+                                            right:left:rest -> eval([evalBinop(operation, left, right):rest, state, world], other)
+                                        esac
+        | LD(x):other               ->  eval([state(x):stack, state, world], other)
+        | ST(x):other               ->  case stack of
+                                            head:rest -> eval([rest, state <- [x, head], world], other)
+                                        esac
+        | READ:other                ->  case readWorld(world) of
+                                            [value, newWorld] -> eval([value:stack, state, newWorld], other)
+                                        esac
+        | WRITE:other               ->  case stack of
+                                            head:rest -> eval([rest, state, writeWorld(head, world)], other)
+                                        esac
+        | {}                        ->  c
+    esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -38,12 +57,24 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+    Const(x)    -> singleton(CONST(x))
+    | Var(x)    -> singleton(LD(x))
+    | Binop(operation, left, right) -> flatten({ compileExpr(left), compileExpr(right), singleton(BINOP(operation)) })
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  fun compile(stmt) {
+      case stmt of
+        Read(x)         ->  { READ, ST(x) }
+    |   Write(value)    ->  { compileExpr(value), singleton(WRITE) }
+    |   Assn(x, value)  ->  { compileExpr(value), singleton(ST(x)) }
+    |   Seq(stmt1,stmt2)->  { compileSM(stmt1), compileSM(stmt2) }
+      esac
+    }
+    deepFlatten(compile(stmt))
 }
