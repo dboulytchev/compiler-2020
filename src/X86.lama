@@ -306,13 +306,27 @@ fun logicalBinop (op, s1, s2) {
   }
 }
 
+fun makeBinopMap() {
+  local binopsMap = {
+    [{"+", "-", "*"},  binop],
+    [{"/", "%"},  divBinop],
+    [{">", ">=", "<", "<=", "==", "!=", "&&", "||"}, compareBinop],
+    [{"&&", "!!"}, logicalBinop]
+  };
+  fun flat([list, f]) {
+    map(fun (op) {[op, f]}, list)
+  }
+  map(flat, binopsMap).deepFlatten
+}
+
+local binopsMap = makeBinopMap();
+
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
   fun compile (env, code) {
     foldl (
-      fun ([env, scode], i) {
-        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+      fun ([env, code], i) {           
         case i of
           Read ->
             case env.allocate of
@@ -338,20 +352,8 @@ fun compile (env, code) {
             case env.pop2 of
               [s1, s2, env] ->
                 case env.push(s2) of
-                  env -> [env, code : case op of
-                                        "+" -> binop(op, s1, s2)
-                                      | "-" -> binop(op, s1, s2)
-                                      | "*" -> binop(op, s1, s2)
-                                      | "/" -> divBinop(op, s1, s2)
-                                      | "%" -> divBinop(op, s1, s2)
-                                      | ">" -> compareBinop(op, s1, s2)
-                                      | ">=" -> compareBinop(op, s1, s2)
-                                      | "<" -> compareBinop(op, s1, s2)
-                                      | "<=" -> compareBinop(op, s1, s2)
-                                      | "==" -> compareBinop(op, s1, s2)
-                                      | "!=" -> compareBinop(op, s1, s2)
-                                      | "&&" -> logicalBinop(op, s1, s2)
-                                      | "!!" -> logicalBinop(op, s1, s2)
+                  env -> [env, code : case assoc(binopsMap, op) of
+                                        Some (f) -> f(op, s1, s2)
                                       esac]
                 esac
             esac
