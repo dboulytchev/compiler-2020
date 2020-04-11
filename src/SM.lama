@@ -81,11 +81,11 @@ fun compileExpr (expr) {
 public fun compileSM (stmt) {
     fun compile (stmt) {
       case stmt of
-        Read (x)     -> { READ, ST (x) }
-      | Write (x)    -> { compileExpr (x), WRITE }
-      | Seq (x1, x2) -> { compile (x1), compile (x2) }
-      | Assn (x, e)  -> { compileExpr (e), ST (x) }
-      | Skip         -> { }
+        Read (x)       -> { READ, ST (x) }
+      | Write (x)      -> { compileExpr (x), WRITE }
+      | Seq (x1, x2)   -> { compile (x1), compile (x2) }
+      | Assn (x, e)    -> { compileExpr (e), ST (x) }
+      | Skip           -> { }
       esac 
     }
 

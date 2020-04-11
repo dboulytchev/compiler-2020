@@ -9,12 +9,32 @@ import World;
 -- Returns a final configuration (if any)
 fun eval ([state, world], stmt) {
   case stmt of
-    Read (x)      -> local newWorld = readWorld (world); 
-                     [state <- [x, newWorld[0]], newWorld[1]] 
-  | Write (x)     -> [state, evalExpr (state, x).writeWorld (world)]
-  | Seq (x1, x2)  -> eval (eval ([state, world], x1), x2)
-  | Assn (x, e)   -> [state <- [x, evalExpr (state, e)], world]
-  | _             -> [state, world]
+    Read (x)       -> local newWorld = readWorld (world); 
+                      [state <- [x, newWorld[0]], newWorld[1]] 
+  | Write (x)      -> [state, evalExpr (state, x).writeWorld (world)]
+  | Seq (x1, x2)   -> eval (eval ([state, world], x1), x2)
+  | Assn (x, e)    -> [state <- [x, evalExpr (state, e)], world]
+  | While (e, s0)  -> if evalExpr (state, e) != 0 then 
+                         eval (eval ([state, world], s0), stmt) 
+                      else 
+                         [state, world] 
+                      fi
+  | If (e, s1, s2) -> if evalExpr (state, e) != 0 then
+                          eval ([state, world], s1)
+                      else
+                          eval ([state, world], s2)
+                      fi
+  | While (e, s)   -> if evalExpr (state, e) != 0 then 
+                          eval(eval([state, world], s), stmt) 
+                      else 
+                          [state, world]
+                      fi
+  | Repeat (e, s) ->  case eval ([state, world], s) of 
+                          [newState, newWorld] -> if evalExpr (newState, e) != 0 then
+                                                      eval([newState, newWorld], stmt)
+                                                  fi
+                      esac
+  | _              -> [state, world]
   esac
 }
 

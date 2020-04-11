@@ -36,10 +36,39 @@ local primary = memo $ eta (decimal @ fun (x) { Const (stringInt (x)) } |
       exp     = memo $ eta (expr(binopList, primary)(id));
 
 local stmtSingle = memo $ eta (
-                         kRead  |> lift(inbr("(", lident, ")") @ fun (x) { Read (x) } )           |  
-                         kWrite |> lift(exp @ fun (x) { Write (x) } )                             |
-                         lident |> fun (x) { s(":=") |> lift(exp @ fun (val) { Assn (x, val) }) } |
-                         kSkip  @ lift (Skip)),                                                       
+                           kRead  |> lift(inbr("(", lident, ")") @ fun (x) { Read (x) } ) 
+                         | kWrite |> lift(exp) @ fun (x) { Write (x) }  
+                         | lident |> fun (x) { s(":=") |> lift(exp @ fun (val) { Assn (x, val) }) } 
+                         | kSkip  @ lift (Skip)  
+                         | ifStmt
+                         | whileStmt 
+                         | forStmt
+                         | repeatStmt);
+
+fun ifBody (e) {
+      kThen |> lift (stmt) @ fun (s1) {
+          kElse |> lift (stmt) @ fun (s2) {    
+            kFi |> lift (If (e, s1, s2)) }
+    | kElif |> lift (exp) @ fun (e2) { ifBody (e2) }
+    | kFi |> lift (If (e, s1, Skip)) } 
+}
+
+local ifStmt    = memo $ eta (kIf |> lift (exp) @ fun (e) { ifBody (e) } ),
+
+      whileStmt = memo $ eta (kWhile |> lift (exp) @ fun (e) {
+                                  kDo |> lift (stmt) @ fun (s) { 
+                                      kOd |> lift (While (s, e)) } }),
+
+      repeatStmt = memo $ eta (kRepeat |> lift (stmt) @ fun (s) {
+                                  kUntil |> lift (exp) @ fun (e) {
+                                      Repeat (e, s) } } ),
+
+      forStmt    = memo $ eta (kFor |> lift (stmt) @ fun (sInit) {
+                                 s(',') |> lift (exp) @ fun (eExit) {
+                                   s(',') |> lift (stmt) @ fun (sInc) {
+                                     kDo |> lift (stmt) @ fun (s) {
+                                       kOd |> lift (Seq (sInit, While (eExit, Seq (s, sInc)))) } } } } ),
+      
       stmt       = memo $ eta (stmtSingle |
                                stmtSingle |> fun (s1) { 
                                     (s(";") |> lift (stmt)) @ fun (s2) { Seq (s1, s2) } } );
