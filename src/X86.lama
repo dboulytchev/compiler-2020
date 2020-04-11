@@ -325,7 +325,7 @@ fun compile (env, code) {
             esac
         | CONST(c) ->
             case env.allocate of
-              [s, env] -> [env, code : {Mov(L(c), s)}]
+              [s, env] -> [env, code : singleton (Mov(L(c), s))]
             esac
         | BINOP(op) ->
             case env.pop2 of
