@@ -25,8 +25,26 @@ public fun showSM (prg) {
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval ([stack, st, w], insns) {
+  case insns of
+    Binop (op) : insns1 -> case stack of
+                             y : stack1 -> case stack1 of
+                                             x : stack2 -> eval ([applyBinop (op, x, y) : stack2, st, w], insns1)
+                                           esac
+                           esac
+  | Const (const) : insns1 -> eval ([const : stack, st, w], insns1)
+  | Read : insns1 -> case w.readWorld of
+                       [val, w1] -> eval ([val : stack, st, w1], insns1)
+                     esac
+  | Write : insns1 -> case stack of
+                        z : stack1 -> eval ([stack1, st, writeWorld (z, w)], insns1)
+                      esac
+  | LD (var) : insns1 -> eval ([st (var) : stack, st, w], insns1)
+  | ST (var) : insns1 -> case stack of
+                           z : stack1 -> eval ([stack1, st <- [var, z], w], insns1)
+                         esac
+  | {} -> [stack, st, w]
+  esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -38,12 +56,21 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+    Const (const) -> {Const (const)}
+  | Var (var) -> {LD (var)}
+  | Binop (op, expr1, expr2) -> {compileExpr(expr1), compileExpr(expr2), Binop (op)}.deepFlatten
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  case stmt of
+    Seq (s1, s2) -> {compileSM(s1), compileSM(s2)}.deepFlatten
+  | Read (var) -> {Read, ST (var)}
+  | Write (expr) -> {compileExpr(expr), Write}.deepFlatten
+  | Assn (var, expr) -> {compileExpr(expr), ST (var)}.deepFlatten
+  esac
 }
