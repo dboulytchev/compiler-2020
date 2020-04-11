@@ -37,7 +37,7 @@ local operations = {
         binOp("%"),
         binOp("/")
     }]
-}
+};
 
 
 -- Primary expression
