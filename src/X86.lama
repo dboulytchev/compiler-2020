@@ -275,7 +275,7 @@ fun suffix (op) {
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
   fun compile (env, code) {
-	fun bin (s1, s2, s, op) {
+    fun bin (s1, s2, s, op) {
       { Mov   (s2, eax), 
         Binop (op, s1, eax), 
         Mov   (eax, s) }
