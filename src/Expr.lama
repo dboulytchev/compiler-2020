@@ -14,5 +14,28 @@ import State;
 --        Binop (string, expr, expr)
 
 public fun evalExpr (st, expr) {
-  failure ("evalExpr not implemented\n")
+  case expr of
+      Const (n) -> n
+    | Var (x) -> st(x)
+    | Binop (op, l, r) -> op.evalBinop(st.evalExpr(l), st.evalExpr(r))
+  esac
+}
+
+-- The evaluator for binary operators
+public fun evalBinop (op, l, r) {
+  case op of
+      "+" -> l + r
+    | "-" -> l - r
+    | "*" -> l * r
+    | "/" -> l / r
+    | "%" -> l % r
+    | "==" -> l == r
+    | "!=" -> l != r
+    | "<" -> l < r
+    | "<=" -> l <= r
+    | ">" -> l > r
+    | ">=" -> l >= r
+    | "&&" -> l && r
+    | "!!" -> l !! r
+  esac
 }
