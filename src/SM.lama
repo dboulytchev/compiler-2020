@@ -50,8 +50,8 @@ fun compileExpr (expr) {
 public fun compileSM (stmt) {
   case stmt of
     Read(x) -> { READ, ST(x) }
-  | Write(val) -> flatten({ compileExpr(val), singleton(WRITE) })
-  | Assn(x, val) -> flatten({ compileExpr(val), singleton(ST(x)) })
-  | Seq(stmt1, stmt2) -> flatten({ compileSM(stmt1), compileSM(stmt2) })
+  | Write(val) -> deepFlatten({ compileExpr(val), singleton(WRITE) })
+  | Assn(x, val) -> deepFlatten({ compileExpr(val), singleton(ST(x)) })
+  | Seq(stmt1, stmt2) -> deepFlatten({ compileSM(stmt1), compileSM(stmt2) })
   esac
 }
