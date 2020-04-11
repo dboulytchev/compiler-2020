@@ -25,7 +25,6 @@ public fun showSM (prg) {
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-
 fun eval ([st, s, w], insns) {
   case insns of
     BINOP (op) : rest -> case st of
@@ -75,6 +74,6 @@ public fun compileSM (stmt) {
       | _ -> {}
       esac
   }
-
+  
   deepFlatten(compile(stmt))
 }

@@ -279,15 +279,15 @@ fun compile (env, code) {
     foldl (
       fun ([env, scode], i) {
         local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
-
-fun simpleBinop (op) {
+        
+        fun simpleBinop (op) {
             case env.pop2 of 
               [x, y, env] -> case env.allocate of
                                [s, env] -> [env, code : {Mov (y, eax), Binop (op, x, eax), Mov (eax, s)}]
                              esac
             esac
         }      
-
+      
         fun compareBinop (op) {
           case env.pop2 of 
             [x, y, env] -> 
@@ -297,7 +297,7 @@ fun simpleBinop (op) {
               esac
           esac
         }  
-
+        
         fun logicBinop (op) {
             case env.pop2 of 
               [x, y, env] -> 
@@ -310,7 +310,7 @@ fun simpleBinop (op) {
                 esac
             esac
         }
-
+        
         case i of
           READ ->
             case env.allocate of
@@ -355,6 +355,7 @@ fun simpleBinop (op) {
         | BINOP (">=") -> compareBinop(">=")
         | BINOP ("&&") -> logicBinop(1)
         | BINOP ("!!") -> logicBinop(0)
+        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
   }
