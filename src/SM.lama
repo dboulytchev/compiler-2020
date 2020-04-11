@@ -15,9 +15,9 @@ fun eval (configuration@[stack, state, world], instructions) { -- understandable
   | ST (name) : tail -> case stack of value : other -> eval ([other, state <- [name, value], world], tail) esac
   | READ : tail -> case readWorld (world) of [value, newworld] -> eval ([value : stack, state, newworld], tail) esac
   | WRITE : tail -> case stack of value : other -> eval ([other, state, writeWorld (value, world)], tail) esac
-  | BINOP (operand) : tail -> case stack of 
-                                value1 : value2 : other -> 
-                                  local expressionResult = evalExpr(state, Binop (operand, Const (value2), Const (value1)));
+  | BINOP (operand) : tail -> case stack of
+                                value1 : value2 : other ->
+                                  local expressionResult = evalOperand (operand, value2, value1);
                                   eval ([expressionResult : other, state, world], tail)
                               esac
   | {} -> configuration
@@ -38,7 +38,6 @@ fun compileExpr (expression) {
   | Const (value) -> CONST (value) : {}
   | Binop (operand, expression1, expression2) -> {compileExpr (expression1), compileExpr (expression2), ( BINOP (operand) : {} )}
   esac
-  
 }
 
 -- Compiles a statement into a stack machine code.
