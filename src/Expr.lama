@@ -1,8 +1,31 @@
 -- Expression evaluator
 
 import List;
+import Collection;
 import State;
 
+local operandsMap = listMap (
+  ["+", infix +]:
+  ["-", infix -]:
+  ["*", infix *]:
+  ["/", infix /]:
+  ["%", infix %]:
+  ["==", infix ==]:
+  ["!=", infix !=]:
+  ["<=", infix <=]:
+  ["<", infix <]:
+  [">=", infix >=]:
+  [">", infix >]:
+  ["&&", infix &&]:
+  ["!!", infix !!]:{}
+);
+
+public fun evalOperand(operand (*string*), left_value (*int*), right_value (*int*)) {
+  case findMap(operandsMap, operand) of
+    Some (operandF) -> operandF (left_value, right_value)
+  | None -> failure (stringcat ("Unknown operand " : operand : "\n" : {}))
+  esac
+}
 
 -- The evaluator itself: takes a state and an expression,
 -- returns integer value
@@ -13,6 +36,10 @@ import State;
 --        Const (int)                |
 --        Binop (string, expr, expr)
 
-public fun evalExpr (st, expr) {
-  failure ("evalExpr not implemented\n")
+public fun evalExpr (state, expression) {
+  case expression of
+    Var (name) -> state (name)
+  | Const (value) -> value
+  | Binop (operand, expression1, expression2) -> evalOperand (operand, evalExpr (state, expression1), evalExpr (state, expression2))
+  esac
 }
