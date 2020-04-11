@@ -45,7 +45,7 @@ local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
                             lident  @ fun (x) {Var (x)} |
                             inbr ("(", exp, ")"));
 
-local exp = memo $ eta (expr (ops, primary)(id));
+local exp = memo $ eta (expr (operations, primary)(id));
 
 local substmt = memo $ eta (kSkip @ lift (Skip)
                          | kRead |> lift (primary @ fun (Var (x)) { Read (x) })
