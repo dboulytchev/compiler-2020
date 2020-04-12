@@ -363,9 +363,9 @@ fun booleanBinop (op, l, r, s) {
   }
 }
 
--- A top-level codegeneration function. Takes a stack machine program
--- and returns x86 listing as a string
-public fun compileX86 (code) {
+-- A top-level codegeneration function. Takes a driver's environment and a stack machine program,
+-- compiles the program into machine code, and compiles the machine code into an executable
+public fun compileX86 (args, code) {
   case compile (initEnv (), code) of
     [env, code] ->
        local asmFile = args.getBaseName ++ ".s",
