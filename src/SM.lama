@@ -40,7 +40,7 @@ fun compileExpr (expr) {
   case expr of
     Const(c) -> singleton(CONST(c))
   | Var(x) -> singleton(LD(x))
-  | Binop(op, l, r) -> flatten({ compileExpr(l), compileExpr(r), singleton(BINOP(op)) })
+  | Binop(op, l, r) -> { compileExpr(l), compileExpr(r), BINOP(op) }
   esac
 }
 
@@ -48,10 +48,13 @@ fun compileExpr (expr) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  case stmt of
-    Read(x) -> { READ, ST(x) }
-  | Write(val) -> deepFlatten({ compileExpr(val), singleton(WRITE) })
-  | Assn(x, val) -> deepFlatten({ compileExpr(val), singleton(ST(x)) })
-  | Seq(stmt1, stmt2) -> deepFlatten({ compileSM(stmt1), compileSM(stmt2) })
-  esac
+  fun compile(stmt) {
+    case stmt of
+      Read(x) -> { READ, ST(x) }
+    | Write(val) -> deepFlatten({ compileExpr(val), singleton(WRITE) })
+    | Assn(x, val) -> deepFlatten({ compileExpr(val), singleton(ST(x)) })
+    | Seq(stmt1, stmt2) -> deepFlatten({ compileSM(stmt1), compileSM(stmt2) })
+    esac
+  }
+  deepFlatten(compile(stmt))
 }
