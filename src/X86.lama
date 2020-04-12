@@ -310,7 +310,7 @@ fun makeBinopMap() {
   local binopsMap = {
     [{"+", "-", "*"},  binop],
     [{"/", "%"},  divBinop],
-    [{">", ">=", "<", "<=", "==", "!=", "&&", "||"}, compareBinop],
+    [{">", ">=", "<", "<=", "==", "!="}, compareBinop],
     [{"&&", "!!"}, logicalBinop]
   };
   fun flat([list, f]) {
