@@ -37,28 +37,26 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  fun compile (expr) {
   case expr of
-      Binop (op, left, right) -> {compileExpr(left), compileExpr(right), BINOP (op)}
-    | Const (val)             -> singleton(CONST (val))
-    | Var   (val)             -> singleton(LD (val))
-    | _                       -> failure ("compileExpr not implemented\n")
-    esac
-  }
-  deepFlatten(compile (expr))
+    Binop (op, left, right) -> {compileExpr(left), compileExpr(right), BINOP (op)}
+  | Const (val)             -> singleton(CONST (val))
+  | Var   (val)             -> singleton(LD (val))
+  | _                       -> failure ("compileExpr not implemented\n")
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  case stmt of
-			stackip -> {}
-			| Read(x) -> {READ, ST(x)}
-			| Write(val) -> {compileExpr(val), WRITE}
-			| Assn(x, val) -> {compileExpr (val), ST(x)}
-			| Seq(stmt1, stmt2) -> {compile(stmt1), compile(stmt2)}
-		esac
-	}
-	deepFlatten (compile (stmt))
+    fun compile(stmt){
+      case stmt of
+        Read  (val)       -> {READ, ST (val)}
+      | Write (expr)      -> deepFlatten({compileExpr(expr), WRITE})
+      | Seq   (x1, x2)    -> deepFlatten({compileSM (x1), compileSM (x2)})
+      | Assn  (val, expr) -> deepFlatten({compileExpr(expr), ST (val)})
+      | _                 -> failure ("compileSM not implemented\n")
+      esac
+    }
+   deepFlatten (compile(stmt))
 }
