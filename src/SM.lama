@@ -25,7 +25,7 @@ fun eval (config@[stack, state, world], instr) {
  
   | BINOP (operation) : rmd -> case 
   
-  stack of r : l : stackrmd -> eval ([evalBinop (operation, l, r) : stackrmd, state, world], rmd)
+  stack of r : l : stackrmd -> eval ([eval (operation, l, r) : stackrmd, state, world], rmd)
   
    esac
 
