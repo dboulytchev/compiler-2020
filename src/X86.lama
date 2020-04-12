@@ -81,6 +81,7 @@ fun insnString (insn) {
   | Pop   (s)          -> sprintf ("\tpopl\t%s\n", opndString (s))
   | Ret                -> "\tret\n"
   | Call  (p)          -> sprintf ("\tcall\t%s\n", p)
+  | Commnt(s)          -> sprintf ("#\t%s\n", s)
   | Meta  (m)          -> m
   esac
 }
@@ -276,9 +277,46 @@ fun suffix (op) {
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
   fun compile (env, code) {
+    fun genBinOp (x, y, res, op) {
+      {Mov(y, eax), Binop(op, x, eax), Mov(eax, res)}
+    }
+    fun getDivMod (x, y, res, op) {
+      fun resultReg (op) {
+        case op of
+            "/" -> eax
+          | "%" -> edx
+        esac
+      }
+      {Mov(y, eax), Cltd, IDiv(x), Mov(resultReg(op), res)}
+    }
+    fun getLogicOp (x, y, res, op) {
+      {Binop("^", eax, eax), Binop("cmp", L(0), x), Set(suffix("!="), "%al"),
+       Binop("^", edx, edx), Binop("cmp", L(0), y), Set(suffix("!="), "%dl"),
+       Binop(op, eax, edx), Mov(eax, res)}
+    }
+    fun getCmpOp(x, y, res, op) {
+      {Mov(y, edx), Binop("^", eax, eax), Binop("cmp", x, edx), Set(suffix(op), "%al"), Mov(eax, res)}
+    }
+    fun getFun(x, y, res, op) {
+      case op of
+          "+" -> genBinOp
+        | "-" -> genBinOp
+        | "*" -> genBinOp
+        | "&&" -> getLogicOp
+        | "!!" -> getLogicOp
+        | "/" -> getDivMod
+        | "%" -> getDivMod
+        | ">" -> getCmpOp
+        | ">=" -> getCmpOp
+        | "==" -> getCmpOp
+        | "!=" -> getCmpOp
+        | "<=" -> getCmpOp
+        | "<" -> getCmpOp
+      esac (x, y, res, op)
+    }
     foldl (
-      fun ([env, scode], i) {
-        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+      fun ([env, code2], i) {
+        local code = code2 : {Meta ("# " ++ showSMInsn (i) ++ "\n"), Commnt(i.string)};
         case i of
           READ ->
             case env.allocate of
@@ -288,7 +326,26 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | CONST(n) ->
+            case env.allocate of
+              [s, env] -> [env, code : singleton(Mov(L(n), s))]
+            esac
+        | BINOP(op) -> 
+            case env.pop2 of
+              [x, y, env] -> 
+                case env.allocate of
+                  [res, env] -> [env, code : getFun(x, y, res, op)]
+                esac
+            esac
+        | LD(x) ->
+            case env.addGlobal(x).allocate of
+              [s, env] -> [env, code : move(env.loc(x), s)]
+            esac
+        | ST(x) ->
+            case env.addGlobal(x).pop of
+              [s, env] -> [env, code : move(s, env.loc(x))]
+            esac
+        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
   }
