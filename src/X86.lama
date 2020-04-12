@@ -277,24 +277,9 @@ fun compile (env, code) {
   fun compile (env, code) {
     foldl (
       fun ([env, code], i) {  
-        fun processBinop(op, x, y, s) {
-          case op of 
-            "+"  -> simpleBinop ("+")
-            | "-"  -> simpleBinop ("-")
-            | "*"  -> simpleBinop ("*")
-            | "<"  -> compareBinop ("<")
-            | "<=" -> compareBinop ("<=")
-            | "==" -> compareBinop ("==")
-            | "!=" -> compareBinop ("!=")
-            | ">"  -> compareBinop (">")
-            | ">=" -> compareBinop (">=")
-            | "&&" -> logicBinop (1)
-            | "!!" -> logicBinop (0)
-            | "/"  -> divBinop ()
-            | "%"  -> modBinop ()
-          esac
 
-	  fun simpleBinop (op) {
+        fun processBinop(op, x, y, s) {
+          fun simpleBinop (op) {
             {Mov (y, eax), Binop (op, x, eax), Mov (eax, s)}
           }
 
@@ -316,6 +301,21 @@ fun compile (env, code) {
 	  fun divBinop () {
             {Mov (y, eax), Cltd, IDiv (x), Mov (eax, s)}
           }
+          case op of 
+            "+"  -> simpleBinop ("+")
+            | "-"  -> simpleBinop ("-")
+            | "*"  -> simpleBinop ("*")
+            | "<"  -> compareBinop ("<")
+            | "<=" -> compareBinop ("<=")
+            | "==" -> compareBinop ("==")
+            | "!=" -> compareBinop ("!=")
+            | ">"  -> compareBinop (">")
+            | ">=" -> compareBinop (">=")
+            | "&&" -> logicBinop (1)
+            | "!!" -> logicBinop (0)
+            | "/"  -> divBinop ()
+            | "%"  -> modBinop ()
+          esac
         }
  	case i of
           READ ->
