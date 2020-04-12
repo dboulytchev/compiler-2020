@@ -11,13 +11,39 @@ fun inbr (l, p, r) {
   s (l) |> lift (p |> bypass (s (r)))
 }
 
+fun brac (p) {
+  inbr ("(", p, ")")
+}
+
+fun mkBinEntry (o) {
+  [s(o), fun(l, r) { Binop (o, l, r) }]
+}
+
+local ops = {
+  [Left, singleton(mkBinEntry("!!"))],
+  [Left, singleton(mkBinEntry("&&"))],
+  [Nona, map(mkBinEntry, {"==", "!=", "<=", "<", ">=", ">"})],
+  [Left, map(mkBinEntry, {"+", "-"})],
+  [Left, map(mkBinEntry, {"*", "/", "%"})]
+};
+
+-- seq combinator that accepts parser A and parser B as parsers
+infixr |=> after  |  (a, b) {seq (a, lift(b))}
+
 -- Primary expression
 local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
                             lident  @ fun (x) {Var (x)} |
-                            inbr ("(", exp, ")")),
-      exp = memo $ eta (failure ("expression parsing not implemented\n"));
+                            brac (exp));
 
-local stmt = memo $ eta (failure ("statement parsing not implemented\n"));
+local exp = memo $ eta (expr (ops, primary)(id));
+
+local st = memo $ eta (kSkip @ lift (Skip) |
+                       kRead |=>  primary @ fun (Var (x)) { Read (x) } |
+                       kWrite |=> exp @ fun (x) { Write (x) } |
+                       lident |> fun (x) { s(":=") |=> exp @ fun (e) { Assn (x, e) } });
+
+local stmt = memo $ eta (st |
+                         st |> fun (s1) { s(";") |=> stmt @ fun (s2) { Seq (s1, s2) } });
    
 
 -- Public top-level parser
