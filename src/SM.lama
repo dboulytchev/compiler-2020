@@ -73,7 +73,7 @@ public fun compileSM (state) {
       Assn (value, expr) -> flatten({compileExpr (expr), singleton(ST (value))})
     | Seq (state1, state2) -> flatten({compileSM (state1), compileSM (state2)})
     | Read (value) -> {READ, ST (value)}
-    | Write (expr) -> flatten({compileExpr (expr), singleton(WRITE)})
+    | Write (x) -> flatten({compileExpr (x), singleton(WRITE)})
     | Skip -> {}
     esac
 
