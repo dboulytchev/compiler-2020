@@ -288,7 +288,25 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | LD(x) ->
+            case env.addGlobal(x).allocate of
+              [s, env] -> [env, code : move(env.loc(x), s)]
+            esac
+        | ST(x) ->
+            case env.addGlobal(x).pop of
+              [s, env] -> [env, code : move(s, env.loc(x))]
+            esac
+        | CONST(n) ->
+            case env.allocate of
+              [s, env] -> [env, code : {Mov(L(n), s)}]
+            esac
+        | BINOP (op) -> 
+            case env.pop2 of 
+              [l, r, env] -> 
+                case env.allocate of
+                  [s, env] -> [env, code : binop(op, l, r, s)]
+                esac
+            esac
         esac
       }, [env, {}], code)
   }
@@ -296,9 +314,58 @@ fun compile (env, code) {
   compile (env, code) 
 }
 
--- A top-level codegeneration function. Takes a driver's environment and a stack machine program,
--- compiles the program into machine code, and compiles the machine code into an executable
-public fun compileX86 (args, code) {
+fun binop(op, l, r, s) {
+  case op of 
+    "+"  -> primitiveBinop ("+", l, r, s)
+    | "-"  -> primitiveBinop ("-", l, r, s)
+    | "*"  -> primitiveBinop ("*", l, r, s)
+    | "/"  -> {Mov(r, eax), Cltd, IDiv(l), Mov(eax, s)}
+    | "%"  -> {Mov(r, eax), Cltd, IDiv(l), Mov(edx, s)}
+    | "==" -> compareBinop ("==", l, r, s)
+    | "!=" -> compareBinop ("!=", l, r, s)
+    | "<"  -> compareBinop ("<", l, r, s)
+    | "<=" -> compareBinop ("<=", l, r, s)
+    | ">"  -> compareBinop (">", l, r, s)
+    | ">=" -> compareBinop (">=", l, r, s)
+    | "&&" -> booleanBinop ("&&", l, r, s)
+    | "!!" -> booleanBinop ("!!", l, r, s)
+  esac
+}
+
+fun primitiveBinop(op, l, r, s) {
+  {
+    Mov(r, eax), 
+    Binop(op, l, eax), 
+    Mov(eax, s)
+  }
+}
+
+fun compareBinop(op, l, r, s) {
+  {
+    Mov(r, edx), 
+    Binop("^", eax, eax), 
+    Binop("cmp", l, edx),
+    Set(suffix(op), "%al"), 
+    Mov(eax, s)
+  }
+}
+
+fun booleanBinop (op, l, r, s) {
+  {
+    Binop("^", eax, eax), 
+    Binop("cmp", l, eax), 
+    Set(suffix("!="), "%al"),
+    Binop("^", edx, edx),
+    Binop("cmp", r, edx), 
+    Set(suffix("!="), "%dl"),
+    Binop(op, eax, edx),
+    Mov(edx, s)
+  }
+}
+
+-- A top-level codegeneration function. Takes a stack machine program
+-- and returns x86 listing as a string
+public fun compileX86 (code) {
   case compile (initEnv (), code) of
     [env, code] ->
        local asmFile = args.getBaseName ++ ".s",
