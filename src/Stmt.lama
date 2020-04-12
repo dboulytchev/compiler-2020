@@ -7,6 +7,15 @@ import World;
 -- Evaluates a statement "stmt" in a configuration "c".
 -- A configuration is a pair of a state "s" and a world "w".
 -- Returns a final configuration (if any)
+
+-- A statement is represented by a data structure of the following shape:
+--
+-- stmt = Assn   (string, expr)     |
+--        Seq    (stmt, stmt)       |
+--        Skip                      |
+--        Read   (string)           |
+--        Write  (expr)             |
+    
 fun eval (c@[s, w], stmt) {
   case stmt of
     Read (x) -> case readWorld (w) of [v, nw] -> [s <- [x, v], nw] esac
@@ -15,6 +24,7 @@ fun eval (c@[s, w], stmt) {
     | Seq (s1, s2) -> eval (eval (c, s1), s2)
     | Skip -> c
   esac
+
 }
 
 -- Evaluates a program with a given input and returns an output
