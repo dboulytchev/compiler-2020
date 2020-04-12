@@ -292,7 +292,7 @@ fun compile (env, code) {
     fun getLogicOp (x, y, res, op) {
       {Binop("^", eax, eax), Binop("cmp", L(0), x), Set(suffix("!="), "%al"),
        Binop("^", edx, edx), Binop("cmp", L(0), y), Set(suffix("!="), "%dl"),
-       Binop(op, eax, edx), Mov(eax, res)}
+       Binop(op, eax, edx), Mov(edx, res)}
     }
     fun getCmpOp(x, y, res, op) {
       {Mov(y, edx), Binop("^", eax, eax), Binop("cmp", x, edx), Set(suffix(op), "%al"), Mov(eax, res)}
