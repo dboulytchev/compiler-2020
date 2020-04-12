@@ -56,31 +56,31 @@ local stElif = memo $ eta (kElif |> lift (expression |> fun (expr) {
                         );                                
                                 
  local st = memo $ eta (kSkip @ lift(Skip) | 
-                        kRead |> lift (primary @ fun (Var (name)) { Read (name) }) |
+                        s("read") |> lift (primary @ fun (Var (name)) { Read (name) }) |
                         kWrite |> lift (expression @ fun (value) { Write (value) }) |
                         lident |> fun (name) { s(":=") |> lift (expression @ fun (value) { Assn (name, value) }) } |
-                        kWhile |> lift (expression |> fun (cond) {
-                            kDo |> lift (stmt |> fun (body) {
-                                kOd @ lift (While (cond, body))
+                        s("while") |> lift (expression |> fun (cond) {
+                            s("do") |> lift (stmt |> fun (body) {
+                                s("od") @ lift (While (cond, body))
                                 })
                             }) |
-                        kRepeat |> lift (stmt |> fun (body) {
-                            kUntil |> lift (expression @ fun (cond) {Repeat (body, cond)})
+                        s("repeat") |> lift (stmt |> fun (body) {
+                            s("until") |> lift (expression @ fun (cond) {Repeat (body, cond)})
                         }) |
-                        kIf |> lift (expression |> fun (cond) {
-                            kThen |> lift (stmt |> fun (onTrue) {
-                                kElse |> lift (stmt |> fun (onFalse) {
-                                   kFi @ lift (If (cond, onTrue, onFalse))
+                        s("if") |> lift (expression |> fun (cond) {
+                            s("then") |> lift (stmt |> fun (onTrue) {
+                                s("else") |> lift (stmt |> fun (onFalse) {
+                                   s("fi") @ lift (If (cond, onTrue, onFalse))
                                 }) | 
-                            kFi @ lift (If (cond, onTrue, Skip)) | 
+                            s("fi") @ lift (If (cond, onTrue, Skip)) | 
                             stElif @ fun (onNext) {If (cond, onTrue, onNext)}
                             })
                         }) |
-                        kFor |> lift (stmt |> fun (init) {
+                        s("for") |> lift (stmt |> fun (init) {
                             s(",") |> lift (expression |> fun (cond) {
                                 s(",") |> lift (stmt |> fun (update) {
-                                    kDo |> lift (stmt |> fun (body) {
-                                        kOd @ lift (Seq (init, While (cond, Seq(body, update))))
+                                    s("do") |> lift (stmt |> fun (body) {
+                                        s("od") @ lift (Seq (init, While (cond, Seq(body, update))))
                                     })
                                 })
                             })
