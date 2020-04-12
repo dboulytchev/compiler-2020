@@ -384,7 +384,12 @@ fun compile (env, code) {
         | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
+  }
 
+  compile (env, code) 
+  compile (env, code)
+  
+}
 -- A top-level codegeneration function. Takes a stack machine program
 -- and returns x86 listing as a string
 public fun compileX86 (code) {
