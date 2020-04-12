@@ -1,24 +1,54 @@
--- Statement evaluator.
+-- Stack machine.
 
+import List;
+import World;
 import State;
 import Expr;
-import World;
+import Util;
 
--- Evaluates a statement "stmt" in a configuration "c".
--- A configuration is a pair of a state "s" and a world "w".
--- Returns a final configuration (if any)
-fun eval (c@[s, w], stmt) {
-	case stmt of
-		Read (x) -> case readWorld (w) of [v, nw] -> [s <- [x, v], nw] esac
-		| Write (e) -> [s, writeWorld (evalExpr (s, e), w)]
-		| Assn (x, e) -> [s <- [x, evalExpr (s, e)], w]
-		| Seq (s1, s2) -> eval (eval (c, s1), s2)
-		| Skip -> c
+-- Stack machine interpreter. Takes an SM-configuration and a program,
+-- returns a final configuration
+fun eval (c@[sk, s, w], insns) {
+	case insns of
+		CONST (const) : i -> eval ([const : sk, s, w], i)
+		| READ : i -> case readWorld (w) of [v, nw] -> eval ([v : sk, s, nw], i) esac
+		| WRITE : i -> case sk of head : t ->	eval ([t, s, writeWorld (head, w)], i) esac
+		| ST (x) : i ->  case sk of	head : t -> eval ([t, s <- [x, head], w], i) esac
+		| LD (x) : i -> eval ([s (x) : sk, s, w], i)
+		| BINOP (o) : i -> case sk of r : l : t -> eval ([evalBinop (o, l, r) : t, s, w], i) esac
+		| {} -> c
 	esac
 }
 
--- Evaluates a program with a given input and returns an output
-public fun evalStmt (input, stmt) {
-  eval ([emptyState, createWorld (input)], stmt).snd.getOutput
+-- Runs a stack machine for a given input and a given program, returns an output
+public fun evalSM (input, insns) {
+  eval ([{}, emptyState, createWorld (input)], insns)[2].getOutput
+}
+
+-- Compiles an expression into a stack machine code.
+-- Takes an expression, returns a list (of, possibly, lists)
+-- of stack machine instructions
+fun compileExpr (expr) {
+	case expr of
+	    Const (x) -> singleton (CONST (x))
+	  | Var (x) -> singleton (LD (x))
+	  | Binop (op, l, r) -> {compileExpr (l), compileExpr(r), BINOP (op)}
+  	esac
+}
+
+-- Compiles a statement into a stack machine code.
+-- Takes a statement, returns a list of stack machine
+-- instructions.
+public fun compileSM (stmt) {
+  fun compile (stmt) {
+	case stmt of
+	    Skip -> {}
+	  | Assn (x, e) -> {compileExpr (e), ST (x)}
+	  | Read (x) -> { READ, ST (x) }
+	  | Write (x) -> {compileExpr (x), WRITE}
+	  | Seq (s1, s2) -> {compile (s1), compile (s2)}
+  	esac 
+  }
+  deepFlatten (compile (stmt))
 }
 
