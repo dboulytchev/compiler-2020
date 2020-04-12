@@ -22,7 +22,7 @@ public fun evalExpr (state, expr)
   esac
 }
 
-public fun evalBinOp(oper, l, r)
+public fun evalBinOp(operation, l, r)
 {
   case operation of
     "+" -> l + r
