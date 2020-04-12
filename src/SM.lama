@@ -69,13 +69,15 @@ fun compileExpr (expr) {
 public fun compileSM (state) {
 
 
-    case state of
-      Assn (value, expr) -> flatten({compileExpr (expr), singleton(ST (value))})
-    | Seq (state1, state2) -> flatten({compileSM (state1), compileSM (state2)})
-    | Read (value) -> {READ, ST (value)}
-    | Write (x) -> flatten({compileExpr (x), singleton(WRITE)})
-    | Skip -> {}
+  fun compile (stmt) {
+    case stmt of
+      Skip -> {}
+    | Read (x) -> {READ, ST(x)}
+    | Write (expr) -> {compileExpr (expr), WRITE}
+    | Assn (x, expr) -> {compileExpr (expr), ST(x)}
+    | Seq (state1, state2) -> {compile (state1), compile (state2)}
     esac
-
+  }
+  deepFlatten (compile (stmt))
   
 }
