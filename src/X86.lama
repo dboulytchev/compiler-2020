@@ -287,6 +287,7 @@ fun compile (env, code) {
     {
       Mov (L (0), edx),
       Mov (y, eax),
+      Cltd,
       IDiv (x),
       case op of
           "/" -> Mov (eax, res)
@@ -297,11 +298,13 @@ fun compile (env, code) {
 
   fun logopsBinop(x, y, res, op) {
     {
-      Mov (y, eax),
-      Binop (op, x, eax),
-      Binop ("cmp", L (0), eax),
       Mov (L (0), eax),
+      Mov (L (0), edx),
+      Binop ("cmp", x, eax),
       Set (suffix("!="), "%al"),
+      Binop ("cmp", y, edx),
+      Set (suffix("!="), "%dl"),
+      Binop (op, edx, eax),
       Mov (eax, res)
     }
   }
