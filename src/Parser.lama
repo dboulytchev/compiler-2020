@@ -46,8 +46,50 @@ local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
                             lident  @ fun (x) {Var (x)} |
                             inbr ("(", exp, ")"));
 
-local stmt = memo $ eta (failure ("statement parsing not implemented\n"));
-   
+local exp = memo $ eta (expr (operations, primary)(id));
+
+local stElif = memo $ eta ( kElif |> lift (exp |> fun (expr) {
+                              kThen |> lift (stmt |> fun (stmt1) {
+                                kElse |> lift (stmt |> fun (stmt2) {
+                                  kFi @ lift (If (expr, stmt1, stmt2))
+                                })
+                                | kFi @ lift (If (expr, stmt1, Skip))
+                                | stElif @ fun (stmt2) {If (expr, stmt1, stmt2)}
+                              })
+                            })
+                          );
+
+local substmt = memo $ eta (kSkip @ lift (Skip)
+                       | kRead |> lift (primary @ fun (Var (x)) { Read (x) })
+                       | kWrite |> lift (exp @ fun (x) { Write (x) })
+                       | lident |> fun (x) { s(":=") |> lift (exp @ fun (expr) {Assn (x, expr) }) }
+                       | kIf |> lift (exp |> fun(expr) {
+                           kThen |> lift (stmt |> fun (stmt1) {
+                             kElse |> lift ( stmt |> fun (stmt2) {
+                               kFi @ lift (If (expr, stmt1, stmt2))
+                             })
+                             | kFi @ lift (If (expr, stmt1, Skip))
+                             | stElif @ fun (stmt2) {If (expr, stmt1, stmt2)}
+                           })
+                         })
+                       | kWhile |> lift (exp |> fun (expr) {
+                           kDo |> lift (stmt |> fun (state) {
+                             kOd @ lift (While (expr, state))
+                           })
+                         })
+                       | kRepeat |> lift (stmt |> fun (state) {
+                           kUntil |> lift (exp @ fun (expr) {Repeat (state, expr)})
+                         })
+                       | kFor |> lift (stmt |> fun (stmt1) {
+                           s(",") |> lift (exp |> fun (expr) {
+                             s(",") |> lift (stmt |> fun (stmt2) {
+                               kDo |> lift (stmt |> fun (stmt3) {
+                                 kOd @ lift (Seq (stmt1, While (expr, Seq (stmt3, stmt2))))
+                               })
+                             })
+                           })
+                         })
+                       );
 
 local stmt = memo $ eta (substmt | substmt |> fun (s1) {
                            s(";") |> lift (stmt @ fun (s2) { Seq (s1, s2) })

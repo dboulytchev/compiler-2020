@@ -30,6 +30,20 @@ fun eval (c, stmt) {
     |   Write(x)        ->  [state, writeWorld(evalExpr(state, x), world)]
     |   Assn(x, value)  ->  [state <- [x, evalExpr(state, value)], world]
     |   Seq(stmt1,stmt2)->  eval(eval(c, stmt1) ,stmt2)
+    |   If (x, stmt1, stmt2) -> if evalExpr(state, x) != 0
+                                    then eval(c, stmt1)
+                                    else eval(c, stmt2)
+                                fi
+    |   While (x, stmt1) -> if evalExpr(state, x) != 0
+                               then eval(eval(c, stmt1), stmt)
+                               else c
+                            fi
+    |   Repeat (stmt1, x) -> case eval(c, stmt1) of
+                                  [sp, wp] -> if evalExpr(sp, x) != 0
+                                                        then [sp, wp]
+                                                        else eval([sp, wp], stmt)
+                                                      fi
+                             esac
   esac
 }
 
