@@ -7,9 +7,16 @@ import World;
 -- Evaluates a statement "stmt" in a configuration "c".
 -- A configuration is a pair of a state "s" and a world "w".
 -- Returns a final configuration (if any)
+--
+-- A statement is represented by a data structure of the following shape:
+--
+-- stmt = Assn   (string, expr)     |
+--        Seq    (stmt, stmt)       |
+--        Skip                      |
+--        Read   (string)           |
+--        Write  (expr)             |
 
-fun eval (c, stmt)
-{
+fun eval (c, stmt) {
     local state = c[0];
     local world = c[1];
 
@@ -30,7 +37,6 @@ fun eval (c, stmt)
 }
 
 -- Evaluates a program with a given input and returns an output
-public fun evalStmt (input, stmt)
-{
+public fun evalStmt (input, stmt) {
   eval ([emptyState, createWorld (input)], stmt).snd.getOutput
 }

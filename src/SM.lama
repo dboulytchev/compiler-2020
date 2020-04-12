@@ -6,10 +6,26 @@ import State;
 import Expr;
 import Util;
 
+-- Stack code printer. Takes a list of SM instructions, return its
+-- string representation.
+public fun showSMInsn (i) {
+  case i of
+    READ      -> sprintf ("READ")
+  | WRITE     -> sprintf ("WRITE")
+  | BINOP (s) -> sprintf ("BINOP %s", s)
+  | LD    (x) -> sprintf ("LD %s", x)
+  | ST    (x) -> sprintf ("ST %s", x)
+  | CONST (n) -> sprintf ("CONST %d", n)
+  esac
+}
+
+public fun showSM (prg) {
+  map (fun (i) {showSMInsn (i) ++ "\n"}, prg).stringcat
+}
+
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns)
-{
+fun eval (c, insns) {
   -- stack, state, world - stack machine configuration
   local stack = c[0];
   local state = c[1];
@@ -39,16 +55,14 @@ fun eval (c, insns)
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
-public fun evalSM (input, insns)
-{
+public fun evalSM (input, insns) {
   eval ([{}, emptyState, createWorld (input)], insns)[2].getOutput
 }
 
 -- Compiles an expression into a stack machine code.
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
-fun compileExpr (expr)
-{
+fun compileExpr (expr) {
   case expr of
     Const(x) -> singleton(CONST(x))
 
@@ -61,8 +75,7 @@ fun compileExpr (expr)
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
-public fun compileSM (stmt)
-{
+public fun compileSM (stmt) {
     fun innerCompile (stmt) {
         case stmt of
                 Skip -> {}
