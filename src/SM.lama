@@ -9,41 +9,25 @@ import Util;
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
 
-fun eval (config@[stack, state, world], instr) {
-  case instr of 
-   
-  READ : rmd -> case 
-  
-  readWorld (world) of [value, world2] -> eval ([value : stack, state, world2], rmd)
-  
-  esac
-  | WRITE : rmd -> case
-  
-   stack of value : stackrmd -> eval([stackrmd, state, writeWorld (value, world)], rmd)
-   
-  esac
- 
-  | BINOP (operation) : rmd -> case 
-  
-  stack of r : l : stackrmd -> eval ([evalBinOp(operation, l, r) : stackrmd, state, world], rmd)
-  
-   esac
-
-
-  | ST (value) : rmd -> case 
-  
-  stack of x : stackrmd -> eval ([stackrmd, state <- [value, x], world], rmd) 
-  
-  esac
-
-  |CONST (value) : rmd -> eval ([value : stack,state, world], rmd)
-
-  |LD (value) : rmd -> eval ([state(value) : stack, state, world], rmd)
-
-  | {} -> config
+fun eval (c@[stack, st, w], insns) {
+  case insns of
+    CONST(c):other  -> eval([c:stack, st, w], other)
+  | BINOP(op):other -> case stack of
+                         r:l:rest -> eval([evalBinop(op, l, r):rest, st, w], other)
+                       esac
+  | LD(x):other     -> eval([st(x):stack, st, w], other)
+  | ST(x):other     -> case stack of
+                         head:rest -> eval([rest, st <- [x, head], w], other)
+                       esac
+  | READ:other      -> case readWorld(w) of
+                         [val, w2] -> eval([val:stack, st, w2], other)
+                       esac
+  | WRITE:other     -> case stack of
+                         head:rest -> eval([rest, st, writeWorld(head, w)], other)
+                       esac
+  | {}              -> c
   esac
 }
-
 
 -- Runs a stack machine for a given input and a given program, returns an output
 public fun evalSM (input, insns) {
@@ -69,15 +53,12 @@ fun compileExpr (expr) {
 public fun compileSM (state) {
 
 
-  fun compile (stmt) {
-    case stmt of
-      Skip -> {}
-    | Read (val) -> {READ, ST(val)}
-    | Write (expr) -> {compileExpr (expr), WRITE}
-    | Assn (x, expr) -> {compileExpr (expr), ST(x)}
-    | Seq (state1, state2) -> {compile (state1), compile (state2)}
+    case state of
+      Assn (value, expr) -> flatten({compileExpr (expr), singleton(ST (value))})
+    | Seq (state1, state2) -> flatten({compileSM (state1), compileSM (state2)})
+    | Read (value) -> {READ, ST (value)}
+    | Write (expr) -> flatten({compileExpr (expr), singleton(WRITE)})
+    | Skip -> {}
     esac
-  }
-  deepFlatten (compile (stmt))
   
 }
