@@ -276,9 +276,42 @@ fun suffix (op) {
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
   fun compile (env, code) {
+    fun compileOp (lhs, rhs, s, op) {
+      case op of
+        "+" -> simpleOp(lhs, rhs, s, op)
+      | "-" -> simpleOp(lhs, rhs, s, op)
+      | "*" -> simpleOp(lhs, rhs, s, op)
+      | "/" -> divOp(lhs, rhs, s, op)
+      | "%" -> divOp(lhs, rhs, s, op)
+      | "<" -> cmpOp(lhs, rhs, s, op)
+      | ">" -> cmpOp(lhs, rhs, s, op)
+      | "<=" -> cmpOp(lhs, rhs, s, op)
+      | ">=" -> cmpOp(lhs, rhs, s, op)
+      | "==" -> cmpOp(lhs, rhs, s, op)
+      | "!=" -> cmpOp(lhs, rhs, s, op)
+      | "&&" -> logOp(lhs, rhs, s, op)
+      | "!!" -> logOp(lhs, rhs, s, op)
+      esac
+    }
+    fun simpleOp (lhs, rhs, s, op) {
+      { Mov (rhs, eax),  Binop (op, lhs, eax), Mov (eax, s)}
+    }
+    fun divOp (lhs, rhs, s, op) {
+      { Mov (rhs, eax), Cltd, IDiv(lhs),
+        case op of "/" -> Mov(eax, s)
+                  |"%" -> Mov(edx, s)
+        esac
+      }
+    }
+    fun cmpOp (lhs, rhs, s, op) {
+      { Mov (rhs, edx), Binop ("^", eax, eax), Binop("cmp", lhs, edx), Set (suffix(op), "%al"), Mov (eax, s)}
+    }
+    fun logOp (lhs, rhs, s, op) {
+      { Binop("^", eax, eax), Binop("^", edx, edx), Binop("cmp", lhs, eax), Set(suffix("!="), "%al"),
+        Binop("cmp", rhs, edx), Set(suffix("!="), "%dl"), Binop(op, eax, edx), Mov(edx, s)}
+    }
     foldl (
-      fun ([env, scode], i) {
-        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+      fun ([env, code], i) {           
         case i of
           READ ->
             case env.allocate of
@@ -288,14 +321,31 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | LD (x) ->
+            case env.addGlobal(x).allocate of
+              [s, env] -> [env, code : move(env.loc(x), s)]
+            esac
+        | ST (x) ->
+            case env.addGlobal(x).pop of
+              [s, env] -> [env, code : move(s, env.loc(x))]
+            esac
+        | CONST (n) ->
+            case env.allocate of 
+              [s, env] -> [env, code : singleton(Mov (L(n), s))]
+            esac
+        | BINOP (op) ->
+            case env.pop2 of
+              [lhs, rhs, env] ->
+                  case env.allocate of 
+                    [s, env] -> [env, code : compileOp(lhs, rhs, s, op)]
+                  esac
+            esac
         esac
       }, [env, {}], code)
   }
 
   compile (env, code) 
 }
-
 -- A top-level codegeneration function. Takes a driver's environment and a stack machine program,
 -- compiles the program into machine code, and compiles the machine code into an executable
 public fun compileX86 (args, code) {
