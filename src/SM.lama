@@ -15,7 +15,7 @@ fun eval (c@[stack, st, w], insns) {
   | BINOP(op):other -> case stack of
                          r:l:rest -> eval([evalBinop(op, l, r):rest, st, w], other)
                        esac
-  | LD(x):other     -> eval([st(x):stack, st, w], other)
+  | LD(value):other     -> eval([st(value):stack, st, w], other)
   | ST(x):other     -> case stack of
                          head:rest -> eval([rest, st <- [x, head], w], other)
                        esac
