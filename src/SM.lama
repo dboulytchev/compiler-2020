@@ -9,23 +9,23 @@ import Util;
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
 
-fun eval (c@[stack, st, w], insns) {
-  case insns of
-    CONST(c):other  -> eval([c:stack, st, w], other)
-  | BINOP(op):other -> case stack of
-                         r:l:rest -> eval([evalBinop(op, l, r):rest, st, w], other)
-                       esac
-  | LD(value):other     -> eval([st(value):stack, st, w], other)
-  | ST(x):other     -> case stack of
-                         head:rest -> eval([rest, st <- [x, head], w], other)
-                       esac
-  | READ:other      -> case readWorld(w) of
-                         [val, w2] -> eval([val:stack, st, w2], other)
-                       esac
-  | WRITE:other     -> case stack of
-                         head:rest -> eval([rest, st, writeWorld(head, w)], other)
-                       esac
-  | {}              -> c
+fun eval ([stack, s, w], insns) {
+  case insns of 
+    {} -> [stack, s, w]
+  | READ : other -> case readWorld (w) of
+      [n, w] -> eval ([n : stack, s, w], other)
+    esac
+  | WRITE : other -> case stack of
+      n : stack -> eval([stack, s, writeWorld (n, w)], other)
+    esac
+  | CONST (n) : other -> eval ([n : stack, s, w], other)
+  | LD (x) : other -> eval ([s(x) : stack, s, w], other)
+  | ST (x) : other -> case stack of
+      n : stack -> eval ([stack, s <- [x, n], w], other)
+    esac
+  | BINOP (operation) : other -> case stack of
+      second : first : stack -> eval ([evalBinOperation (operation, first, second) : stack, s, w], other)
+    esac
   esac
 }
 
