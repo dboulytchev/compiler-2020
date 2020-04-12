@@ -4,7 +4,6 @@ import SM;
 import Collection;
 import List;
 import Util;
-import Manifest;
 
 -- Assembler language interface
 -- The registers: 
@@ -79,7 +78,7 @@ fun insnString (insn) {
   | Mov   (s1, s2)     -> sprintf ("\tmovl\t%s,\t%s\n", opndString (s1), opndString (s2))
   | Push  (s)          -> sprintf ("\tpushl\t%s\n", opndString (s))
   | Pop   (s)          -> sprintf ("\tpopl\t%s\n", opndString (s))
-  | Ret                -> "\tret\n"
+  | Ret                -> "\tret"
   | Call  (p)          -> sprintf ("\tcall\t%s\n", p)
   | Meta  (m)          -> m
   esac
@@ -198,7 +197,7 @@ fun getStackSize (env) {
 }
 
 -- Creates an initial environment
-fun initEnv () {
+public fun initEnv () {
   makeEnv (0, emptySet (), {})
 }
 
@@ -276,9 +275,29 @@ fun suffix (op) {
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
   fun compile (env, code) {
+    fun arithmetic(s1, s2, s, op) {
+      {Mov(s2, eax), Binop(op, s1, eax), Mov(eax, s)}
+    }
+
+    fun div(s1, s2, s) {
+      {Mov(s2, eax), Cltd, IDiv (s1), Mov(eax, s)}
+    }
+
+    fun mod(s1, s2, s) {
+      {Mov(s2, eax), Cltd, IDiv(s1), Mov(edx, s)}
+    }
+
+    fun compare(s1, s2, s, op) {
+      {Mov(s2, eax), Binop("^", edx, edx), Binop("cmp", s1, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
+    }
+
+    fun logic(s1, s2, s, op) {
+      {Binop("^", eax, eax), Binop("^", edx, edx), Binop("cmp", s1, eax), Set(suffix("!="), "%al"),
+        Binop("cmp", s2, edx), Set(suffix("!="), "%dl"), Binop(op, eax, edx), Mov(edx, s)}
+    }
+
     foldl (
-      fun ([env, scode], i) {
-        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+      fun ([env, code], i) {           
         case i of
           READ ->
             case env.allocate of
@@ -288,7 +307,41 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | LD(x) ->
+            case env.addGlobal(x).allocate of
+              [s, env] -> [env, code : move(env.loc(x), s)]
+            esac
+        | ST(x) ->
+            case env.addGlobal(x).pop of
+              [s, env] -> [env, code : move(s, env.loc(x))]
+            esac
+        | CONST(c) ->
+            case env.allocate of
+              [s, env] -> [env, code : {Mov(L(c), s)}]
+            esac
+        | BINOP(op) ->
+            case env.pop2 of
+              [s1, s2, env] ->
+                case env.allocate of
+                  [s, env] -> [env, code : 
+                    case op of
+                        "+"  -> arithmetic(s1, s2, s, op)
+                      | "-"  -> arithmetic(s1, s2, s, op)
+                      | "*"  -> arithmetic(s1, s2, s, op)
+                      | "/"  -> div(s1, s2, s)
+                      | "%"  -> mod(s1, s2, s)
+                      | "==" -> compare(s1, s2, s, op)
+                      | "!=" -> compare(s1, s2, s, op)
+                      | "<"  -> compare(s1, s2, s, op)
+                      | "<=" -> compare(s1, s2, s, op)
+                      | ">"  -> compare(s1, s2, s, op)
+                      | ">=" -> compare(s1, s2, s, op)
+                      | "&&" -> logic(s1, s2, s, op)
+                      | "!!" -> logic(s1, s2, s, op)
+                    esac
+                  ]
+                esac
+            esac
         esac
       }, [env, {}], code)
   }
@@ -296,31 +349,22 @@ fun compile (env, code) {
   compile (env, code) 
 }
 
--- A top-level codegeneration function. Takes a driver's environment and a stack machine program,
--- compiles the program into machine code, and compiles the machine code into an executable
-public fun compileX86 (args, code) {
+-- A top-level codegeneration function. Takes a stack machine program
+-- and returns x86 listing as a string
+public fun compileX86 (code) {
   case compile (initEnv (), code) of
     [env, code] ->
-       local asmFile = args.getBaseName ++ ".s",
-             runtime = case getEnv ("LAMA_RUNTIME") of
-                         #unboxed -> "../runtime/"
-                       | path     -> path
-                       esac ++ "/runtime.o";
-       
-       fwrite (asmFile,
-               map (insnString, 
-                    deepFlatten ({
-                      Meta ("\t.global\tmain\n"),
-                      dataSection (
-                        map (dataDef, getGlobals (env))
-                      ),
-                      codeSection ({
-                        Meta ("main:\n"),
-                        prologue (getStackSize (env)),
-                        code,
-                        epilogue ()})
-                    })).stringcat);
-                    
-       system ({"gcc -g -m32 -o ", args.getBaseName, " ", runtime, " ", asmFile}.stringcat)
+       map (insnString, 
+            deepFlatten ({
+              Meta ("\t.global\tmain\n"),
+              dataSection (
+                map (dataDef, getGlobals (env))
+              ),
+              codeSection ({
+                Meta ("main:\n"),
+                prologue (getStackSize (env)),
+                code,
+                epilogue ()})
+            })).stringcat
   esac
 }
