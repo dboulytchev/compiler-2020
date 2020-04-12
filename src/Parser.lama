@@ -5,19 +5,52 @@ import Lexer;
 import List;
 import Fun;
 
+import Matcher;
+
 -- A parser of "something" in brackets; l, r are left and right
 -- brackets as strings, p --- a parser of "something"
 fun inbr (l, p, r) {
   s (l) |> lift (p |> bypass (s (r)))
 }
 
--- Primary expression
-local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
-                            lident  @ fun (x) {Var (x)} |
-                            inbr ("(", exp, ")")),
-      exp = memo $ eta (failure ("expression parsing not implemented\n"));
+fun binop(op) { 
+  [s (op), fun (l, r) { Binop (op, l, r) }]
+}
 
-local stmt = memo $ eta (failure ("statement parsing not implemented\n"));
+local operators = { 
+  [Left, singleton (binop ("!!"))], 
+  [Left, singleton (binop ("&&"))], 
+  [Nona, { binop ("=="), binop ("!="), binop ("<="), binop ("<"), binop (">="), binop (">") }], 
+  [Left, { binop ("+"), binop ("-") }], 
+  [Left, { binop ("*"), binop ("/"), binop ("%") }]
+};
+
+-- Primary expression
+local primary = memo $ eta (
+  decimal @ fun (x) { Const (stringInt (x)) } 
+  |
+  lident  @ fun (x) {Var (x)} 
+  |
+  inbr ("(", exp, ")")
+);
+
+local exp = memo $ eta (expr (operators, primary) (id));
+
+local statement = memo $ eta (
+  kSkip @ lift (Skip) 
+  |
+  kRead |> lift (primary @ fun (Var (x)) { Read (x) }) 
+  |
+  kWrite |> lift (exp @ fun (x) { Write (x) }) 
+  |
+  lident |> fun (x) { s(":=") |> lift (exp @ fun (e) { Assn (x, e) }) }
+);
+
+local stmt = memo $ eta (
+  statement 
+  |
+  statement |> fun (s1) { s(";") |> lift (stmt @ fun (s2) { Seq (s1, s2) }) }
+);
    
 
 -- Public top-level parser

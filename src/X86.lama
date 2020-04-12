@@ -335,8 +335,8 @@ fun compile (env, code) {
       | ">"  -> compileCmpBinop (o)
       | ">=" -> compileCmpBinop (o)
 
-      | "!!" -> compileLogicBinop (0)
-      | "&&" -> compileLogicBinop (1)
+      | "!!" -> compileLogicBinop (o)
+      | "&&" -> compileLogicBinop (o)
     esac
   } 
 

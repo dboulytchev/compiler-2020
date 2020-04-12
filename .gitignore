@@ -3,7 +3,8 @@
 **.log
 **.s
 **.o
-test**
+test*
+generated*
 
 **.i
 **.sm
