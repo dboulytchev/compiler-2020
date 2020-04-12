@@ -29,4 +29,5 @@ fun eval (c @ [state, world], stmt) {
 
 -- Evaluates a program with a given input and returns an output
 public fun evalStmt (input, stmt) {
-  eval ([emptyS
+  eval ([emptyState, createWorld (input)], stmt).snd.getOutput
+}
