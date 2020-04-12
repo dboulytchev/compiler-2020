@@ -4,15 +4,16 @@ import Ostap;
 import Lexer;
 import List;
 import Fun;
+import Matcher;
 
 -- A parser of "something" in brackets; l, r are left and right
--- brackets as strings, p --- a parser of "something"
+-- brackets as parsers, p --- a parser of "something"
 fun inbr (l, p, r) {
-  s (l) |> lift (p |> bypass (s (r)))
+  l |> lift (p |> bypass (r))
 }
 
 fun brac (p) {
-  inbr ("(", p, ")")
+  inbr (s ("("), p, s(")"))
 }
 
 fun mkBinEntry (o) {
@@ -48,4 +49,3 @@ local stmt = memo $ eta (st |
 
 -- Public top-level parser
 public parse = stmt;
-             
