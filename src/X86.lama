@@ -315,11 +315,10 @@ fun compile (env, code) {
           case env.pop2 of
             [x, y, env] ->
               case env.allocate of
-                [s, env] -> [env, code : {
-                      Mov (y, edx), Binop ("^", eax, eax), Binop ("cmp", L (0), edx), Set (suffix ("!="), "%al"), Push (eax),
-                      Mov (x, edx), Binop ("^", eax, eax), Binop ("cmp", L (0), edx), Set (suffix ("!="), "%al"), Pop (edx),
-                      Binop ("+", edx, eax), move (eax, edx), Binop ("^", eax, eax), Binop ("cmp", L (operation), edx),
-                      Set (suffix(">"), "%al"), Mov (eax, s)}]
+                [s, env] -> [env, code :  {
+                  Binop ("^", eax, eax), Binop ("cmp", y, eax), Set (suffix ("!="), "%al"),
+                  Binop ("^", edx, edx), Binop ("cmp", x, edx), Set (suffix ("!="), "%dl"),
+                  Binop (operation, edx, eax), Mov (eax, s) }]
               esac
           esac
        }
