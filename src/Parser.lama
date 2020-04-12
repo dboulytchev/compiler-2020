@@ -30,7 +30,7 @@ local primary = memo $ eta (
                     | lident  @ fun (x) {Var (x)}
                     | inbr ("(", expression, ")") );
 
-local expression = memo $ eta (expr (ops, primary)(id));
+local expression = memo $ eta (expr (operators, primary)(id));
 
 local st = memo $ eta (kSkip @ lift (Skip) |
                        kRead |> lift (primary @ fun (Var (x)) {Read (x)}) |
