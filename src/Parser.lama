@@ -22,7 +22,7 @@ local ops = { [Left, singleton (binary("!!"))],
                        binary(">"),
                        binary(">="),
                        binary("=="),
-                       binary("!=")
+                       binary("!=") 
                      }
               ],
               [Left, { binary("+"),
@@ -48,14 +48,14 @@ local stElif = memo $ eta (kElif |> lift (expression |> fun (expr) {
                                kThen |> lift (stmt |> fun (stmt1) {
                                    kElse |> lift (stmt |> fun (stmt2) {
                                        kFi @ lift (If (expr, stmt1, stmt2))
-                                   }) |
-                               kFi @ lift (If (expr, stmt1, Skip)) |
+                                   }) | 
+                               kFi @ lift (If (expr, stmt1, Skip)) | 
                                stElif @ fun (stmt2) {If (expr, stmt1, stmt2)}
                                })
                            })
-                        );
-
- local st = memo $ eta (kSkip @ lift(Skip) |
+                        );                                
+                                
+ local st = memo $ eta (kSkip @ lift(Skip) | 
                         kRead |> lift (primary @ fun (Var (name)) { Read (name) }) |
                         kWrite |> lift (expression @ fun (value) { Write (value) }) |
                         lident |> fun (name) { s(":=") |> lift (expression @ fun (value) { Assn (name, value) }) } |
@@ -71,8 +71,8 @@ local stElif = memo $ eta (kElif |> lift (expression |> fun (expr) {
                             kThen |> lift (stmt |> fun (onTrue) {
                                 kElse |> lift (stmt |> fun (onFalse) {
                                    kFi @ lift (If (cond, onTrue, onFalse))
-                                }) |
-                            kFi @ lift (If (cond, onTrue, Skip)) |
+                                }) | 
+                            kFi @ lift (If (cond, onTrue, Skip)) | 
                             stElif @ fun (onNext) {If (cond, onTrue, onNext)}
                             })
                         }) |
@@ -84,7 +84,7 @@ local stElif = memo $ eta (kElif |> lift (expression |> fun (expr) {
                                     })
                                 })
                             })
-                        })
+                        }) 
                       );
 
 
@@ -95,3 +95,5 @@ local stmt = memo $ eta (st |
 
 -- Public top-level parser
 public parse = stmt;
+
+
