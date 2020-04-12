@@ -312,9 +312,6 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-<<<<<<< HEAD
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
-=======
         | LD(x) ->
             case env.addGlobal(x).allocate of
               [s, env] -> [env, code : move(env.loc(x), s)]
@@ -350,7 +347,6 @@ fun compile (env, code) {
                   ]
                 esac
             esac
->>>>>>> a28c9a717ef0fc38ba519de9f1b71409e81fb14e
         esac
       }, [env, {}], code)
   }
