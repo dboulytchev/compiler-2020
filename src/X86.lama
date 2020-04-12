@@ -275,7 +275,72 @@ fun suffix (op) {
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
-  fun compile (env, code) {
+
+  fun compileBinop (env, code, o) {
+    -- default operations for each 2-operator
+    fun preCompile (op) {
+      case env.pop2 of [l, r, env] ->
+        case env.push (r) of env ->
+          [l, r, env]
+        esac
+      esac
+    }
+
+    -- for +, -, *
+    fun compileArithmBinop (op) {
+      case preCompile (op) of [l, r, env] ->
+        [env, code : {Mov (r, eax), Binop (op, l, eax), Mov (eax, r)}]
+      esac
+    }
+
+    -- for /, %
+    fun compileDivBinop (op) {
+      case preCompile (op) of [l, r, env] ->
+        [env, code : {Mov (r, eax), Cltd, IDiv (l), Mov (case op of "/" -> eax | "%" -> edx esac, r)}]
+      esac
+    }
+
+    -- fot ==, !=, <, <=, >, >=
+    fun compileCmpBinop (op) {
+      case preCompile (op) of [l, r, env] ->
+        [env, code : {
+          Mov (r, edx), Binop ("^", eax, eax), Binop ("cmp", l, edx), Set (suffix (op), "%al"), Mov (eax, r)
+        }]
+      esac
+    }
+
+    -- for !!, &&
+    fun compileLogicBinop (op) {
+      case preCompile (op) of [l, r, env] ->
+        [env, code : {
+          Binop ("^", eax, eax), Binop ("cmp", r, eax), Set (suffix ("!="), "%al"),
+          Binop ("^", edx, edx), Binop ("cmp", l, edx), Set (suffix ("!="), "%dl"),
+          Binop (op, edx, eax), Mov (eax, r)
+        }]
+      esac
+    }
+
+    case o of 
+      "+"   -> compileArithmBinop (o)
+      | "-" -> compileArithmBinop (o)
+      | "*" -> compileArithmBinop (o)
+
+      | "/" -> compileDivBinop (o)
+      | "%" -> compileDivBinop (o)
+
+      | "==" -> compileCmpBinop (o)
+      | "!=" -> compileCmpBinop (o)
+      | "<"  -> compileCmpBinop (o)
+      | "<=" -> compileCmpBinop (o)
+      | ">"  -> compileCmpBinop (o)
+      | ">=" -> compileCmpBinop (o)
+
+      | "!!" -> compileLogicBinop (0)
+      | "&&" -> compileLogicBinop (1)
+    esac
+  } 
+
+  fun compile_ (env, code) {
     foldl (
       fun ([env, scode], i) {
         local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
@@ -288,12 +353,25 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | CONST (x) ->
+            case env.allocate of
+              [s, env] -> [env, code : singleton (Mov (L (x), s))]
+            esac
+        | LD (x) ->
+            case env.addGlobal (x).allocate of
+              [s, env] -> [env, code : move (env.loc (x), s)]
+            esac
+        | ST (x) ->
+            case env.addGlobal (x).pop of
+              [s, env] -> [env, code : move (s, env.loc (x))]
+            esac
+        | BINOP (o) -> compileBinop (env, code, o)
+        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
   }
 
-  compile (env, code) 
+  compile_ (env, code) 
 }
 
 -- A top-level codegeneration function. Takes a driver's environment and a stack machine program,
