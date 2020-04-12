@@ -272,6 +272,22 @@ fun suffix (op) {
   esac
 }
 
+local binop_groups = {
+  ["+",  ASM],
+  ["-",  ASM],
+  ["*",  ASM],
+  ["/",  DIV],
+  ["%",  MOD],
+  ["==", CMP],
+  ["!=", CMP],
+  ["<",  CMP],
+  ["<=", CMP],
+  [">",  CMP],
+  [">=", CMP],
+  ["&&", BLN],
+  ["!!", BLN]
+};
+
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
@@ -287,6 +303,38 @@ fun compile (env, code) {
         | WRITE ->
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
+            esac
+	| LD (x) ->
+            case env.addGlobal(x).allocate of
+              [s, env] -> [env, code : move(env.loc(x), s)]
+            esac
+        | ST (x) ->
+            case env.addGlobal(x).pop of
+              [s, env] -> [env, code : move(s, env.loc(x))]
+            esac
+        | CONST (x) ->
+            case env.allocate of
+              [s, env] -> [env, code : singleton(Mov(L (x), s))]
+            esac
+        | BINOP(op) ->
+            case env.pop2 of 
+              [x, y, env] ->
+                case env.allocate of [s, env] ->
+                  case assoc(binop_groups, op) of
+                    Some(group) ->
+                      case group of
+                        ASM -> [env, code: {Mov (y, eax), Binop (op, x, eax), Mov (eax, s)}]
+                      | DIV -> [env, code: {Mov (y, eax), Cltd, IDiv (x), Mov (eax, s)}]
+		      | MOD -> [env, code: {Mov (y, eax), Cltd, IDiv (x), Mov (edx, s)}]			
+                      | CMP -> [env, code: {Mov (y, eax), Binop ("^", edx, edx), Binop ("cmp", x, eax),
+                			    Set (suffix(op), "%dl"), Mov (edx, s)}]
+                      | BLN -> [env, code: {Binop ("^", eax, eax), Binop ("^", edx, edx), 
+					    Binop ("cmp", x, eax), Set (suffix("!="), "%al"), 
+					    Binop ("cmp", y, edx), Set (suffix("!="), "%dl"),
+					    Binop (op, eax, edx), Mov (edx, s) }]
+                      esac
+                  esac
+                esac
             esac
         | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
         esac
