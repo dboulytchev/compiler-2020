@@ -40,6 +40,14 @@ fun compileExpr (expression) {
   esac
 }
 
+fun printExpr (expression) {
+  case expression of
+    Var (name) -> "LD (" : name : ")\n" : {}
+  | Const (value) -> "CONST (" : value.string : ")\n" : {}
+  | Binop (operand, expression1, expression2) -> {printExpr (expression1), printExpr (expression2), ( "BINOP (" : operand : ")\n" : {} )}
+  esac
+}
+
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
@@ -54,4 +62,18 @@ public fun compileSM (statement) {
     esac
   }
   statement.innerCompileSM.deepFlatten
+}
+
+public fun printSM (statement) {
+  fun innerPrintSM (statement) {
+    case statement of
+      Assn (name, expression) -> {printExpr (expression), ( "ST (" : name : ")\n" : {} )}
+    | Seq (statement1, statement2) -> {innerPrintSM (statement1), innerPrintSM (statement2)}
+    | Skip -> {}
+    | Read (name) -> "READ\n" : "ST (" : name : ")\n" : {}
+    | Write (expression) -> {printExpr (expression),  ( "WRITE\n" : {} )}
+    esac
+  }
+
+  statement.innerPrintSM.deepFlatten.stringcat
 }

@@ -6,13 +6,13 @@ import List;
 import Util;
 
 -- Assembler language interface
--- The registers: 
+-- The registers:
 local regs = ["%ebx", "%ecx", "%esi", "%edi", "%eax", "%edx", "%ebp", "%esp"];
 
 -- We can not freely operate with all register; only with 4 by now
 local nRegs = regs.length - 5;
 
--- For convenience we define the following synonyms for the registers: 
+-- For convenience we define the following synonyms for the registers:
 local ebx = R (0),
       ecx = R (1),
       esi = R (2),
@@ -25,37 +25,37 @@ local ebx = R (0),
 -- We need to know the word size to calculate offsets correctly
 local wordSize = 4;
 
--- We need to distinguish the following operand types: 
---    R (int)    -- hard register                    
---    S (int)    -- a position on the hardware stack 
---    M (string) -- a named memory location          
---    L (int)    -- an immediate operand             
+-- We need to distinguish the following operand types:
+--    R (int)    -- hard register
+--    S (int)    -- a position on the hardware stack
+--    M (string) -- a named memory location
+--    L (int)    -- an immediate operand
 
 -- Some x86 instruction (we do not need all of them):
---   Mov   (opnd, opnd)         -- copies a value from the first to the second operand  
---   Binop (string, opnd, opnd) -- makes a binary operation; note, the first operand   
+--   Mov   (opnd, opnd)         -- copies a value from the first to the second operand
+--   Binop (string, opnd, opnd) -- makes a binary operation; note, the first operand
 --                                 designates x86 operator, not the source language one
---   IDiv  (opnd)               -- x86 integer division, see instruction set reference 
---   Cltd                       -- see instruction set reference           
---   Set   (string, string)     -- sets a value from flags; the first operand is the   
+--   IDiv  (opnd)               -- x86 integer division, see instruction set reference
+--   Cltd                       -- see instruction set reference
+--   Set   (string, string)     -- sets a value from flags; the first operand is the
 --                                 suffix, which determines the value being set, the
---                                 the second --- (sub)register name 
+--                                 the second --- (sub)register name
 --   Push  (opnd)               -- pushes the operand on the hardware stack
 --   Pop   (opnd)               -- pops from the hardware stack to the operand
---   Call  (string)             -- calls a function by its name 
+--   Call  (string)             -- calls a function by its name
 --   Ret                        -- returns from a function
 --   Meta  (string)             -- metainformation (declarations, etc.)
-                                                               
+
 -- Machine instruction printer
 fun insnString (insn) {
-  
+
   fun binopString (op) {
     case op of
       "+"   -> "addl"
     | "-"   -> "subl"
     | "*"   -> "imull"
     | "&&"  -> "andl"
-    | "!!"  -> "orl" 
+    | "!!"  -> "orl"
     | "^"   -> "xorl"
     | "cmp" -> "cmpl"
     esac
@@ -69,7 +69,7 @@ fun insnString (insn) {
     | L (i) -> sprintf ("$%d", i)
     esac
   }
-  
+
   case insn of
     Cltd               -> "\tcltd\n"
   | Set   (suf, s)     -> sprintf ("\tset%s\t%s\n", suf, s)
@@ -100,12 +100,12 @@ fun makeEnv (stack, stackSlots, globals) {
   fun envString () {
     sprintf ("Stack     : %s\nStackSlots: %d\nGlobals   : %s\n", stack.string, stackSlots, elements (globals).string)
   }
-  
+
   -- Allocates a new position on the symbolic stack;
   -- returns a pair: a location for allocated item and
   -- an updated environment
   fun allocate () {
-    case 
+    case
       case stack of
         {}        -> [ebx, 0]
       | S (n) : _ -> [S (n+1), n+2]
@@ -141,11 +141,16 @@ fun makeEnv (stack, stackSlots, globals) {
     makeEnv (stack, stackSlots, addSet (globals, globalName (name)))
   }
 
+  -- Checks if global variable exists; returns 0 if not
+  fun checkGlobal (name) {
+    memSet (globals, globalName (name))
+  }
+
   -- References a global variable
   fun loc (name) {
     M (globalName (name))
   }
-  
+
   -- Gets a list of global variables from the environment
   fun getGlobals () {
     globals.elements
@@ -156,7 +161,7 @@ fun makeEnv (stack, stackSlots, globals) {
     stackSlots
   }
 
-  [envString, allocate, push, pop, pop2, addGlobal, loc, getGlobals, getStackSize]
+  [envString, allocate, push, pop, pop2, addGlobal, checkGlobal, loc, getGlobals, getStackSize]
 }
 
 -- Exported accessors
@@ -184,16 +189,20 @@ fun addGlobal (env, name) {
   env [5] (name)
 }
 
-fun loc (env, name) {
+fun checkGlobal (env, name) {
   env [6] (name)
 }
 
+fun loc (env, name) {
+  env [7] (name)
+}
+
 fun getGlobals (env) {
-  env [7] ()
+  env [8] ()
 }
 
 fun getStackSize (env) {
-  env [8] ()
+  env [9] ()
 }
 
 -- Creates an initial environment
@@ -237,7 +246,7 @@ fun stackOpnd (opnd) {
   case opnd of
     S (_) -> true
   | _     -> false
-  esac      
+  esac
 }
 
 -- Checks if an operand resides in memory
@@ -274,24 +283,90 @@ fun suffix (op) {
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
+  fun codeBinop(operand, value1, value2, toStore) {
+    if  compare (operand, "/") == 0 !!
+        compare (operand, "%") == 0
+    then
+
+      local divCode = {
+        move (value2, eax),
+        Cltd,
+        IDiv (value1)
+      };
+      if compare (operand, "/") == 0 then
+        divCode : { move (eax, toStore) : {}}
+      else
+        divCode : { move (edx, toStore) : {}}
+      fi
+
+    elif  compare (operand, "==") == 0 !!
+          compare (operand, "!=") == 0 !!
+          compare (operand, "<=") == 0 !!
+          compare (operand, "<") == 0 !!
+          compare (operand, ">=") == 0 !!
+          compare (operand, ">") == 0
+    then
+
+      {
+        move (value2, edx),
+        Binop ("^", eax, eax),
+        Binop ("cmp", value1, edx),
+        Set (suffix (operand), "%al"),
+        move (eax, toStore)
+      }
+
+    else
+
+      {
+        move (value2, eax),
+        Binop (operand, value1, eax),
+        move (eax, toStore)
+      }
+
+    fi
+  }
+
   fun compile (env, code) {
     foldl (
-      fun ([env, code], i) {           
+      fun ([env, code], i) {
         case i of
           READ ->
             case env.allocate of
               [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
-            esac             
+            esac
         | WRITE ->
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
+        | CONST (value) ->
+            case env.allocate of
+              [s, env] -> [env, code : ( Mov (L (value), s) : {})]
+            esac
+        | LD (name) ->
+            case env.checkGlobal (name) of
+              0 -> failure (stringcat ("Trying to access variable with " : name : " which is not exists\n" : {}))
+            | _ ->
+              case env.addGlobal(name).allocate of
+                [s, env] -> [env, code : {move (env.loc (name), s)}]
+              esac
+            esac
+        | ST (name) ->
+            case env.addGlobal(name).pop of
+              [s, env] -> [env, code : {move (s, env.loc (name))}]
+            esac
+        | BINOP (operand) ->
+            case env.pop2 of
+              [value1, value2, env] ->
+                case env.allocate of
+                  [s, env] -> [env, code : codeBinop (operand, value1, value2, s)]
+                esac
+            esac
+        | {} -> [env, code]
         esac
       }, [env, {}], code)
   }
 
-  compile (env, code) 
+  compile (env, code)
 }
 
 -- A top-level codegeneration function. Takes a stack machine program
@@ -299,7 +374,7 @@ fun compile (env, code) {
 public fun compileX86 (code) {
   case compile (initEnv (), code) of
     [env, code] ->
-       map (insnString, 
+       map (insnString,
             deepFlatten ({
               Meta ("\t.global\tmain\n"),
               dataSection (
