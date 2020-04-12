@@ -388,7 +388,7 @@ fun compile (env, code) {
 
   compile (env, code) 
   compile (env, code)
-  
+  }
 }
 -- A top-level codegeneration function. Takes a stack machine program
 -- and returns x86 listing as a string
