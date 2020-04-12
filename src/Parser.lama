@@ -13,39 +13,27 @@ fun inbr (l, p, r) {
   l |> lift (p |> bypass (r))
 }
 
-local rCompOperation = createRegexp ("<=\\|>=\\|==\\|!=\\|[<>]", "compOperation");
-local rAddOperation = createRegexp ("\-\\|[+]", "addOperation");
-local rMulOperation = createRegexp ("[*/%]", "mulOperation");
-local rOperation = createRegexp ("<=\\|>=\\|==\\|!=\\|!!\\|&&\\|\-\\|[+*/%<>]", "binop");
-
-fun binExp (arg1, arg_op, arg2) {
-  (arg1 |> fun(left) {
-      s(arg_op) |> fun (op) {
-        arg2 @ fun (right) { Binop (op, left, right) }
-      }
-    }
-  ) | arg2
+fun binOp (op){
+  [s(op), fun(left, right) { Binop (op, left, right) }]
 }
 
+local ops = { [Left, singleton (binOp ("!!"))],
+              [Left, singleton (binOp ("&&"))],
+              [Nona, { binOp ("<"), binOp ("<="), binOp (">="), binOp (">"),
+                       binOp ("=="), binOp ("!=") }],
+              [Left, { binOp ("+"), binOp ("-")}],
+              [Left, { binOp ("*"), binOp ("/"), binOp ("%") }] };
 
 
 
 -- Primary expression
 local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
                             lident  @ fun (x) {Var (x)} |
-                            inbr (s("("), orExp, s(")"))),
+                            inbr (s("("), exp, s(")")));
 
-      orExp = memo $ eta (binExp (orExp, "!!", andExp)),
+local exp = memo $ eta (expr (ops, primary)(id));
 
-      andExp = memo $ eta (binExp (andExp, "&&", logicExp)),
-
-      logicExp = memo $ eta (binExp (logicExp, rCompOperation, addExp)),
-
-      addExp = memo $ eta (binExp (addExp, rAddOperation, mulExp)),
-
-      mulExp = memo $ eta (binExp (mulExp, rMulOperation, primary));
-
-local stElif = memo $ eta ( kElif |> lift (orExp |> fun (expr) {
+local stElif = memo $ eta ( kElif |> lift (exp |> fun (expr) {
                               kThen |> lift (stmt |> fun (stmt1) {
                                 kElse |> lift (stmt |> fun (stmt2) {
                                   kFi @ lift (If (expr, stmt1, stmt2))
@@ -59,9 +47,9 @@ local stElif = memo $ eta ( kElif |> lift (orExp |> fun (expr) {
 
 local substmt = memo $ eta (kSkip @ lift (Skip)
                          | kRead |> lift (primary @ fun (Var (x)) { Read (x) })
-                         | kWrite |> lift (orExp @ fun (x) { Write (x) })
-                         | lident |> fun (x) { s(":=") |> lift (orExp @ fun (expr) {Assn (x, expr) }) }
-                         | kIf |> lift (orExp |> fun(expr) {
+                         | kWrite |> lift (exp @ fun (x) { Write (x) })
+                         | lident |> fun (x) { s(":=") |> lift (exp @ fun (expr) {Assn (x, expr) }) }
+                         | kIf |> lift (exp |> fun(expr) {
                              kThen |> lift (stmt |> fun (stmt1) {
                                kElse |> lift ( stmt |> fun (stmt2) {
                                  kFi @ lift (If (expr, stmt1, stmt2))
@@ -70,16 +58,16 @@ local substmt = memo $ eta (kSkip @ lift (Skip)
                                | stElif @ fun (stmt2) {If (expr, stmt1, stmt2)}
                              })
                            })
-                         | kWhile |> lift (orExp |> fun (expr) {
+                         | kWhile |> lift (exp |> fun (expr) {
                              kDo |> lift (stmt |> fun (state) {
                                kOd @ lift (While (expr, state))
                              })
                            })
                          | kRepeat |> lift (stmt |> fun (state) {
-                             kUntil |> lift (orExp @ fun (expr) {Repeat (state, expr)})
+                             kUntil |> lift (exp @ fun (expr) {Repeat (state, expr)})
                            })
                          | kFor |> lift (stmt |> fun (stmt1) {
-                             s(",") |> lift (orExp |> fun (expr) {
+                             s(",") |> lift (exp |> fun (expr) {
                                s(",") |> lift (stmt |> fun (stmt2) {
                                  kDo |> lift (stmt |> fun (stmt3) {
                                    kOd @ lift (Seq (stmt1, While (expr, Seq (stmt3, stmt2))))
