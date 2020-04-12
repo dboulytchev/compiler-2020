@@ -16,7 +16,6 @@ import World;
 --        Read   (string)           |
 --        Write  (expr)             |
 
-
 fun eval (c@[s, w], stmt) {
   case stmt of
       Skip -> c
