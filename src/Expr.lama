@@ -3,22 +3,22 @@
 import List;
 import State;
 
-public fun evalBinop (o, l, r) {
-	case o of
-		"+"    -> l + r
-		| "-"  -> l - r
-		| "*"  -> l * r
-		| "/"  -> l / r
-		| "%"  -> l % r
-		| "==" -> l == r
-		| "!=" -> l != r
-		| "<"  -> l < r
-		| "<=" -> l <= r
-		| ">"  -> l > r
-		| ">=" -> l >= r
-		| "!!" -> l !! r
-		| "&&" -> l && r
-	esac
+public fun binop(op, l, r) {
+  case op of
+    "+" -> l + r
+  | "-" -> l - r
+  | "*" -> l * r
+  | "/" -> l / r
+  | "%" -> l % r
+  | "==" -> l == r
+  | "!=" -> l != r
+  | "<" -> l < r
+  | "<=" -> l <= r
+  | ">" -> l > r
+  | ">=" -> l >= r
+  | "&&" -> l && r
+  | "!!" -> l !! r
+  esac
 }
 
 
