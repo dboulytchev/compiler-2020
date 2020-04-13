@@ -18,33 +18,20 @@ import World;
 --        if     (expr, stmt, stmt) |
 --        While  (expr, stmt)       |
 --        Repeat (stmt, expr)
-
-fun eval (c, stmt) {
-  local state = c[0];
-  local world = c[1];
-  case stmt of
-        Skip            ->  c
-    |   Read(x)         ->  case readWorld(world) of
-                                [value, newWorld] -> [state <- [x, value], newWorld]
-                            esac
-    |   Write(x)        ->  [state, writeWorld(evalExpr(state, x), world)]
-    |   Assn(x, value)  ->  [state <- [x, evalExpr(state, value)], world]
-    |   Seq(stmt1,stmt2)->  eval(eval(c, stmt1) ,stmt2)
-    |   If (x, stmt1, stmt2) -> if evalExpr(state, x) != 0
-                                    then eval(c, stmt1)
-                                    else eval(c, stmt2)
-                                fi
-    |   While (x, stmt1) -> if evalExpr(state, x) != 0
-                               then eval(eval(c, stmt1), stmt)
-                               else c
-                            fi
-    |   Repeat (stmt1, x) -> case eval(c, stmt1) of
-                                  [sp, wp] -> if evalExpr(sp, x) != 0
-                                                        then [sp, wp]
-                                                        else eval([sp, wp], stmt)
-                                                      fi
-                             esac
-  esac
+fun eval (c@[s, w], stmt) {
+	case stmt of
+		Assn    (x, e)    -> [s <- [x, evalExpr (s, e)], w]
+		| Seq (s1, s2)    -> eval (eval (c, s1), s2)
+		| Read     (x)    -> case readWorld (w) of
+							    [n, w] -> [s <- [x, n], w]
+						     esac
+		| Write    (e)    -> [s, writeWorld (evalExpr (s, e), w)]
+		| Skip            -> c
+        | If (e, s1, s2)  -> if evalExpr (s, e) != 0 then eval (c, s1) else eval (c, s2) fi
+        | While (e, st)   -> if evalExpr (s, e) != 0 then eval (eval (c, st), stmt) else c fi
+        | Repeat (st, e)  -> local ret = eval (c, st);
+                    if evalExpr (ret[0], e) == 0 then eval (ret, stmt) else ret fi
+	esac
 }
 
 -- Evaluates a program with a given input and returns an output

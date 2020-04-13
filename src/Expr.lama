@@ -3,6 +3,23 @@
 import List;
 import State;
 
+public fun evalBinop (o, l, r) {
+	case o of
+		"+"    -> l + r
+		| "-"  -> l - r
+		| "*"  -> l * r
+		| "/"  -> l / r
+		| "%"  -> l % r
+		| "==" -> l == r
+		| "!=" -> l != r
+		| "<"  -> l < r
+		| "<=" -> l <= r
+		| ">"  -> l > r
+		| ">=" -> l >= r
+		| "!!" -> l !! r
+		| "&&" -> l && r
+	esac
+}
 
 -- The evaluator itself: takes a state and an expression,
 -- returns integer value
@@ -15,27 +32,8 @@ import State;
 
 public fun evalExpr (st, expr) {
   case expr of
-    Const(x) -> x
-    | Var(x) -> st(x)
-    | Binop(operation, left, right) -> evalBinop(operation, evalExpr(st, left), evalExpr(st, right))
-    | _      -> failure ("Expresion is not implemented\n")
-  esac
-}
-
-public fun evalBinop(operation, left, right) {
-    case operation of
-          "+"    ->  left + right
-        | "-"    ->  left - right
-        | "*"    ->  left * right
-        | "/"    ->  left / right
-        | "%"    ->  left % right
-        | "<"    ->  left < right
-        | ">"    ->  left > right
-        | "<="   ->  left <= right
-        | ">="   ->  left >= right
-        | "=="   ->  left == right
-        | "!="   ->  left != right
-        | "!!"   ->  left !! right
-        | "&&"   ->  left && right
-    esac
+		Const          (c) -> c
+		| Var          (x) -> st (x)
+		| Binop (op, l, r) -> evalBinop(op, evalExpr(st, l), evalExpr(st, r))
+	esac
 }
