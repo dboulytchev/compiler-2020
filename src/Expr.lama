@@ -35,6 +35,6 @@ public fun evalExpr (st, expr) {
   case expr of
     Const (x) -> x
   | Var (x) -> st(x)
-  | Binop (op, l, r) -> evalBinop(op, evalExpr(st, l), evalExpr(st, r))
+  | Binop (op, l, r) -> binop(op, evalExpr(st, l), evalExpr(st, r))
   esac
 }
