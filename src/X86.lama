@@ -250,12 +250,29 @@ fun memOpnd (opnd) {
   esac
 }
 
+-- Checks if an operand resides in memory
+fun isRegOpnd (opnd) {
+  case opnd of
+    R (_) -> true
+  | _     -> false
+  esac
+}
+
 -- Generates a move between locations, using
 -- intermediate register if needed
 fun move (from, to) {
   if memOpnd (from) && memOpnd (to)
   then {Mov (from, eax), Mov (eax, to)}
   else singleton (Mov (from, to))
+  fi
+}
+
+-- Generates a binop between locations, using
+-- intermediate register if needed
+fun binop (op, src, dest) {
+  if memOpnd (dest) && memOpnd (src)
+  then {Mov (src, eax), Binop(op, eax, dest)}
+  else singleton (Binop(op, src, dest))
   fi
 }
 
@@ -272,74 +289,99 @@ fun suffix (op) {
   esac
 }
 
+fun setZero(item) {
+  case item of
+    R(_) -> Binop("^", item, item)
+  | S(_) -> Mov(L(0), item)
+  esac
+}
+
+fun isSimpleArith(opr) {
+  case opr of
+    "+" -> true
+  | "-" -> true
+  | "^" -> true
+  | _   -> false
+  esac
+}
+
+fun isLogical(opr) {
+  case opr of
+    "&&" -> true
+  | "!!" -> true
+  | _    -> false
+  esac
+}
+
+fun isComparison(opr) {
+  case opr of
+    "<"  -> true
+  | "<=" -> true
+  | ">"  -> true
+  | ">=" -> true
+  | "==" -> true
+  | "!=" -> true
+  | _    -> false
+  esac
+}
+
+(**
+ * @returns list of x86 instructions resulted from compilation
+ *          of `s opr d` expression
+ * @type    [String, MemLoc, MemLoc] -> {Instr}
+*)
+fun compileBinop(opr, s, d) {
+  if   opr.isSimpleArith then 
+    binop(opr, s, d)
+  elif opr.isLogical then
+    {setZero(eax), Binop("cmp", s, eax), Set(suffix("!="), "%al"), -- %al := s != 0
+     setZero(edx), Binop("cmp", d, edx), Set(suffix("!="), "%dl"), -- %dl := d != 0
+     Binop(opr, edx, eax), Mov(eax, d)}
+  elif opr.isComparison then
+     -- V only %edx is allowed here, %eax is already used in comparison
+     --                 V --- %eax used here
+     setZero(edx) : binop("cmp", s, d) +++ {Set(suffix(opr), "%dl"), Mov(edx, d)}
+  else
+    case opr of
+      "*" -> if   d.isRegOpnd 
+             then singleton(Binop("*", s, d)) 
+             else {Mov(d, eax), Binop("*", s, eax), Mov(eax, d)} 
+             fi 
+    | "/" -> {Mov(d, eax), Cltd, IDiv(s), Mov(eax, d)}
+    | "%" -> {Mov(d, eax), Cltd, IDiv(s), Mov(edx, d)}
+    esac
+  fi
+}
+
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
   fun compile (env, code) {
-    fun bin (s1, s2, s, op) {
-      { Mov (s2, eax), Binop (op, s1, eax), Mov (eax, s) }
-    }
-
-    fun cmp (s1, s2, s, op) {
-      { Mov (s2, eax), Binop ("^", edx, edx), Binop ("cmp", s1, eax), Set (suffix (op), "%dl"), Mov (edx, s) }
-    }
-
-    fun div (s1, s2, s, op) {
-      { Mov (s2, eax), Cltd, IDiv (s1), Mov (case op of "/" -> eax | "%" -> edx esac, s) }
-    }
-
-    fun log (s1, s2, s, op) {
-      { Binop ("^", eax, eax), Binop ("cmp", s2, eax), Set (suffix ("!="), "%al"),
-        Binop ("^", edx, edx), Binop ("cmp", s1, edx), Set (suffix ("!="), "%dl"),
-        Binop (op, edx, eax), Mov (eax, s) }
-    }
-
-    foldl (
-      fun ([env, scode], i) {
-        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
-        case i of
-          READ ->
-            case env.allocate of
-              [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
-            esac
-        | WRITE ->
-            case env.pop of
-              [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
-            esac
-        | LD (x) -> case env.addGlobal(x).allocate of
-                      [s, env] -> [env, code : move(env.loc(x), s)]
-                    esac
-        | ST (x) -> case env.addGlobal(x).pop of
-                      [s, env] -> [env, code : move(s, env.loc(x))]
-                    esac
-        | CONST (x) -> case env.allocate of
-                         [s, env] -> [env, code : singleton(Mov(L (x), s))]
-                       esac
-        | BINOP (op) ->
-            case env.pop2 of
-              [s1, s2, env] ->
-                case env.allocate of
-                  [s, env] -> [env, code :
-                    case op of
-                      "*" -> bin (s1, s2, s, op)
-                    | "/" -> div (s1, s2, s, op)
-                    | "%" -> div (s1, s2, s, op)
-                    | "+" -> bin (s1, s2, s, op)
-                    | "-" -> bin (s1, s2, s, op)
-                    | "==" -> cmp (s1, s2, s, op)
-                    | "!=" -> cmp (s1, s2, s, op)
-                    | "<" -> cmp (s1, s2, s, op)
-                    | "<=" -> cmp (s1, s2, s, op)
-                    | ">" -> cmp (s1, s2, s, op)
-                    | ">=" -> cmp (s1, s2, s, op)
-                    | "&&" -> log (s1, s2, s, op)
-                    | "!!" -> log (s1, s2, s, op)
-                  esac
-                ]
-              esac
+    foldl (fun ([env, scode], i) {
+      local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+      case i of
+        READ ->
+          case env.allocate of
+            [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
           esac
-        esac
-      }, [env, {}], code)
+      | WRITE ->
+          case env.pop of
+            [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
+          esac
+      | LD (x) -> case env.addGlobal(x).allocate of
+                    [s, env] -> [env, code : move(env.loc(x), s)]
+                  esac
+      | ST (x) -> case env.addGlobal(x).pop of
+                    [s, env] -> [env, code : move(s, env.loc(x))]
+                  esac
+      | CONST (x) -> case env.allocate of
+                       [s, env] -> [env, code : singleton(Mov(L (x), s))]
+                     esac
+      | BINOP (op) -> case env.pop2 of
+                        [s, d, env] -> [env.push(d), code : compileBinop(op, s, d)]
+                      esac
+      esac
+    }, [env, {}], code)
   }
 
   compile (env, code)

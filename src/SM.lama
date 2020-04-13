@@ -53,11 +53,11 @@ public fun evalSM (input, insns) {
 -- Compiles an expression into a stack machine code.
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
-fun compileExpr (expr) {
+fun compileExpr (expr, acc) {
   case expr of
-    Const(c) -> singleton(CONST(c))
-  | Var(x) -> singleton(LD(x))
-  | Binop(op, l, r) -> { compileExpr(l), compileExpr(r), BINOP(op) }
+    Const(n) -> CONST(n) : acc
+  | Var(x)   -> LD(x) : acc
+  | Binop(opr, l, r) -> BINOP(opr) : compileExpr(r, compileExpr(l, acc))
   esac
 }
 
@@ -65,13 +65,14 @@ fun compileExpr (expr) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  fun compile(stmt) {
+  fun compileSM (stmt, acc) {
     case stmt of
-      Read(x) -> { READ, ST(x) }
-    | Write(val) -> deepFlatten({ compileExpr(val), singleton(WRITE) })
-    | Assn(x, val) -> deepFlatten({ compileExpr(val), singleton(ST(x)) })
-    | Seq(stmt1, stmt2) -> deepFlatten({ compileSM(stmt1), compileSM(stmt2) })
+      Skip -> acc
+    | Assn(varStr, expr) -> ST(varStr) : compileExpr(expr, acc)
+    | Read(varStr) -> ST(varStr) : READ : acc
+    | Write(expr)  -> WRITE : compileExpr(expr, acc)
+    | Seq(s1, s2)  -> compileSM(s2, compileSM(s1, acc))
     esac
   }
-  deepFlatten(compile(stmt))
+  reverse(compileSM(stmt, {}))
 }
