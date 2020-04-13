@@ -34,7 +34,7 @@ public fun applyInfixOp (op, l, r) {
 public fun evalExpr (st, expr) {
   case expr of
       Const(x)        -> x
-    | Var(x)          -> st(x)
+    | Var(x)          -> st.get(x)
     | Binop(op, l, r) -> op.applyInfixOp(evalExpr(st, l), evalExpr(st, r))
     | _ -> failure("Unknown expression %s\n", expr.string)
   esac

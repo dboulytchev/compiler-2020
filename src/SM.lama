@@ -43,7 +43,7 @@ fun initEvalEnv (insns) {
         }) $ [emptyMap (), insns];
   
   [fun (l) {
-     case findMap (map, l) of Some (insns) -> insns esac
+     case findMap (map, l) of Some (insns) -> insns | None -> failure("No label %s\n", l) esac
   }]
 }
 
@@ -54,35 +54,53 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c @ [stack, state, w], insns) {
+fun eval (env, c @ [stack, state, w], insns) {
+  fun evalProxy (newState, insns) {
+    case newState of 
+        SJump(newC, newInsns) -> [env, newC, newInsns]
+      | newC                  -> [env, newC, insns]
+    esac
+  }
+  fun evalInner ([env, c @ [stack, state, w], insns]) {
   case insns of
       h : t -> case h of
-                      CONST(n)  -> [n:stack, state, w]
-                    | BINOP(op) -> case stack of
-                                      r:l:sttail -> [op.applyInfixOp(l, r):sttail, state, w]
-                                    | _          -> failure("Not enough values on stack for BINOP %s in statement %s\n", op.string, insns.string)
-                                  esac
-                    | LD(x)     -> [state(x):stack, state, w]
-                    | ST(x)     -> case stack of
-                                      h:sttail -> [sttail, state <- [x, h], w]
-                                    | _        -> failure("Not enough values on stack for ST in statement %s\n", insns.string)
-                                  esac
-                    | READ      -> case readWorld(w) of
-                                      [v, ww]  -> [v:stack, state, ww]
-                                  esac
-                    | WRITE     -> case stack of
-                                      h:sttail -> [sttail, state, writeWorld(h, w)]
-                                    | _        -> failure("Not enough values on stack for WRITE in statement %s\n", insns.string)
-                                  esac
-
-               esac . eval(t)
+          CONST(n)       -> [n:stack, state, w]
+        | BINOP(op)      -> case stack of
+                r:l:sttail -> [op.applyInfixOp(l, r):sttail, state, w]
+              | _          -> failure("Not enough values on stack for BINOP %s in statement %s\n", op.string, insns.string)
+            esac
+        | LD(x)          -> [state.get(x):stack, state, w]
+        | ST(x)          -> case stack of
+                h:sttail -> [sttail, state <- [x, h], w]
+              | _        -> failure("Not enough values on stack for ST in statement %s\n", insns.string)
+            esac
+        | READ           -> case readWorld(w) of
+                [v, w]  -> [v:stack, state, w]
+            esac
+        | WRITE          -> case stack of
+                h:sttail -> [sttail, state, writeWorld(h, w)]
+              | _        -> failure("Not enough values on stack for WRITE in statement %s\n", insns.string)
+            esac
+        | JMP(l)         -> SJump(c, fromLabel(env, l))
+        | CJMP("z", l)   -> case stack of
+                0:sttail -> SJump([sttail, state, w], fromLabel(env, l))
+              | _:sttail -> [sttail, state, w]
+            esac
+        | LABEL(_) -> c
+        esac . evalProxy(t)
     | _ -> c
   esac
+  }
+  local sm = [env, c, insns];
+  while sm[2] != {} do
+    sm := evalInner(sm)
+  od;
+  case sm of [env, c, insns] -> c esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
 public fun evalSM (input, insns) {
-  eval (initEvalEnv (insns), [{}, emptyState, createWorld (input)], insns)[2].getOutput
+  eval (initEvalEnv (insns), [{}, emptyState(), createWorld (input)], insns)[2].getOutput
 }
 
 -- Compilation environment: generates labels
@@ -120,22 +138,55 @@ fun genLabels (env, n) {
 -- of stack machine instructions
 fun compileExpr (expr) {
   case expr of
-      Const(c)       -> singleton(CONST(c))
-    | Var(x)         -> singleton(LD(x))
-    | Binop(op, l, r)-> {compileExpr(l), compileExpr(r), singleton(BINOP(op))}
+      Const(c)       -> CONST(c)
+    | Var(x)         -> LD(x)
+    | Binop(op, l, r)-> {compileExpr(l), compileExpr(r), BINOP(op)}
   esac
 }
 
 -- Compiles a statement into a stack machine code.
--- Takes a statement, returns a list of lists and stack machine
+-- Takes a statement, returns nested lists with stack machine
 -- instructions.
-public fun compileSMunflat (stmt) {
-  case stmt of
-      Assn(x, v)  -> {compileExpr(v), singleton(ST(x))}
-    | Read(x)     -> {READ, ST(x)}
-    | Write(v)    -> {compileExpr(v), singleton(WRITE)}
-    | Seq(s1, s2) -> {compileSMunflat(s1), compileSMunflat(s2)}
-  esac
+fun compileSMunflat (stmt) {
+  fun compEasy(stmt) {
+    case stmt of 
+        Assn(x, v)  -> {compileExpr(v), ST(x)}
+      | Read(x)     -> {READ, ST(x)}
+      | Write(v)    -> {compileExpr(v), WRITE}
+      | Skip        -> {}
+    esac
+  }
+  fun compRec(stmt, env) {
+    case stmt of
+        Seq(s1, s2) -> case compRec(s1, env) of
+          [comp1, env] -> case compRec(s2, env) of
+            [comp2, env] -> [{comp1, comp2}, env]
+          esac esac
+      | While(e, x) -> case env.genLabels(2) of
+          [bgn, end, env] -> case compRec(x, env) of
+            [compx, env] ->
+              [{LABEL(bgn), compileExpr(e), CJMP("z", end), compx, JMP(bgn), LABEL(end)}, env]
+          esac esac
+      | Repeat(x, e) -> case env.genLabels(1) of
+          [bgn, env] -> case compRec(x, env) of
+            [compx, env] ->
+              [{LABEL(bgn), compx, compileExpr(e), CJMP("z", bgn)}, env]
+          esac esac
+      | If(e, x, Skip) -> case env.genLabels(1) of
+          [end, env] -> case compRec(x, env) of
+            [compx, env] ->
+              [{compileExpr(e), CJMP("z", end), compx, LABEL(end)}, env]
+          esac esac
+      | If(e, t, f) -> case env.genLabels(2) of
+          [end, els, env] -> case compRec(t, env) of
+            [compx, env] -> case compRec(f, env) of
+              [compf, env3] ->
+                [{compileExpr(e), CJMP("z", els), compx, JMP(end), LABEL(els), compf, LABEL(end)}, env3]
+          esac esac esac
+      | _ -> [compEasy(stmt), env]
+    esac
+  }
+  compRec(stmt, initCompEnv())[0]
 }
 
 -- Compiles a statement into a stack machine code.

@@ -351,6 +351,12 @@ fun compile (env, code) {
             case env.addGlobal(x).pop of
               [s, env] -> [env, code : move(s, env.loc(x))]
             esac
+        | LABEL(l)    -> [env, code : singleton(Label(l))]
+        | JMP(l)      -> [env, code : singleton(Jmp(l))]
+        | CJMP(op, l) ->
+            case env.pop of
+              [s, env] -> [env, code : {Binop("^", eax, eax), Binop("cmp", L(0), s), CJmp(op, l)}]
+            esac 
         | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
