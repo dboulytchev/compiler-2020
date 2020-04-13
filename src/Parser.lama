@@ -73,6 +73,11 @@ local stmt = memo $ eta (
   | (s("while") |> lift(exp |> bypass( s ("do")))) |> fun(e) {
       (parse |> bypass (s ("od"))) @ fun(body) { While(e, body) } 
     }
+  | (s("if") |> lift(exp |> bypass( s ("then")))) |> fun(cond) { 
+      ( parse |> bypass (s ("else"))) |> fun(firstBody) {
+        ( parse |> bypass ( s ("fi"))) @ fun(secondBody) { If(cond, firstBody, secondBody) }
+      }
+    }
 );
 
 local inParse = memo $ eta (
