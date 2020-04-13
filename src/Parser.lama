@@ -40,7 +40,7 @@ local stElif = memo $ eta ( kElif |> lift (exp |> fun (expr) {
                           })
                         );
 
-local stmt = memo $ eta (kSkip @ lift (Skip)
+local substmt = memo $ eta (kSkip @ lift (Skip)
                          | kRead |> lift (primary @ fun (Var (x)) { Read (x) })
                          | kWrite |> lift (exp @ fun (x) { Write (x) })
                          | lident |> fun (x) { s(":=") |> lift (exp @ fun (expr) {Assn (x, expr) }) }
