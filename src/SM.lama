@@ -167,10 +167,14 @@ public fun compileSM (stmt) {
 
     fun compile(stmt, env) {
       case stmt of
-        Read(x)                 ->  { READ, ST(x) }
-    |   Write(value)            ->  { compileExpr(value), singleton(WRITE) }
-    |   Assn(x, value)          ->  { compileExpr(value), singleton(ST(x)) }
-    |   Seq(stmt1,stmt2)        ->  { compileSM(stmt1), compileSM(stmt2) }
+        Read(x)                 ->  [{ READ, ST(x) }, env]
+    |   Write(value)            ->  [{ compileExpr(value), singleton(WRITE) }, env]
+    |   Assn(x, value)          ->  [{ compileExpr(value), singleton(ST(x)) }, env]
+    |   Seq(stmt1,stmt2)        ->  case compile(stmt1, env) of [cs1, env1] ->
+                                      case compile(stmt2, env1) of [cs2, env2] ->
+                                        [{cs1, cs2}, env2]
+                                      esac
+                                    esac
     |   Skip                    ->  [{}, env]
     |   If (x, stmt1, stmt2)    ->  { compileIfStmt(x, stmt1, stmt2, env) }
     |   While (x, stmt)         ->  { compileWhile(x, stmt, env) }
