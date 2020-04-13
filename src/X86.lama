@@ -59,7 +59,7 @@ fun insnString (insn) {
     | "-"   -> "subl"
     | "*"   -> "imull"
     | "&&"  -> "andl"
-    | "!!"  -> "orl" 
+    | "!!"  -> "orl"
     | "^"   -> "xorl"
     | "cmp" -> "cmpl"
     esac
@@ -73,7 +73,7 @@ fun insnString (insn) {
     | L (i) -> sprintf ("$%d", i)
     esac
   }
-  
+
   case insn of
     Cltd               -> "\tcltd\n"
   | Set   (suf, s)     -> sprintf ("\tset%s\t%s\n", suf, s)
@@ -107,12 +107,12 @@ fun makeEnv (stack, stackSlots, globals) {
   fun envString () {
     sprintf ("Stack     : %s\nStackSlots: %d\nGlobals   : %s\n", stack.string, stackSlots, elements (globals).string)
   }
-  
+
   -- Allocates a new position on the symbolic stack;
   -- returns a pair: a location for allocated item and
   -- an updated environment
   fun allocate () {
-    case 
+    case
       case stack of
         {}        -> [ebx, 0]
       | S (n) : _ -> [S (n+1), n+2]
@@ -282,6 +282,31 @@ fun suffix (op) {
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
   fun compile (env, code) {
+    fun basic(s1, s2, s, op) {
+      {Mov(s2, eax), Binop(op, s1, eax), Mov(eax, s)}
+    }
+
+    fun delete(s1, s2, s) {
+      {Mov(s2, eax), Cltd, IDiv (s1), Mov(eax, s)}
+    }
+
+    fun div(s1, s2, s) {
+      {Mov(s2, eax), Cltd, IDiv(s1), Mov(edx, s)}
+    }
+
+    fun compare(s1, s2, s, op) {
+      {Mov(s2, eax), Binop("^", edx, edx), Binop("cmp", s1, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
+    }
+
+    fun logical(s1, s2, s, op) {
+      {
+        Binop("^", eax, eax), Binop("^", edx, edx),
+        Binop("cmp", s1, eax), Set(suffix("!="), "%al"),
+        Binop("cmp", s2, edx), Set(suffix("!="), "%dl"),
+        Binop(op, eax, edx), Mov(edx, s)
+      }
+    }
+
     foldl (
       fun ([env, scode], i) {
         local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
@@ -294,7 +319,41 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | LD(x) ->
+            case env.addGlobal(x).allocate of
+              [s, env] -> [env, code : move(env.loc(x), s)]
+            esac
+        | ST(x) ->
+            case env.addGlobal(x).pop of
+              [s, env] -> [env, code : move(s, env.loc(x))]
+            esac
+        | CONST(c) ->
+            case env.allocate of
+              [s, env] -> [env, code : {Mov(L(c), s)}]
+            esac
+        | BINOP(op) ->
+            case env.pop2 of
+              [s1, s2, env] ->
+                case env.allocate of
+                  [s, env] -> [env, code :
+                    case op of
+                        "+" -> basic(s1, s2, s, op)
+                      | "-" -> basic(s1, s2, s, op)
+                      | "*" -> basic(s1, s2, s, op)
+                      | "&&" -> logical(s1, s2, s, op)
+                      | "!!" -> logical(s1, s2, s, op)
+                      | "/" -> delete(s1, s2, s)
+                      | "%" -> div(s1, s2, s)
+                      | ">" -> compare(s1, s2, s, op)
+                      | ">=" -> compare(s1, s2, s, op)
+                      | "==" -> compare(s1, s2, s, op)
+                      | "!=" -> compare(s1, s2, s, op)
+                      | "<=" -> compare(s1, s2, s, op)
+                      | "<" -> compare(s1, s2, s, op)
+                    esac
+                  ]
+                esac
+            esac
         esac
       }, [env, {}], code)
   }
@@ -312,9 +371,9 @@ public fun compileX86 (args, code) {
                          #unboxed -> "../runtime/"
                        | path     -> path
                        esac ++ "/runtime.o";
-       
+
        fwrite (asmFile,
-               map (insnString, 
+               map (insnString,
                     deepFlatten ({
                       Meta ("\t.global\tmain\n"),
                       dataSection (
@@ -326,7 +385,7 @@ public fun compileX86 (args, code) {
                         code,
                         epilogue ()})
                     })).stringcat);
-                    
+
        system ({"gcc -g -m32 -o ", args.getBaseName, " ", runtime, " ", asmFile}.stringcat)
   esac
 }
