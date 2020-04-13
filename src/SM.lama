@@ -76,11 +76,11 @@ fun eval (env, c, insns) {
         | LABEL(l):other             -> eval(env, c, other)
         | JMP(l):other               -> eval(env, c, fromLabel(env, l))
         | CJMP(flag, l):other        -> case flag of
-                                       "z" ->   case stack of
+                                       "nz" ->   case stack of
                                                       0 : newStack -> eval(env, [newStack, state, world], other)
                                                     | _ : newStack -> eval(env, [newStack, state, world], fromLabel(env, l))
                                                 esac
-                                     | "nz" ->  case stack of
+                                     | "z" ->  case stack of
                                                       0 : newStack -> eval(env, [newStack, state, world], fromLabel(env, l))
                                                     | _ : newStack -> eval(env, [newStack, state, world], other)
                                                 esac
