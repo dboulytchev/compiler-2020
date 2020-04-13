@@ -28,6 +28,7 @@ fun eval (conf@[state, world], stmt) {
     }
   | Write(expr) -> [state, writeWorld(evalExpr(state, expr), world)]
   | Seq(s1, s2) -> eval(eval([state, world], s1), s2)
+  | Skip -> conf
   | If(e, s1, s2) -> if (evalExpr(state, e) != 0) then eval(conf, s1) else eval(conf, s2) fi
   | While(e, statement) -> if (evalExpr(state, e) == 0) 
                            then conf 

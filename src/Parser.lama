@@ -66,18 +66,33 @@ local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
 
 local exp = memo $ eta ( expr(operations, primary)(id) );
 
+local elParse = memo $ eta (
+    empty @ lift (Skip) 
+  | ( s ("else") |> lift (parse)) @ fun(stmt) { stmt }
+  | ( s ("elif") |> lift (exp)) |> fun(localCond) { 
+      (s ("then") |> lift(parse)) |> fun(localStmt) {
+        elParse @ fun(rest) { If(localCond, localStmt, rest) }
+      }
+    }
+);
+
 local stmt = memo $ eta ( 
-    (s("read")  |> lift(sInbr("(", lident, ")"))) @ fun(z) {Read(z)}
+    s("skip") @ lift(Skip) 
+  | (s("read")  |> lift(sInbr("(", lident, ")"))) @ fun(z) {Read(z)}
   | (s("write") |> lift(primary)) @ fun(x) {Write(x)}
   | (lident  |> fun(var) {(s(":=") |> lift(exp)) @ fun(val) {Assn(var, val)}})
   | (s("while") |> lift(exp |> bypass( s ("do")))) |> fun(e) {
       (parse |> bypass (s ("od"))) @ fun(body) { While(e, body) } 
     }
-  | (s("if") |> lift(exp |> bypass( s ("then")))) |> fun(cond) { 
-      ( parse |> bypass (s ("else"))) |> fun(firstBody) {
-        ( parse |> bypass ( s ("fi"))) @ fun(secondBody) { If(cond, firstBody, secondBody) }
+  | (s("if") |> lift(exp)) |> fun(cond) { 
+      (s ("then") |> lift (parse)) |> fun(fbody) {
+        (elParse |> bypass( s ("fi"))) @ fun(rest) { If (cond, fbody, rest) }
       }
     }
+    -- ( parse |> bypass (s ("else"))) |> fun(firstBody) {
+    --     ( parse |> bypass ( s ("fi"))) @ fun(secondBody) { If(cond, firstBody, secondBody) }
+    --   }
+    -- }
 );
 
 local inParse = memo $ eta (
