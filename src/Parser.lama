@@ -6,20 +6,122 @@ import List;
 import Fun;
 import Matcher;
 
+fun opPair(op) {
+  [s(op), fun(l, r) {Binop(op, l, r)}]
+}
+
+local operations = {
+  [
+    Left,
+    singleton( opPair("!!") )
+  ],
+  [
+    Left,
+    singleton( opPair("&&") )
+  ],
+  [
+    Left,
+    {
+      opPair("<"),
+      opPair("<="),
+      opPair(">"),
+      opPair(">="),
+      opPair("=="),
+      opPair("!=")
+    }
+  ],
+  [
+    Left,
+    {
+      opPair("+"),
+      opPair("-")
+    }
+  ],
+  [
+    Left,
+    {
+      opPair("*"),
+      opPair("/"),
+      opPair("%")
+    }
+  ]
+};
+
 -- A parser of "something" in brackets; l, r are left and right
 -- brackets as parsers, p --- a parser of "something"
 fun inbr (l, p, r) {
   l |> lift (p |> bypass (r))
 }
 
+fun sInbr (l, p, r) {
+  inbr (s (l), p, s (r))
+}
+
+
 -- Primary expression
 local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
-                            lident  @ fun (x) {Var (x)} |
-                            inbr (s ("("), exp, s (")"))),
-      exp = memo $ eta (failure ("expression parsing not implemented\n"));
+                            lident @ fun(x) {Var (x)} |
+                            sInbr ("(", exp, ")"));
 
-local stmt = memo $ eta (failure ("statement parsing not implemented\n"));
-   
+
+local exp = memo $ eta ( expr(operations, primary)(id) );
+
+local elParse = memo $ eta (
+    empty @ lift (Skip) 
+  | ( s ("else") |> lift (parse)) @ fun(stmt) { stmt }
+  | ( s ("elif") |> lift (exp)) |> fun(localCond) { 
+      (s ("then") |> lift(parse)) |> fun(localStmt) {
+        elParse @ fun(rest) { If(localCond, localStmt, rest) }
+      }
+    }
+);
+
+local stmt = memo $ eta ( 
+    s("skip") @ lift(Skip) 
+  | (s("read")  |> lift(sInbr("(", lident, ")"))) @ fun(z) {Read(z)}
+  | (s("write") |> lift(primary)) @ fun(x) {Write(x)}
+  | (lident  |> fun(var) {(s(":=") |> lift(exp)) @ fun(val) {Assn(var, val)}})
+  | (s("while") |> lift(exp |> bypass( s ("do")))) |> fun(e) {
+      (parse |> bypass (s ("od"))) @ fun(body) { While(e, body) } 
+    }
+  | (s("if") |> lift(exp)) |> fun(cond) { 
+      (s ("then") |> lift (parse)) |> fun(fbody) {
+        (elParse |> bypass( s ("fi"))) @ fun(rest) { If (cond, fbody, rest) }
+      }
+    }
+  | (s("repeat") |> lift (parse)) |> fun(stmt) {
+      (s("until") |> lift (exp)) @ fun(e) { Repeat(stmt, e) }
+    }
+  | (s("for") |> lift (parse)) |> fun(s1) {
+      (s(",") |> lift (exp)) |> fun(cond) {
+        (s(",") |> lift (parse)) |> fun(s2) {
+          (s("do") |> lift (parse |> bypass (s ("od")))) @ fun(s3) {
+            Seq(s1, While(cond, Seq(s3, s2)))
+          }
+        }
+      }
+    }
+    -- ( parse |> bypass (s ("else"))) |> fun(firstBody) {
+    --     ( parse |> bypass ( s ("fi"))) @ fun(secondBody) { If(cond, firstBody, secondBody) }
+    --   }
+    -- }
+);
+
+local inParse = memo $ eta (
+    empty @ lift(None)
+  | ( s(";") |> lift(stmt) ) |> fun(z) { inParse @ fun(rest) {
+     case rest of 
+       None -> Some(z)
+     | Some(v) -> Some(Seq(z, v))
+     esac
+  }}
+);
 
 -- Public top-level parser
-public parse = stmt;
+public parse = memo $ eta (
+  stmt |> fun(first) { inParse @ fun(rest) {case rest of 
+      None -> first
+    | Some(v) -> Seq(first, v)
+    esac
+  }}
+);

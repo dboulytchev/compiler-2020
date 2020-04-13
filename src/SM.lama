@@ -54,8 +54,39 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval (env, c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval ([stack, state, world], insns) {
+  case insns of 
+    CONST(z):tail -> eval([z:stack, state, world], tail)
+  | READ:tail -> 
+      case readWorld(world) of 
+        [item, newWorld] -> eval([item:stack, state, newWorld], tail)
+      esac
+  | WRITE:tail -> 
+      eval(
+        case stack of 
+          stackHead:rest -> [rest, state, writeWorld(stackHead, world)]
+        esac
+      , tail
+      )
+  | LD(varName):tail -> eval([state(varName):stack, state, world], tail)
+  | ST(varName):tail -> 
+      eval(
+        case stack of 
+          stackHead:rest -> [rest, state <- [varName, stackHead], world]
+        esac
+      , tail
+      )
+  | BINOP(op):tail -> 
+      eval(
+        case stack of 
+          first:rest -> case rest of 
+            second: rrest -> [callBinop(op, second, first):rrest, state, world]
+          esac
+        esac
+      , tail
+      )
+  | _ -> [stack, state, world]
+  esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -97,12 +128,21 @@ fun genLabels (env, n) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+    case expr of 
+      Var(x) -> singleton(LD(x))
+      | Const(n) -> singleton(CONST(n))
+      | Binop(op, l, r) -> {compileExpr(l), compileExpr(r), BINOP(op)}
+    esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+   case stmt of 
+    Assn(varName, expr) -> {compileExpr(expr), ST(varName)}
+  | Read(varName) -> {READ, ST(varName)}
+  | Write(expr) -> {compileExpr(expr), WRITE}
+  | Seq(s1, s2) -> {compileSM(s1), compileSM(s2)}
+  esac
 }
