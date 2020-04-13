@@ -6,7 +6,7 @@ import State;
 public fun stringToOpr(oprStr) {
   case oprStr of
     "+"  -> infix +
-  | "-"  -> infix -
+  | "-"  -> infix - 
   | "*"  -> infix *
   | "/"  -> infix /
   | "%"  -> infix %

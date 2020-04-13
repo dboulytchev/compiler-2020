@@ -326,7 +326,7 @@ fun isComparison(opr) {
 }
 
 fun compileBinop(opr, s, d) {
-  if   opr.isSimpleArith then
+  if   opr.isSimpleArith then 
     binop(opr, s, d)
   elif opr.isLogical then
     {setZero(eax), Binop("cmp", s, eax), Set(suffix("!="), "%al"), -- %al := s != 0
@@ -338,10 +338,10 @@ fun compileBinop(opr, s, d) {
      setZero(edx) : binop("cmp", s, d) +++ {Set(suffix(opr), "%dl"), Mov(edx, d)}
   else
     case opr of
-      "*" -> if   d.isRegOpnd
-             then singleton(Binop("*", s, d))
-             else {Mov(d, eax), Binop("*", s, eax), Mov(eax, d)}
-             fi
+      "*" -> if   d.isRegOpnd 
+             then singleton(Binop("*", s, d)) 
+             else {Mov(d, eax), Binop("*", s, eax), Mov(eax, d)} 
+             fi 
     | "/" -> {Mov(d, eax), Cltd, IDiv(s), Mov(eax, d)}
     | "%" -> {Mov(d, eax), Cltd, IDiv(s), Mov(edx, d)}
     | _ -> failure("Unknown operator: %s\n", opr)
@@ -364,10 +364,10 @@ fun compile (env, code) {
           case env.pop of
             [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
           esac
-      | CONST(n) ->
-          case env.allocate of
-            [s, env] -> [env, code : singleton(Mov(L(n), s))]
-          esac
+      | CONST(n) -> 
+        case env.allocate of
+          [s, env] -> [env, code : singleton(Mov(L(n), s))]
+        esac
       | LD(var) ->
           case env.addGlobal(var).allocate of
             [s, env] -> [env, code : move(env.loc(var), s)]
@@ -380,11 +380,11 @@ fun compile (env, code) {
           case env.pop2 of
             [s, d, env] -> [env.push(d), code : compileBinop(opr, s, d)]
           esac
-          esac
       esac
     }, [env, {}], code)
   }
-  compile (env, code)
+
+  compile (env, code) 
 }
 
 

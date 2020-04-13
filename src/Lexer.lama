@@ -26,7 +26,8 @@ local keywords =
            "until"});
 
 -- Regular expression definitions
-public rWhiteSpace  = createRegexp ("\\(\\([ \n\r\t]*\\)\\|\\(--[^\n]*[ \n\r\t]*\\)\\)*", "whitespace"),
+public 
+      rWhiteSpace  = createRegexp ("\\(\\([ \n\r\t]*\\)\\|\\(--[^\n]*[ \n\r\t]*\\)\\)*", "whitespace"),
       rDecimal     = createRegexp ("-?[0-9]+", "decimal constant"),
       rLident      = createRegexp ("[a-z][a-z_A-Z0-9]*", "lowercase identifier"),
       rRead        = createRegexp ("read\\b", """read"""),
@@ -51,7 +52,8 @@ local whiteSpace = token (rWhiteSpace);
 public fun s (t) {memo $ whiteSpace |> lift (token (t))}
 
 -- Some individual tokens
-public kRead    = s ("read"),
+public 
+       kRead    = s ("read"),
        kWrite   = s ("write"),
        kSkip    = s ("skip"),
        kIf      = s ("if"),
@@ -65,9 +67,23 @@ public kRead    = s ("read"),
        kRepeat  = s ("repeat"),
        kUntil   = s ("until"),
        kFor     = s ("for"),
+      --  kRead    = s (rRead),
+      --  kWrite   = s (rWrite),
+      --  kSkip    = s (rSkip),
+      --  kIf      = s (rIf),
+      --  kThen    = s (rThen),
+      --  kElse    = s (rElse),
+      --  kElif    = s (rElif),
+      --  kFi      = s (rFi),
+      --  kWhile   = s (rWhile),
+      --  kDo      = s (rDo),
+      --  kOd      = s (rOd),
+      --  kRepeat  = s (rRepeat),
+      --  kUntil   = s (rUntil),
+      --  kFor     = s (rFor),
        decimal  = s (rDecimal),
        end      = memo $ whiteSpace |> lift (eof),
-       lident   = memo $
+       lident   = memo $       
          whiteSpace |> lift (fun (k) {
                                 fun (s) {
                                   k (case s.matchRegexp (rLident) of
