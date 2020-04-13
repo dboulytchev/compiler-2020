@@ -15,6 +15,9 @@ import World;
 --        Skip                      |
 --        Read   (string)           |
 --        Write  (expr)             |
+--        if     (expr, stmt, stmt) |
+--        While  (expr, stmt)       |
+--        Repeat (stmt, expr)
 fun eval (c@[s, w], stmt) {
   case stmt of
     Skip -> c
@@ -25,7 +28,7 @@ fun eval (c@[s, w], stmt) {
     | Write(e) -> [s, writeWorld(evalExpr(s, e), w)]
     | Seq(s1, s2) -> eval(eval(c, s1), s2)
   esac
-}
+
 
 -- Evaluates a program with a given input and returns an output
 public fun evalStmt (input, stmt) {

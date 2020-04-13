@@ -7,9 +7,9 @@ import Fun;
 import Matcher;
 
 -- A parser of "something" in brackets; l, r are left and right
--- brackets as strings, p --- a parser of "something"
+-- brackets as parsers, p --- a parser of "something"
 fun inbr (l, p, r) {
-  s (l) |> lift (p |> bypass (s (r)))
+  l |> lift (p |> bypass (r))
 }
 
 fun binop (o) {
@@ -35,10 +35,10 @@ local st = memo $ eta (kSkip @ lift(Skip) |
                        kWrite |> lift(exp @ fun (x) {Write(x)}) |
                        lident |> fun(x) {s(":=") |> lift(exp @ fun (e) {Assn(x, e)})});
 
+
 local stmt = memo $ eta (st |
                          st |> fun (s1) {s(";") |> lift(stmt @ fun (s2) {Seq(s1, s2)})});
    
 
 -- Public top-level parser
 public parse = stmt;
-             
