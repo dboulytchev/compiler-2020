@@ -3,6 +3,27 @@
 import List;
 import State;
 
+local ops = {
+  ["+", infix +],
+  ["-", infix -],
+  ["*", infix *],
+  ["/", infix /],
+  ["%", infix %],
+  ["==", infix ==],
+  ["!=", infix !=],
+  ["<", infix <],
+  ["<=", infix <=],
+  [">", infix >],
+  [">=", infix >=],
+  ["&&", infix &&],
+  ["!!", infix !!]
+};
+
+public fun evalBinop(op, left, right){
+  case assoc (ops, op) of
+    Some (f) -> f(left, right)
+  esac
+}
 
 -- The evaluator itself: takes a state and an expression,
 -- returns integer value
@@ -14,5 +35,9 @@ import State;
 --        Binop (string, expr, expr)
 
 public fun evalExpr (st, expr) {
-  failure ("evalExpr not implemented\n")
+  case expr of
+   Const (x) -> x
+   | Var (x) -> st (x)
+   | Binop (o, l, r) -> evalBinop (o, evalExpr (st, l), evalExpr (st, r) )
+  esac
 }

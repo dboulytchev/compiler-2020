@@ -43,7 +43,7 @@ public rWhiteSpace  = createRegexp ("\\(\\([ \n\r\t]*\\)\\|\\(--[^\n]*[ \n\r\t]*
       rRepeat      = createRegexp ("repeat\\b", """repeat"""),
       rUntil       = createRegexp ("until\\b", """until"""),
       rFor         = createRegexp ("for\\b", """for""");
-      
+
 local whiteSpace = token (rWhiteSpace);
 
 -- Public parsers for concrete tokens
@@ -54,20 +54,20 @@ public fun s (t) {memo $ whiteSpace |> lift (token (t))}
 public kRead    = s (rRead),
        kWrite   = s (rWrite),
        kSkip    = s (rSkip),
-       kIf      = s (rIf),
-       kThen    = s (rThen),
-       kElse    = s (rElse),
-       kElif    = s (rElif),
-       kFi      = s (rFi),
-       kWhile   = s (rWhile),
-       kDo      = s (rDo),
-       kOd      = s (rOd),
-       kRepeat  = s (rRepeat),
-       kUntil   = s (rUntil),
-       kFor     = s (rFor),
+       kIf      = s ("if"),
+       kThen    = s ("then"),
+       kElse    = s ("else"),
+       kElif    = s ("elif"),
+       kFi      = s ("fi"),
+       kWhile   = s ("while"),
+       kDo      = s ("do"),
+       kOd      = s ("od"),
+       kRepeat  = s ("repeat"),
+       kUntil   = s ("until"),
+       kFor     = s ("for"),
        decimal  = s (rDecimal),
        end      = memo $ whiteSpace |> lift (eof),
-       lident   = memo $       
+       lident   = memo $
          whiteSpace |> lift (fun (k) {
                                 fun (s) {
                                   k (case s.matchRegexp (rLident) of
@@ -79,4 +79,3 @@ public kRead    = s (rRead),
                                      esac)
                                 }
                               });
-
