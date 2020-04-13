@@ -25,11 +25,28 @@ public fun showSM (prg) {
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval ([stack, state, world], insns) {
+  case insns of
+    CONST(value):next -> eval([value:stack, state, world], next)
+  | READ:next         -> case readWorld(world) of
+                           [value, world2] -> eval([value:stack, state, world2], next)
+                         esac
+  | ST(name):next     -> case stack of
+                           head:tail -> eval([tail, state <- [name, head], world], next)
+                         esac
+  | LD(name):next     -> eval([state(name):stack, state, world], next)
+  | BINOP(op):next    -> case stack of
+                           right:left:tail -> eval([evalBinary(op, left, right):tail, state, world], next)
+                         esac
+  | WRITE:next        -> case stack of
+                            head:tail -> eval([tail, state, writeWorld(head, world)], next)
+                         esac
+  | _ -> [stack, state, world]
+  esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
+
 public fun evalSM (input, insns) {
   eval ([{}, emptyState, createWorld (input)], insns)[2].getOutput
 }
@@ -37,13 +54,27 @@ public fun evalSM (input, insns) {
 -- Compiles an expression into a stack machine code.
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
+
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+    Const(value) -> singleton(CONST(value))
+  | Var(name) -> singleton(LD(name))
+  | Binop(op, left, right) -> {compileExpr(left), compileExpr(right), singleton(BINOP(op))}
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  fun compileSM (stmt) {
+    case stmt of
+      Read(value) -> {READ, ST(value) }
+    | Write(expr) -> {compileExpr(expr), singleton(WRITE)}
+    | Seq(stmt1, stmt2) -> {compileSM(stmt1), compileSM(stmt2)}
+    | Assn(name, value) -> {compileExpr(value), singleton(ST(name))}
+    esac
+  }
+
+  deepFlatten(compileSM(stmt))
 }

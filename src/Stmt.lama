@@ -20,10 +20,24 @@ import World;
 --        Repeat (stmt, expr)
 
 fun eval (c, stmt) {
-  failure ("Stmt eval not implemented\n")
+  case stmt of
+      Seq(stmt1, stmt2) -> eval(eval([state, world], stmt1), stmt2)
+    | Read(name) -> case readWorld(world) of
+        [value, world2] -> [state <- [name, value], world2]
+      esac
+    | Write(expr) -> [state, writeWorld(evalExpr(state, expr), world)]
+    | Assn(name, value) -> [state <- [name, evalExpr(state, value)], world]
+    | While(cond, body) -> if evalExpr(state, cond) != 0 then eval(eval([state, world], body), stmt)  else [state, world] fi
+    | Repeat (body, cond) -> case eval([state, world], body) of
+          [state1, world1] -> if evalExpr(state1, cond) != 0 then [state1, world1] else eval([state1, world1], stmt) fi
+      esac
+    | If(cond, onTrue, onFalse) -> eval([state, world], if evalExpr(state, cond) != 0 then onTrue else onFalse fi)
+    | Skip -> [state, world]
+  esac
 }
 
 -- Evaluates a program with a given input and returns an output
+
 public fun evalStmt (input, stmt) {
   eval ([emptyState, createWorld (input)], stmt).snd.getOutput
 }
