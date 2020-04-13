@@ -27,8 +27,13 @@ fun eval (c@[s, w], stmt) {
       esac
     | Write(e) -> [s, writeWorld(evalExpr(s, e), w)]
     | Seq(s1, s2) -> eval(eval(c, s1), s2)
+    | If(e, s1, s2) -> if evalExpr(s, e) != 0 then eval(c, s1) else eval(c, s2) fi
+    | While(e, s1) -> if evalExpr(s, e) != 0 then eval(eval(c, s1), stmt) else c fi
+    | Repeat(s1, e) -> case eval(c, s1) of
+        nc@[ns, nw] -> if evalExpr(ns, e) != 0 then nc else eval(nc, stmt) fi
+      esac
   esac
-
+}
 
 -- Evaluates a program with a given input and returns an output
 public fun evalStmt (input, stmt) {
