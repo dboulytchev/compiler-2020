@@ -12,14 +12,136 @@ fun inbr (l, p, r) {
   l |> lift (p |> bypass (r))
 }
 
--- Primary expression
-local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
-                            lident  @ fun (x) {Var (x)} |
-                            inbr (s ("("), exp, s (")"))),
-      exp = memo $ eta (failure ("expression parsing not implemented\n"));
+fun binop(oprStr) {
+  [s(oprStr), fun(l, r) { Binop(oprStr, l, r) }]
+}
 
-local stmt = memo $ eta (failure ("statement parsing not implemented\n"));
-   
+infixr >> after | (a, b) { seq(a, lift(b)) }
+
+fun return_ (v) {
+  empty @ lift(v)
+}
+
+local oprs =
+  { [Left, singleton(binop("!!"))]
+  , [Left, singleton(binop("&&"))]
+  , [Nona, {binop("=="), binop("!="), binop("<="), binop("<"), binop(">="), binop(">")}]
+  , [Left, {binop("+"), binop("-")}]
+  , [Left, {binop("*"), binop("/"), binop("%")}]
+  };
+
+-- Primary expression
+local primary = memo $ eta (decimal @ fun (x) { Const (stringInt (x)) } 
+                          | lident  @ fun (x) { Var (x) } 
+                          | inbr (s("("), exp, s(")"))),
+      exp = memo $ eta (expr(oprs, primary)(id));
+
+local
+      (* WRITE(exp) *)
+  write = memo $ eta (
+    kWrite >>
+    inbr(s("("), exp, s(")")) |> fun(e) { 
+    empty @ lift(Write(e)) }
+  ),
+
+      (* READ(lident) *)
+  read = memo $ eta (
+    kRead >>
+    inbr(s("("), lident, s(")")) |> fun(var) { 
+    empty @ lift(Read(var)) }
+  ),
+
+      (* SKIP *)
+  skip_ = memo $ eta (
+    kSkip @ lift(Skip)
+  ),
+
+      (* LIDENT := exp *)
+  assignment = memo $ eta (
+    lident  |> fun(var) {
+    s(":=") >>
+    exp     |> fun(e) {
+    empty @ lift(Assn(var, e)) }}
+  ),
+
+      (* IF    exp THEN stmt
+         {ELIF exp THEN stmt}
+         [ELSE stmt]
+         FI                  *)
+  if_ = memo $ eta (
+    kIf   >>
+    exp   |> fun(cond) { 
+    kThen >>
+    stmt  |> fun(s1) {
+    rep0(
+      kElif >>
+      exp   |> fun(e) {
+      kThen >>
+      stmt  |> fun(s) {
+      empty @ lift([e, s]) }}
+    )     |> fun(elifs) {
+    opt(kElse >> stmt) |> fun (else_) {
+    kFi   >>
+    empty @ lift(
+      If(cond, s1,
+        foldr(
+          fun (acc, [e, s]) { If(e, s, acc) }, 
+          case else_ of Some(s) -> s | None -> Skip esac,
+          elifs
+      ))
+    ) }}}}
+  ),
+
+      (* WHILE exp DO stmt OD *)
+  while_ = memo $ eta (
+    kWhile >>
+    exp    |> fun(cond) {
+    kDo    >>
+    stmt   |> fun(s) {
+    kOd    >>
+    empty @ lift(While(cond, s)) }}
+  ),
+
+      (* REPEAT stmt UNTIL exp *)
+  repeat_ = memo $ eta (
+    kRepeat >>
+    stmt    |> fun(s) {
+    kUntil  >>
+    exp     |> fun(cond) {
+    empty @ lift(Repeat(s, cond)) }}
+  ),
+
+      (* FOR exp COMMA exp COMMA exp DO stmt OD *)
+  for_ = memo $ eta (
+    kFor   >>
+    stmt   |> fun(init) {
+    s(",") >>
+    exp    |> fun(cond) {
+    s(",") >>
+    stmt   |> fun(iter) {
+    kDo    >>
+    stmt   |> fun(body) {
+    kOd    >>
+    empty @ lift(Seq(init, While(cond, Seq(body, iter)))) }}}}
+  ),
+
+  stmtItem = memo $ eta (
+      if_
+    | skip_
+    | read
+    | assignment
+    | write
+    | while_
+    | repeat_
+    | for_
+  ),
+
+      (* stmtItem {; stmtItem} *)
+  stmt = memo $ eta (
+    listBy(stmtItem, s(";")) @ fun(l) { 
+      foldr(fun (acc, item) { Seq(item, acc) }, Skip, l) 
+    }
+  );
 
 -- Public top-level parser
 public parse = stmt;
