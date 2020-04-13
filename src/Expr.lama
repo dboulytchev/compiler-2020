@@ -38,5 +38,4 @@ public fun evalBinop(operation, left, right) {
         | "!!"   ->  left !! right
         | "&&"   ->  left && right
     esac
-  }
 }
