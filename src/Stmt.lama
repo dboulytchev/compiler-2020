@@ -21,13 +21,28 @@ import World;
 
 fun eval (c @ [s, w], stmt) {
   case stmt of
-      Read(x)     -> case readWorld(w) of
-                       [val, neww] -> [s <- [x, val], neww]
-                     esac
-    | Write(e)    -> [s, writeWorld(evalExpr(s, e), w)]
-    | Assn(x, e)  -> [s <- [x, evalExpr(s, e)], w]
-    | Seq(s1, s2) -> c.eval(s1).eval(s2)
-    | Skip        -> c
+      Read(x)     ->  case readWorld(w) of
+                        [val, neww] -> [s <- [x, val], neww]
+                      esac
+    | Write(e)    ->  [s, writeWorld(evalExpr(s, e), w)]
+    | Assn(x, e)  ->  [s <- [x, evalExpr(s, e)], w]
+    | Seq(s1, s2) ->  c.eval(s1).eval(s2)
+    | Skip        ->  c
+    | If(i, t, f) ->  if evalExpr(s, i)
+                        then c.eval(t)
+                        else c.eval(f)
+                      fi
+    | While(i, x) ->  if evalExpr(s, i)
+                        then c.eval(x).eval(stmt)
+                        else c
+                      fi
+    | Repeat(x, i)->  case c.eval(x) of
+                        c2 @ [s2, w2] -> if evalExpr(s2, i)
+                          then c2
+                          else c2.eval(stmt)
+                        fi
+                      esac
+    | _ -> failure("Unknown statement %s\n", stmt.string)
   esac
 }
 

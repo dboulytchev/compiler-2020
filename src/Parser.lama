@@ -12,6 +12,12 @@ fun inbr (l, p, r) {
   l |> lift (p |> bypass (r))
 }
 
+fun makeFoldr1(mut) {
+  fun (h:t) {
+    foldl(mut, h, t)
+  }
+}
+
 fun brac (p) {
   inbr (s ("("), p, s(")"))
 }
@@ -28,24 +34,73 @@ local ops = {
   [Left, map(mkBinEntry, {"*", "/", "%"})]
 };
 
--- seq combinator that accepts parser A and parser B as parsers
-infixr |=> after  |  (a, b) {seq (a, lift(b))}
+-- seq combinator that parses as A seq B and gives result of B
+infix |=> at |> (a, b) {seq(a, lift(b))}
+infixr >> after | (a, b) { seq(a, lift(b)) }
+-- seq combinator that parses as A seq B and gives result of A
+infix |>> at |> (a, b) {seq(a, bypass(b))}
+
+local bp = bypass;
+
+fun dump(x) {
+  printf("--%s\n", x.string); x
+}
+
+fun curryIf(c, t) {
+  fun (f) { If(c, t, f) }
+}
+
+local parseIf = memo $ eta (
+  kIf |=> exp |> fun(c) { 
+    kThen |=> stmt |> fun(t) {
+    rep0(
+      kElif |=> exp |> fun(e) { 
+        kThen |=> stmt  |> fun(s) { 
+          empty @ lift([e, s])
+      }}
+    ) |> fun(elifs) {
+    opt(kElse |=> stmt) |> fun (else_) {
+    kFi @ lift(
+      If(c, t,
+        foldr(
+          fun (acc, [e, s]) { If(e, s, acc) }, 
+          case else_ of
+              Some(s) -> s
+            | None -> Skip
+          esac, elifs)
+      )
+    ) }}}}
+);
+
+local parseFor = memo $ eta(
+  kFor |=> stmt |> fun (stmt1) {
+    s(",") |=> exp |> fun (expr) {
+      s(",") |=> stmt |> fun (stmt2) {
+        kDo |=> stmt |> fun (stmt3) {
+          kOd @ lift (Seq (stmt1, While (expr, Seq (stmt3, stmt2))))
+        }
+      }
+    }
+});
 
 -- Primary expression
 local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
-                            lident  @ fun (x) {Var (x)} |
-                            brac (exp));
+                    lident  @ fun (x) {Var (x)} |
+                    brac (exp));
 
 local exp = memo $ eta (expr (ops, primary)(id));
 
-local st = memo $ eta (kSkip @ lift (Skip) |
-                       kRead |=>  primary @ fun (Var (x)) { Read (x) } |
+local st = memo $ eta (kSkip @ lift(Skip) |
+                       kRead |=>  brac(lident) @ fun (x) { Read (x) } |
                        kWrite |=> exp @ fun (x) { Write (x) } |
-                       lident |> fun (x) { s(":=") |=> exp @ fun (e) { Assn (x, e) } });
+                       lident |> fun (x) { s(":=") |=> exp @ fun (e) { Assn (x, e) } } |
+                       kWhile |=> exp |> fun (c) {inbr(kDo, stmt, kOd) @ fun (s) { While(c, s) } } |
+                       inbr(kRepeat, stmt, kUntil) |> fun (s) {exp @ fun (c) { Repeat (s, c) } } |
+                       parseIf |
+                       parseFor
+);
 
-local stmt = memo $ eta (st |
-                         st |> fun (s1) { s(";") |=> stmt @ fun (s2) { Seq (s1, s2) } });
-   
+local stmt = listBy(st, s(";")) @ makeFoldr1(fun(a, b) { Seq(a, b) });
 
 -- Public top-level parser
 public parse = stmt;
