@@ -179,6 +179,5 @@ public fun compileSM (stmt) {
       esac
     }
 
-    deepFlatten(compile(stmt, initCompEnv())[0])
-  stmt.compile.deepFlatten
+  deepFlatten(compile(stmt, initCompEnv())[0])
 }
