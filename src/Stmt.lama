@@ -37,6 +37,26 @@ fun eval ([s, w], stmt) {
 			
 		| Seq (s1, s2) -> 
 			eval (eval ([s, w], s1), s2)
+
+    | While (e, body) -> 
+      case evalExpr (s, e) of
+        0 -> [s, w]
+        | _ -> eval ([s, w], Seq (body, stmt))
+      esac
+
+    | If (e, sIf, sElse) ->
+      case evalExpr (s, e) of
+        0 -> eval ([s, w], sElse)
+        | _ -> eval ([s, w], sIf)
+      esac
+
+    | Repeat (body, e) ->
+      case eval ([s, w], body) of [ns, nw] ->
+        case evalExpr (ns, e) of
+          0 -> eval ([ns, nw], stmt)
+          | _ -> [ns, nw]
+        esac
+      esac
 			
 		| Skip -> [s, w]
 	esac

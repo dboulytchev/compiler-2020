@@ -4,14 +4,13 @@ import Ostap;
 import Lexer;
 import List;
 import Fun;
-import Matcher;
 
 import Matcher;
 
 -- A parser of "something" in brackets; l, r are left and right
 -- brackets as parsers, p --- a parser of "something"
 fun inbr (l, p, r) {
-  l |> lift (p |> bypass (r))
+  s (l) |> lift (p |> bypass (s (r)))
 }
 
 fun binop(op) { 
@@ -37,6 +36,22 @@ local primary = memo $ eta (
 
 local exp = memo $ eta (expr (operators, primary) (id));
 
+local ifStatementEnding = memo $ eta (
+  kFi @ lift (Skip)
+  | 
+  kElse |> lift (stmt |> fun (sElse) {
+    kFi @ lift (sElse) 
+  })
+  |
+  kElif |> lift (exp |> fun (e) {
+    kThen |> lift (stmt |> fun (s) {
+      ifStatementEnding @ fun (sElif) {
+        If (e, s, sElif) 
+      } 
+    }) 
+  }) 
+);
+
 local statement = memo $ eta (
   kSkip @ lift (Skip) 
   |
@@ -45,12 +60,39 @@ local statement = memo $ eta (
   kWrite |> lift (exp @ fun (x) { Write (x) }) 
   |
   lident |> fun (x) { s(":=") |> lift (exp @ fun (e) { Assn (x, e) }) }
+  |  
+  kWhile |> lift (exp |> fun (e) {
+    kDo |> lift (stmt |> fun (st) { 
+      kOd @ lift (While (e, st)) 
+    }) 
+  })
+  | 
+  kRepeat |> lift (stmt |> fun (st) {
+    kUntil |> lift (exp @ fun (e) { Repeat (st, e) }) 
+  })
+  | kFor |> lift (stmt |> fun (sInit) {
+    s (",") |> lift (exp |> fun (eExit) {
+      s (",") |> lift (stmt |> fun (sInc) {
+        kDo |> lift (stmt |> fun (sBody) {
+          kOd @ lift (Seq (sInit, While (eExit, Seq (sBody, sInc))))
+        }) 
+      }) 
+    }) 
+  })
+  | 
+  kIf |> lift (exp |> fun(e) {
+    kThen |> lift (stmt |> fun (st) {
+      ifStatementEnding @ fun (sElse) {
+        If (e, st, sElse) 
+      } 
+    }) 
+  }) 
 );
 
 local stmt = memo $ eta (
   statement 
   |
-  statement |> fun (s1) { s(";") |> lift (stmt @ fun (s2) { Seq (s1, s2) }) }
+  statement |> fun (s1) { s (";") |> lift (stmt @ fun (s2) { Seq (s1, s2) }) }
 );
    
 
