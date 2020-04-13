@@ -377,6 +377,11 @@ fun compile (env, code) {
                   ]
                 esac
             esac
+        | LABEL(val)     -> [env, code : {Label(val)}]
+        | JMP(val)       -> [env, code : {Jmp(val)}]
+        | CJMP(c, val)   -> case env.pop of
+                              [s, env]   -> [env, code : {Binop("cmp", L(0), s), CJmp(c, val)}]
+                            esac
         esac
       }, [env, {}], code)
   }
