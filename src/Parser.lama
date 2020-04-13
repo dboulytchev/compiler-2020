@@ -89,6 +89,18 @@ local stmt = memo $ eta (
         (elParse |> bypass( s ("fi"))) @ fun(rest) { If (cond, fbody, rest) }
       }
     }
+  | (s("repeat") |> lift (parse)) |> fun(stmt) {
+      (s("until") |> lift (exp)) @ fun(e) { Repeat(stmt, e) }
+    }
+  | (s("for") |> lift (parse)) |> fun(s1) {
+      (s(",") |> lift (exp)) |> fun(cond) {
+        (s(",") |> lift (parse)) |> fun(s2) {
+          (s("do") |> lift (parse |> bypass (s ("od")))) @ fun(s3) {
+            Seq(s1, While(cond, Seq(s3, s2)))
+          }
+        }
+      }
+    }
     -- ( parse |> bypass (s ("else"))) |> fun(firstBody) {
     --     ( parse |> bypass ( s ("fi"))) @ fun(secondBody) { If(cond, firstBody, secondBody) }
     --   }

@@ -34,6 +34,14 @@ fun eval (conf@[state, world], stmt) {
                            then conf 
                            else eval(eval(conf, statement), While(e, statement))
                            fi
+  | Repeat(statement, e) -> case eval(conf, statement) of 
+                              newConf@[nState, nWorld] -> {
+                                if (evalExpr(nState, e) == 0) 
+                                then eval(newConf, Repeat(statement, e)) 
+                                else newConf
+                                fi
+                              }
+                            esac
   esac
 }
 
