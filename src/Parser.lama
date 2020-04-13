@@ -53,19 +53,26 @@ fun inbr (l, p, r) {
   l |> lift (p |> bypass (r))
 }
 
+fun sInbr (l, p, r) {
+  inbr (s (l), p, s (r))
+}
+
 
 -- Primary expression
 local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
                             lident @ fun(x) {Var (x)} |
-                            inbr ("(", exp, ")"));
+                            sInbr ("(", exp, ")"));
 
 
 local exp = memo $ eta ( expr(operations, primary)(id) );
 
 local stmt = memo $ eta ( 
-  (s("read")  |> lift(inbr("(", lident, ")"))) @ fun(z) {Read(z)} |
-  (s("write") |> lift(primary)) @ fun(x) {Write(x)}         |  
-  (lident  |> fun(var) {(s(":=") |> lift(exp)) @ fun(val) {Assn(var, val)}})
+    (s("read")  |> lift(sInbr("(", lident, ")"))) @ fun(z) {Read(z)}
+  | (s("write") |> lift(primary)) @ fun(x) {Write(x)}
+  | (lident  |> fun(var) {(s(":=") |> lift(exp)) @ fun(val) {Assn(var, val)}})
+  | (s("while") |> lift(exp |> bypass( s ("do")))) |> fun(e) {
+      (parse |> bypass (s ("od"))) @ fun(body) { While(e, body) } 
+    }
 );
 
 local inParse = memo $ eta (

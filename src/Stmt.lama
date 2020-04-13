@@ -19,7 +19,7 @@ import World;
 --        While  (expr, stmt)       |
 --        Repeat (stmt, expr)
 
-fun eval ([state, world], stmt) {
+fun eval (conf@[state, world], stmt) {
   case stmt of 
     Assn(varName, expr) -> [state <- [varName, evalExpr(state, expr)], world]
   | Read(varName) -> {
@@ -28,6 +28,10 @@ fun eval ([state, world], stmt) {
     }
   | Write(expr) -> [state, writeWorld(evalExpr(state, expr), world)]
   | Seq(s1, s2) -> eval(eval([state, world], s1), s2)
+  | While(e, statement) -> if (evalExpr(state, e) == 0) 
+                           then conf 
+                           else eval(eval(conf, statement), While(e, statement))
+                           fi
   esac
 }
 
