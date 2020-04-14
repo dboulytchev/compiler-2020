@@ -272,87 +272,93 @@ fun suffix (op) {
   esac
 }
 
+fun arithmeticBinop (op, st1, st2) {
+  {Mov (st2, eax), Binop (op, st1, eax), Mov (eax, st2)}
+}
+
+fun divisionBinop (op, st1, st2) {
+  {Mov (st2, eax), Cltd, IDiv (st1), Mov (case op of "/" -> eax | "%" -> edx esac, st2)}
+}
+
+fun compareBinop (op, st1, st2) {
+  {
+    Mov (st2, eax),
+    Binop ("^", edx, edx),
+    Binop ("cmp", st1, eax),
+    Set (suffix(op), "%dl"),
+    Mov(edx, st2)
+  }
+}
+
+fun logicalBinop (op, st1, st2) {
+  {
+    Binop ("^", eax, eax),
+    Binop ("^", edx, edx),
+    Binop ("cmp", st1, eax),
+    Set (suffix("!="), "%al"),
+    Binop ("cmp", st2, edx),
+    Set (suffix("!="), "%dl"),
+    Binop (op, eax, edx),
+    Mov (edx, st2)
+  }
+}
+
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
   fun compile (env, code) {
     foldl (
-fun ([env, code], i) {
-
-        fun simpleBinop (op) {
-            case env.pop2 of 
-              [x, y, env] -> case env.allocate of
-                               [s, env] -> [env, code : {Mov (y, eax), Binop (op, x, eax), Mov (eax, s)}]
-                             esac
-            esac
-        }
-
-        fun compareBinop (op) {
-          case env.pop2 of 
-            [x, y, env] -> 
-              case env.allocate of
-                [s, env] -> [env, code : {Mov (y, edx), Binop ("^", eax, eax), Binop ("cmp", x, edx), Set (suffix(op), "%al"), Mov (eax, s)}]
-              esac
-          esac
-        }
-
-        fun logicBinop (op) {
-            case env.pop2 of
-              [x, y, env] -> 
-                case env.allocate of
-                  [s, env] -> [env, code : {
-                        Mov (y, edx), Binop ("^", eax, eax), Binop ("cmp", L (0), edx), Set (suffix("!="), "%al"), Push (eax),
-                        Mov (x, edx), Binop ("^", eax, eax), Binop ("cmp", L (0), edx), Set (suffix("!="), "%al"), Pop (edx),
-                        Binop ("+", edx, eax), move(eax, edx), Binop ("^", eax, eax), Binop ("cmp", L (op), edx),
-                        Set (suffix(">"), "%al"), Mov (eax, s)}]
-                esac
-            esac
-        }
+      fun ([env, scode], i) {
+        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
         case i of
           READ ->
             case env.allocate of
               [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
             esac
+        
         | WRITE ->
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | LD (x)       ->
-            case env.addGlobal(x).allocate of
-              [s, env] -> [env, code : move(env.loc(x), s)]
+        
+        | LD (x) ->
+            case env.addGlobal (x).allocate of
+                [s, env] -> [env, code : move (env.loc(x), s)]
             esac
-        | ST (x) ->
-            case env.addGlobal(x).pop of
-              [s, env] -> [env, code : move(s, env.loc(x))]
-            esac
-        | CONST (x)    ->
+        
+        | CONST (n) ->
             case env.allocate of
-              [s, env] -> [env, code : singleton(Mov(L (x), s))]
+                [s, env] -> [env, code: singleton (Mov (L (n), s))]
             esac
-        | BINOP ("+")  -> simpleBinop("+")
-        | BINOP ("-")  -> simpleBinop("-")
-        | BINOP ("*")  -> simpleBinop("*")
-        | BINOP ("/")  -> 
-            case env.pop2 of 
-              [x, y, env] -> case env.allocate of
-                               [s, env] -> [env, code : {Mov (y, eax), Cltd, IDiv (x), Mov (eax, s)}]
-                             esac
+        
+        | ST (x) ->
+            case env.addGlobal (x).pop of
+                [s, env] -> [env, code: move (s, env.loc(x))]
             esac
-        | BINOP ("%") -> 
-            case env.pop2 of 
-              [x, y, env] -> case env.allocate of
-                               [s, env] -> [env, code : {Mov (y, eax), Cltd, IDiv (x), Mov (edx, s)}]
-                             esac
+        
+        | BINOP (op) ->
+            case env.pop2 of
+              [s1, s2, env] ->
+                case env.push(s2) of
+                  env -> [env, code : case op of
+                            "+"   -> arithmeticBinop(op, s1, s2)
+                          | "-"   -> arithmeticBinop(op, s1, s2)
+                          | "*"   -> arithmeticBinop(op, s1, s2)
+                          | "/"   -> divisionBinop(op, s1, s2)
+                          | "%"   -> divisionBinop(op, s1, s2)
+                          | ">"   -> compareBinop(op, s1, s2)
+                          | ">="  -> compareBinop(op, s1, s2)
+                          | "<"   -> compareBinop(op, s1, s2)
+                          | "<="  -> compareBinop(op, s1, s2)
+                          | "=="  -> compareBinop(op, s1, s2)
+                          | "!="  -> compareBinop(op, s1, s2)
+                          | "&&"  -> logicalBinop(op, s1, s2)
+                          | "!!"  -> logicalBinop(op, s1, s2)
+                          esac]
+                esac
             esac
-        | BINOP ("<")  -> compareBinop("<")
-        | BINOP ("<=") -> compareBinop("<=")
-        | BINOP (">")  -> compareBinop(">")
-        | BINOP (">=") -> compareBinop(">=")
-        | BINOP ("==") -> compareBinop("==")
-        | BINOP ("!=") -> compareBinop("!=")
-        | BINOP ("&&") -> logicBinop(1)
-        | BINOP ("!!") -> logicBinop(0)
-        |      _       -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
+        
+        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
   }

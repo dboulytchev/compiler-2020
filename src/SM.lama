@@ -25,11 +25,11 @@ public fun showSM (prg) {
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
+fun eval (c@[stack, state, world], insns) {
   -- stack, state, world - stack machine configuration
-  local stack = c[0];
-  local state = c[1];
-  local world = c[2];
+  --local stack = c[0];
+  --local state = c[1];
+  --local world = c[2];
   case insns of
     CONST(x):         ins -> eval([x:stack, state, world], ins)
   | BINOP(operation): ins -> case stack of
@@ -64,10 +64,8 @@ public fun evalSM (input, insns) {
 -- of stack machine instructions
 fun compileExpr (expr) {
   case expr of
-    Const(x) -> singleton(CONST(x))
-
+  Const(x) -> singleton(CONST(x))
   | Var(x)   -> singleton(LD(x))
-
   | Binop(operation, left, right) -> {compileExpr(left), compileExpr(right), BINOP(operation)}
   esac
 }
@@ -78,14 +76,10 @@ fun compileExpr (expr) {
 public fun compileSM (stmt) {
     fun innerCompile (stmt) {
         case stmt of
-                Skip -> {}
-
+            Skip -> {}
             |   Assn(x, e) -> {compileExpr(e), ST(x)}
-
             |   Read(x) -> {READ, ST(x)}
-
             |   Write(e) -> {compileExpr(e), WRITE}
-            
             |   Seq(stmt1, stmt2) -> {innerCompile(stmt1), innerCompile(stmt2)}
         esac
     }

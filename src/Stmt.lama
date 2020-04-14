@@ -15,11 +15,13 @@ import World;
 --        Skip                      |
 --        Read   (string)           |
 --        Write  (expr)             |
+--        if     (expr, stmt, stmt) |
+--        While  (expr, stmt)       |
+--        Repeat (stmt, expr)
 
-fun eval (c, stmt) {
-    local state = c[0];
-    local world = c[1];
-
+fun eval (c@[state, world], stmt) {
+    --local state = c[0];
+    --local world = c[1];
     case stmt of
       Assn(str, expr) -> [state <- [str, evalExpr(state, expr)], world]
 
@@ -29,10 +31,19 @@ fun eval (c, stmt) {
       case readWorld(world) of 
         [value, restWorld] -> [state <-[str, value], restWorld]
       esac
-    
+
     | Write (expr) -> [state, writeWorld(evalExpr(state,expr), world)]
 
     | Skip -> [state, world]
+
+    | If (expr, state1, state2)  -> if evalExpr (state, expr) != 0 then eval (c, state1) else eval (c, state2) fi
+
+    | While (expr, st)   -> if evalExpr (state, expr) != 0 then eval (eval (c, st), stmt) else c fi
+
+    | Repeat (st, expr)  -> local ret = eval (c, st);
+
+     if evalExpr (ret[0], expr) == 0 then eval (ret, stmt) else ret fi
+
     esac
 }
 
