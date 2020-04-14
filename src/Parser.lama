@@ -76,10 +76,6 @@ local elsePart = memo $ eta (
     })
 );
 
--- public fun bypass (f) {
---   fun (x) {f @ lift (x)}
--- }
-
 -- Public top-level parser
 public parse = memo $ eta (
     statement |> fun (s1) { s (";") |> lift (parse @ fun (s2) { Seq (s1, s2) }) }
