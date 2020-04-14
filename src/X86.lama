@@ -287,7 +287,7 @@ fun compile (env, code) {
         Binop (op, s1, eax), 
         Mov   (eax, s) }
     }
-
+	
     fun log (s1, s2, s, op) {
       { Binop ("^", eax, eax), 
         Binop ("cmp", s2, eax), 
@@ -360,7 +360,12 @@ fun compile (env, code) {
                      ]
                   esac
             esac
-        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
+        | LABEL (l) -> [env, code : singleton (Label (l))]
+        | JMP (l) -> [env, code : singleton (Jmp (l))]
+        | CJMP (c, l) ->
+            case env.pop of
+              [s, env] -> [env, code : { Binop ("cmp", L (0), s), CJmp (c, l) }]
+            esac
         esac
       }, [env, {}], code)
   }
