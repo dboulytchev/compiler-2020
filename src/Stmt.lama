@@ -19,8 +19,15 @@ import World;
 --        While  (expr, stmt)       |
 --        Repeat (stmt, expr)
 
-fun eval (c, stmt) {
-  failure ("Stmt eval not implemented\n")
+fun eval ([st, w], stmt) {
+  case stmt of
+    Seq (s1, s2) -> eval (eval ([st, w], s1), s2)
+  | Read (var) -> case w.readWorld of
+                    [val, w1] -> [st <- [var, val], w1]
+                  esac
+  | Write (expr) -> [st, writeWorld (evalExpr (st, expr), w)]
+  | Assn (var, expr) -> [st <- [var, evalExpr (st, expr)], w]
+  esac
 }
 
 -- Evaluates a program with a given input and returns an output
