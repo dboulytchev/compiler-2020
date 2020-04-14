@@ -358,6 +358,12 @@ fun compile (env, code) {
             case env.pop2 of
               [src, dest, env] -> [env.push(dest), code : op.compileBinop(src, dest)]
             esac
+        | LABEL (l)    -> [env, code : singleton(Label (l))]
+        | JMP (l)      -> [env, code : singleton(Jmp (l))]
+        | CJMP (c, l) -> 
+            case env.pop of
+              [s, env] -> [env, code : {Binop ("cmp", L (0), s), CJmp(c, l)}]
+            esac
         esac
       }, [env, {}], code)
   }
