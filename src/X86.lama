@@ -4,6 +4,7 @@ import SM;
 import Collection;
 import List;
 import Util;
+import Manifest;
 
 -- Assembler language interface
 -- The registers: 
@@ -39,7 +40,10 @@ local wordSize = 4;
 --   Cltd                       -- see instruction set reference           
 --   Set   (string, string)     -- sets a value from flags; the first operand is the   
 --                                 suffix, which determines the value being set, the
---                                 the second --- (sub)register name 
+--                                 the second --- (sub)register name
+--   Jmp   (string)             -- unconditional jump to a label
+--   CJmp  (string, string)     -- conditional jump to a label
+--   Label (string)             -- a label
 --   Push  (opnd)               -- pushes the operand on the hardware stack
 --   Pop   (opnd)               -- pops from the hardware stack to the operand
 --   Call  (string)             -- calls a function by its name 
@@ -55,7 +59,7 @@ fun insnString (insn) {
     | "-"   -> "subl"
     | "*"   -> "imull"
     | "&&"  -> "andl"
-    | "!!"  -> "orl" 
+    | "!!"  -> "orl"
     | "^"   -> "xorl"
     | "cmp" -> "cmpl"
     esac
@@ -69,7 +73,7 @@ fun insnString (insn) {
     | L (i) -> sprintf ("$%d", i)
     esac
   }
-  
+
   case insn of
     Cltd               -> "\tcltd\n"
   | Set   (suf, s)     -> sprintf ("\tset%s\t%s\n", suf, s)
@@ -78,8 +82,11 @@ fun insnString (insn) {
   | Mov   (s1, s2)     -> sprintf ("\tmovl\t%s,\t%s\n", opndString (s1), opndString (s2))
   | Push  (s)          -> sprintf ("\tpushl\t%s\n", opndString (s))
   | Pop   (s)          -> sprintf ("\tpopl\t%s\n", opndString (s))
-  | Ret                -> "\tret"
+  | Ret                -> "\tret\n"
   | Call  (p)          -> sprintf ("\tcall\t%s\n", p)
+  | Label (l)          -> sprintf ("%s:\n", l)
+  | Jmp   (l)          -> sprintf ("\tjmp\t%s\n", l)
+  | CJmp  (c, l)       -> sprintf ("\tj%s\t%s\n", c, l)
   | Meta  (m)          -> m
   esac
 }
@@ -100,12 +107,12 @@ fun makeEnv (stack, stackSlots, globals) {
   fun envString () {
     sprintf ("Stack     : %s\nStackSlots: %d\nGlobals   : %s\n", stack.string, stackSlots, elements (globals).string)
   }
-  
+
   -- Allocates a new position on the symbolic stack;
   -- returns a pair: a location for allocated item and
   -- an updated environment
   fun allocate () {
-    case 
+    case
       case stack of
         {}        -> [ebx, 0]
       | S (n) : _ -> [S (n+1), n+2]
@@ -286,12 +293,14 @@ local binop_groups = {
   ["&&", BLN],
   ["!!", BLN]
 };
+
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
   fun compile (env, code) {
     foldl (
-      fun ([env, code], i) {        
+      fun ([env, scode], i) {
+        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
         case i of
           READ ->
             case env.allocate of
@@ -301,7 +310,7 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-	| LD (x) ->
+        | LD (x) ->
             case env.addGlobal(x).allocate of
               [s, env] -> [env, code : move(env.loc(x), s)]
             esac
@@ -313,7 +322,7 @@ fun compile (env, code) {
             case env.allocate of
               [s, env] -> [env, code : singleton(Mov(L (x), s))]
             esac
-        | BINOP(op) ->
+	| BINOP(op) ->
             case env.pop2 of 
               [x, y, env] ->
                 case env.allocate of [s, env] ->
@@ -323,17 +332,21 @@ fun compile (env, code) {
                         ASM -> [env, code: {Mov (y, eax), Binop (op, x, eax), Mov (eax, s)}]
                       | DIV -> [env, code: {Mov (y, eax), Cltd, IDiv (x), Mov (eax, s)}]
 		      | MOD -> [env, code: {Mov (y, eax), Cltd, IDiv (x), Mov (edx, s)}]			
-                      | CMP -> [env, code: {Mov (y, edx), Binop ("^", eax, eax), Binop ("cmp", x, edx),
-                			    Set (suffix(op), "%al"), Mov (eax, s)}]
-                      | BLN -> [env, code: {Mov (y, edx), Binop ("^", eax, eax), Binop ("cmp", L (0), edx), Set (suffix("!="), "%al"), 					            Push (eax),Mov (x, edx), Binop ("^", eax, eax), Binop ("cmp", L (0), edx), 
-					    Set (suffix("!="), "%al"), Pop (edx), Binop ("+", edx, eax), move(eax, edx), 
-					    Binop ("^", eax, eax), Binop ("cmp", L (op), edx), Set (suffix(">"), "%al"), 
-					    Mov (eax, s) }]
+                      | CMP -> [env, code: {Mov (y, eax), Binop ("^", edx, edx), Binop ("cmp", x, eax),
+                			    Set (suffix(op), "%dl"), Mov (edx, s)}]
+                      | BLN -> [env, code: {Binop ("^", eax, eax), Binop ("^", edx, edx), 
+					    Binop ("cmp", x, eax), Set (suffix("!="), "%al"), 
+					    Binop ("cmp", y, edx), Set (suffix("!="), "%dl"),
+					    Binop (op, eax, edx), Mov (edx, s) }]
                       esac
                   esac
                 esac
             esac
-        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
+        | LABEL(val)     -> [env, code : singleton(Label(val))]
+        | JMP(val)       -> [env, code : singleton(Jmp(val))]
+        | CJMP(x, val)   -> case env.pop of
+                              [s, env]   -> [env, code : {Binop("cmp", L(0), s), CJmp(x, val)}]
+                            esac
         esac
       }, [env, {}], code)
   }
@@ -341,22 +354,31 @@ fun compile (env, code) {
   compile (env, code) 
 }
 
--- A top-level codegeneration function. Takes a stack machine program
--- and returns x86 listing as a string
-public fun compileX86 (code) {
+-- A top-level codegeneration function. Takes a driver's environment and a stack machine program,
+-- compiles the program into machine code, and compiles the machine code into an executable
+public fun compileX86 (args, code) {
   case compile (initEnv (), code) of
     [env, code] ->
-       map (insnString, 
-            deepFlatten ({
-              Meta ("\t.global\tmain\n"),
-              dataSection (
-                map (dataDef, getGlobals (env))
-              ),
-              codeSection ({
-                Meta ("main:\n"),
-                prologue (getStackSize (env)),
-                code,
-                epilogue ()})
-            })).stringcat
+       local asmFile = args.getBaseName ++ ".s",
+             runtime = case getEnv ("LAMA_RUNTIME") of
+                         #unboxed -> "../runtime/"
+                       | path     -> path
+                       esac ++ "/runtime.o";
+
+       fwrite (asmFile,
+               map (insnString,
+                    deepFlatten ({
+                      Meta ("\t.global\tmain\n"),
+                      dataSection (
+                        map (dataDef, getGlobals (env))
+                      ),
+                      codeSection ({
+                        Meta ("main:\n"),
+                        prologue (getStackSize (env)),
+                        code,
+                        epilogue ()})
+                    })).stringcat);
+
+       system ({"gcc -g -m32 -o ", args.getBaseName, " ", runtime, " ", asmFile}.stringcat)
   esac
 }
