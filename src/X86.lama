@@ -282,6 +282,31 @@ fun suffix (op) {
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
   fun compile (env, code) {
+    fun simpleBinop (s1, s2, s, op){
+      { 
+        Mov (s2, eax), Binop (op, s1, eax), Mov (eax, s) 
+      }
+    }
+
+    fun compareBinop (s1, s2, s, op) {
+      { 
+        Mov (s2, eax), Binop ("^", edx, edx), Binop ("cmp", s1, eax), Set (suffix(op), "%dl"), Mov (edx, s) 
+      }
+    }
+
+    fun logicBinop (s1, s2, s, op) {
+      { 
+        Binop ("^", eax, eax), Binop ("cmp", s2, eax), Set (suffix("!="), "%al"),
+        Binop ("^", edx, edx), Binop ("cmp", s1, edx), Set (suffix("!="), "%dl"),
+        Binop (op, edx, eax), Mov (eax, s)
+      }
+    }
+
+    fun divBinop (s1, s2, s, op){
+      {
+        Mov (s2, eax), Cltd, IDiv (s1), Mov (case op of "/" -> eax | "%" -> edx esac, s)
+      }
+    }
     foldl (
       fun ([env, scode], i) {
         local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
@@ -294,7 +319,44 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+            | CONST (x) -> case env.allocate of
+                         [s, env] -> [env, code : singleton ( Mov (L (x), s))]
+                       esac
+        | ST (v) -> case env.addGlobal (v).pop of
+                      [s, env] -> [env, code : move (s, env.loc (v))]
+                    esac
+        | LD (v) -> case env.addGlobal (v).allocate of
+                      [s, env] -> [env, code : move (env.loc (v), s)]
+                    esac
+        | BINOP (op) ->
+          case env.pop2 of
+            [s1, s2, env] ->
+              case env.allocate of
+                [s, env] -> [env, code :
+                  case op of
+            	      "+" -> simpleBinop (s1, s2, s, op)                  
+                   | "-" -> simpleBinop (s1, s2, s, op)
+                   | "*" -> simpleBinop (s1, s2, s, op)
+                   | "/" -> divBinop (s1, s2, s, op)
+                   | "%" -> divBinop (s1, s2, s, op)
+                   | "<" -> compareBinop (s1, s2, s, op)
+                   | "<=" -> compareBinop (s1, s2, s, op)
+                   | ">" -> compareBinop (s1, s2, s, op)
+                   | ">=" -> compareBinop (s1, s2, s, op)
+                   | "==" -> compareBinop (s1, s2, s, op)
+                   | "!=" -> compareBinop (s1, s2, s, op)
+                   | "!!" -> logicBinop (s1, s2, s, op)
+                   | "&&" -> logicBinop (s1, s2, s, op)
+                  esac
+                ]
+              esac
+          esac
+        | LABEL (l) -> [env, code : singleton (Label (l))]
+        | JMP (l) -> [env, code : singleton (Jmp (l))]
+        | CJMP (c, l) ->
+            case env.pop of
+              [s, env] -> [env, code : { Binop ("cmp", L (0), s), CJmp (c, l) }]
+            esac
         esac
       }, [env, {}], code)
   }
