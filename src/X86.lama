@@ -352,27 +352,44 @@ fun compile (env, code) {
         local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
         case i of
           READ ->
-            case env.allocate of
-              [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
+            case env.allocate of [s, env] -> 
+              [env, code : {Call ("Lread"), Mov (eax, s)}]
             esac             
-        | WRITE ->
-            case env.pop of
-              [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
+          | 
+          WRITE ->
+            case env.pop of [s, env] -> 
+              [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | CONST (x) ->
-            case env.allocate of
-              [s, env] -> [env, code : singleton (Mov (L (x), s))]
+          | 
+          CONST (x) ->
+            case env.allocate of [s, env] -> 
+              [env, code : singleton (Mov (L (x), s))]
             esac
-        | LD (x) ->
-            case env.addGlobal (x).allocate of
-              [s, env] -> [env, code : move (env.loc (x), s)]
+          | 
+          LD (x) ->
+            case env.addGlobal (x).allocate of  [s, env] -> 
+              [env, code : move (env.loc (x), s)]
             esac
-        | ST (x) ->
-            case env.addGlobal (x).pop of
-              [s, env] -> [env, code : move (s, env.loc (x))]
+          | 
+          ST (x) ->
+            case env.addGlobal (x).pop of [s, env] -> 
+              [env, code : move (s, env.loc (x))]
             esac
-        | BINOP (o) -> compileBinop (env, code, o)
-        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
+          | 
+          BINOP (o) -> 
+            compileBinop (env, code, o)
+          | 
+          LABEL (lb) -> 
+            [env, code : singleton (Label(lb))]
+          | 
+          JMP (lb) -> 
+            [env, code : singleton (Jmp (lb))]
+          | 
+          CJMP (cond, lb) -> 
+            case env.pop of [s, env] -> 
+              [env, code : { Binop("cmp", L (0), s), CJmp (cond, lb)}]
+            esac
+          | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
   }

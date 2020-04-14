@@ -54,39 +54,60 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval ([sk, st, w], c, insns) {
+fun eval (env, conf @ [sk, st, w], insns) {
 	case insns of
 		CONST (c) : ins ->
-			eval ([c : sk, st, w], ins)
-			
-		| READ : ins ->
+			eval (env, [c : sk, st, w], ins)	
+		| 
+    READ : ins ->
 			case readWorld (w) of
 				[v, nw] -> 
-					eval ([v : sk, st, nw], ins)
-			esac
-			
-		| WRITE : ins ->
+					eval (env, [v : sk, st, nw], ins)
+			esac	
+		| 
+    WRITE : ins ->
 			case sk of
 				head : t -> 
 					local nw = writeWorld (head, w);
-					eval ([t, st, nw], ins)
-			esac
-			
-		| ST (x) : ins -> 
+					eval (env, [t, st, nw], ins)
+			esac	
+		| 
+    ST (x) : ins -> 
 			case sk of
 				head : t -> 
-					eval ([t, st <- [x, head], w], ins)
+					eval (env, [t, st <- [x, head], w], ins)
 			esac
-			
-		| LD (x) : ins -> 
-			eval ([st (x) : sk, st, w], ins)
-			
-		| BINOP (o) : ins -> 
+		| 
+    LD (x) : ins -> 
+			eval (env, [st (x) : sk, st, w], ins)	
+		| 
+    BINOP (o) : ins -> 
 			case sk of
 				r : l : t -> 
 					local res = evalBinop (o, l, r);
-					eval ([res : t, st, w], ins)
+					eval (env, [res : t, st, w], ins)
 			esac
+		| 
+    LABEL (_) : instr -> 
+      eval (env, conf, instr)
+    | 
+    JMP (lb) : instr ->
+      eval (env, conf, fromLabel (env, lb))
+    |
+    CJMP ("z", lb) : instr ->
+      case sk of 
+        0 : rest -> eval (env, [rest, st, w], fromLabel (env, lb))
+        |
+        _ : rest -> eval (env, [rest, st, w], instr)
+      esac
+    |
+    CJMP ("nz", lb) : instr ->
+      case sk of 
+        0 : rest -> eval (env, [rest, st, w], instr)
+        |
+        _ : rest -> eval (env, [rest, st, w], fromLabel (env, lb))
+      esac
+
 		| {} -> [sk, st, w]
 	esac
 }
@@ -132,8 +153,10 @@ fun genLabels (env, n) {
 fun compileExpr (expr) {
   case expr of
     Const (x) -> singleton (CONST (x))
-    | Var (x) -> singleton (LD (x))
-    | Binop (o, l, r) -> 
+    | 
+    Var (x) -> singleton (LD (x))
+    | 
+    Binop (o, l, r) -> 
       {compileExpr (l), compileExpr (r), BINOP (o)}
   esac
 }
@@ -142,14 +165,47 @@ fun compileExpr (expr) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  fun compile_ (stmt) {
+  fun compile_ (stmt, env) {
       case stmt of
-        Read (x)       -> {READ, ST (x)}
-        | Write (e)    -> {compileExpr (e), WRITE}
-        | Assn (x, e)  -> {compileExpr (e), ST (x)}
-        | Seq (s1, s2) -> {compile_ (s1), compile_ (s2)}
+        Skip -> [{}, env]
+        |
+        Read (x) -> [{READ, ST (x)}, env]
+        | 
+        Write (e) -> [{compileExpr (e), WRITE}, env]
+        | 
+        Assn (x, e) -> [{compileExpr (e), ST (x)}, env]
+        |
+        Seq (s1, s2) ->
+          case compile_ (s1, env) of [instr1, env1] ->
+            case compile_ (s2, env1) of [instr2, env2] ->
+              [{instr1, instr2}, env2]
+            esac
+          esac
+        |
+        While (e, body) ->
+          case genLabels (env,2) of [lBody, lCheck, envL] ->
+            case compile_ (body, envL) of [instr1, env1] ->
+              [{JMP (lCheck), LABEL (lBody), instr1, LABEL (lCheck), compileExpr (e), CJMP ("nz", lBody)}, env1]
+            esac
+          esac
+        |
+        If (e, sIf, sElse) -> 
+          case genLabels (env, 2) of [lElse, lFi, envL] ->
+            case compile_ (sIf, envL) of [instr1, env1] ->
+              case compile_ (sElse, env1) of [instr2, env2] ->
+                [{compileExpr (e), CJMP ("z", lElse), instr1, JMP (lFi), LABEL (lElse), instr2, LABEL (lFi)}, env2]
+              esac
+            esac
+          esac
+        |
+        Repeat (body, e) ->
+          case genLabels (env, 1) of [lBody, envL] ->
+            case compile_ (body, envL) of [instr1, env1] ->
+              [{LABEL (lBody), instr1, compileExpr (e), CJMP ("z", lBody)}, env1]
+            esac
+          esac
       esac
   }
   
-  deepFlatten (compile_ (stmt))
+  deepFlatten (compile_ (stmt, initCompEnv ()).fst)
 }
