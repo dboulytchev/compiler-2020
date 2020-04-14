@@ -29,16 +29,51 @@ local operations = {
 -- Primary expression
 local primary = memo $ eta (decimal @ fun (c) {Const (stringInt (c))} |
                             lident  @ fun (x) {Var (x)} |
-                            inbr ("(", expression, ")"));
+                            inbr (s("("), expression, s(")")));
 
 local expression = memo $ eta (expr (operations, primary)(id));
 
-local statement = memo $ eta (
-    kSkip  @  lift (Skip)
-  | kWrite |> lift (expression @ fun (e) {Write (e)})
-  | kRead  |> lift (primary @ fun (Var (p)) {Read (p)})
-  | lident |> fun (x) { s (":=") |> lift (expression @ fun (e) {Assn (x, e)}) }
+local elif_statment = memo $ eta (
+    kElif |> lift (expression |> fun (condition) {
+      kThen |> lift (parse |> fun (then_statment) {
+        elif_statment @ fun (else_statment) {If (condition, then_statment, else_statment)}
+      })
+    })
+  | kElse |> lift (parse |> fun (else_statment) {kFi @ lift (else_statment)})
+  | kFi @ lift (Skip)
 );
+
+local statement = memo $ eta (
+    kSkip @ lift (Skip)
+  | kRead |> lift (primary @ fun (Var (x)) { Read (x) })
+  | kWrite |> lift (expression @ fun (e) { Write (e) })
+  | lident |> fun (x) { s(":=") |> lift (expression @ fun (e) { Assn (x, e) }) }
+  | kIf |> lift (expression |> fun (condition) {
+      kThen |> lift (parse |> fun (then_statment) {
+        elif_statment @ fun (else_statment) { If (condition, then_statment, else_statment)}
+      })
+    })
+  | kWhile |> lift (expression |> fun (condition) {
+      kDo |> lift (parse |> fun (loop_statment) {
+        kOd @ lift (While (condition, loop_statment))
+      })
+    })
+  | kRepeat |> lift(parse |> fun(loop_statment) {
+      kUntil |> lift (expression @ fun(condition) {
+        Repeat(loop_statment, condition)
+      })
+    })
+  | kFor |> lift (parse |> fun(first_condition) {
+      s(",") |> lift (expression |> fun (second_condition) {
+        s(",") |> lift (parse |> fun(third_condition) {
+          kDo |> lift (parse |> fun (loop_statment) {
+            kOd @ lift (Seq (first_condition, While(second_condition,
+                                                    Seq(loop_statment, third_condition))))
+          })
+        })
+      })
+    }));
+
    
 
 -- Public top-level parser
