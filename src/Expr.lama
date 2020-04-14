@@ -13,6 +13,31 @@ import State;
 --        Const (int)                |
 --        Binop (string, expr, expr)
 
+<<<<<<< HEAD
+=======
+public fun evalBinOperation(operation, first, second) {
+  case operation of
+    "+" -> first + second
+  | "-" -> first - second
+  | "*" -> first * second
+  | "/" -> first / second
+  | "%" -> first % second
+  | "<" -> first < second
+  | ">" -> first > second
+  | "==" -> first == second
+  | "!=" -> first != second
+  | ">=" -> first >= second
+  | "<=" -> first <= second
+  | "&&" -> first && second
+  | "!!" -> first !! second
+  esac
+}
+
+>>>>>>> A03-straight-line-parser
 public fun evalExpr (st, expr) {
-  failure ("evalExpr not implemented\n")
+  case expr of
+    Var (s) -> st (s)
+  | Const (i) -> i
+  | Binop (operation, first, second) -> evalBinOperation (operation, evalExpr (st, first), evalExpr (st, second))
+  esac
 }
