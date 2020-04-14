@@ -9,17 +9,105 @@ import Matcher;
 -- A parser of "something" in brackets; l, r are left and right
 -- brackets as parsers, p --- a parser of "something"
 fun inbr (l, p, r) {
-  l |> lift (p |> bypass (r))
+  s (l) |> lift (p |> bypass (s (r)))
 }
+
+fun incurl(p) {
+  inbr("(", p, ")")
+}
+
+fun makeOps() {
+  local binopsMap = {
+    [singleton("!!"), Left],
+    [singleton("&&"), Left],
+    [{"==", "!=", "<=", "<", ">=", ">"}, Nona],
+    [{"+", "-"}, Left],
+    [{"*", "/", "%"}, Left] 
+  };
+
+  fun toPair(op) {
+    [s(op), fun (l, r) {Binop(op, l, r)}]
+  }
+
+  fun transform([list, ass]) {
+    [ass, map(toPair, list)]
+  }
+
+  map(
+    transform,
+    binopsMap
+  )
+}
+
+local ops = makeOps();
 
 -- Primary expression
 local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
                             lident  @ fun (x) {Var (x)} |
-                            inbr (s ("("), exp, s (")"))),
-      exp = memo $ eta (failure ("expression parsing not implemented\n"));
+                            incurl (exp)),
+      exp = memo $ eta (expr(ops, primary)(id));
 
-local stmt = memo $ eta (failure ("statement parsing not implemented\n"));
-   
+local pElse = memo $ eta (kElse |> lift(stmt) |
+                          kElif |> lift (pAfterIf));
+
+fun pThen (expr) {
+  kThen |> lift(stmt |> fun (s1) {
+                          opt(pElse) @ fun (x) {case x of 
+                                                  Some (s2) -> If (expr, s1, s2)
+                                                | None -> If (expr, s1, Skip)
+                                                esac
+                                               }
+                        })
+}
+
+local pAfterIf = memo $ eta (exp |> pThen);
+
+local pIf = memo $ eta ((kIf |> lift(pAfterIf)) |> bypass(kFi));
+
+fun pInit (init) {
+  s(",") |> lift(exp |> pCond(init))
+}
+
+fun pCond(init) {
+  fun (expr) {
+    s(",") |> lift(stmt |> fun (step) {
+                              (kDo |>
+                               lift(stmt |>
+                                    bypass(kOd))) @ fun (body) {Seq (init, While (expr, Seq (body, step)))}
+                           })
+  }
+}
+
+local pFor = memo $ eta(kFor |>
+                        lift(stmt |> pInit));
+
+local pWhile = memo $ eta (kWhile |> 
+                              lift(exp |> fun (expr) {
+                                             (kDo |>
+                                              lift(stmt |> bypass(kOd))) @ fun (s) {While (expr, s) } 
+                                           }));
+
+local pRepeat = memo $ eta(kRepeat |>
+                           lift(stmt |> fun (s) {
+                                          kUntil |>
+                                          lift(exp @ fun(expr) {Repeat (s, expr) })
+                                        }));
+
+local basicStmt = memo $ eta (kSkip @ lift(Skip) |
+                              kRead  |> lift(incurl(lident) @ fun (x) {Read (x)}) |
+                              kWrite |> lift(exp @ fun (x) {Write (x)}) |
+                              lident |> fun (x) {
+                                                  (s(":=") |> lift(exp)) @ fun (expr) {Assn (x, expr)}
+                                                }) |
+                              pIf |
+                              pFor |
+                              pWhile |
+                              pRepeat;
+
+local stmt = memo $ eta(basicStmt |
+                        basicStmt |> fun (basic) {
+                                                   (s(";") |> lift(stmt)) @ fun (basics) {Seq (basic, basics)}
+                                                 }); 
 
 -- Public top-level parser
 public parse = stmt;
