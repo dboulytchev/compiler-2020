@@ -39,9 +39,9 @@ local statement = memo $ eta (
   | kWrite |> lift (expression @ fun (x) { Write (x) })
   | lident |> fun (x) { s(":=") |> lift (expression @ fun (e) { Assn (x, e) }) }
   | kWhile |> lift (expression |> fun (e) {
-      kDo |> lift (parse |> fun (s) {
-        kOd @ lift (While (e, s))
-      })
+      inbr(kDo, parse, kOd) @ fun (s) {
+        While (e, s)
+      }
     })
   | kRepeat |> lift (parse |> fun (s) {
       kUntil |> lift (expression @ fun (e) { Repeat (s, e) })
@@ -49,9 +49,9 @@ local statement = memo $ eta (
   | kFor |> lift (statement |> fun (init) {
       s (",") |> lift (expression |> fun (condition) {
         s (",") |> lift (statement |> fun (step) {
-          kDo |> lift (parse |> fun (s) {
-            kOd @ lift (Seq (init, While (condition, Seq (s, step))))
-          }) 
+          inbr(kDo, parse, kOd) @ fun (s) {
+            Seq (init, While (condition, Seq (s, step)))
+          }
         }) 
       }) 
     })
