@@ -27,8 +27,8 @@ fun eval (c @ [s, w], stmt) {
   | Read(var)       -> case readWorld(w) of [val, new_w] -> [s <- [var, val], new_w] esac
   | Write(expr)     -> [s, writeWorld(evalExpr(s, expr), w)]
   | If (x, a, b) -> if evalExpr(s, x) == 0
-                      then eval(c, a)
-                      else eval(c, b)
+                      then eval(c, b)
+                      else eval(c, a)
                     fi
   | Repeat (a, x) -> case eval(c, a) of
                        [sp, wp] -> if evalExpr(sp, x) == 0
