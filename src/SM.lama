@@ -1,53 +1,182 @@
 -- Stack machine.
 
+import Array;
 import List;
+import Fun;
+import Collection;
 import World;
 import State;
 import Expr;
 import Util;
 
--- Stack machine interpreter. Takes an SM-configuration and a program,
+-- Stack code printer. Takes a list of SM instructions, return its
+-- string representation.
+public fun showSMInsn (i) {
+  case i of
+    READ         -> sprintf ("READ")
+  | WRITE        -> sprintf ("WRITE")
+  | BINOP (s)    -> sprintf ("BINOP %s", s)
+  | LD    (x)    -> sprintf ("LD %s", x)
+  | ST    (x)    -> sprintf ("ST %s", x)
+  | CONST (n)    -> sprintf ("CONST %d", n)
+  | LABEL (s)    -> sprintf ("LABEL %s", s)
+  | JMP   (l)    -> sprintf ("JMP %s", l)
+  | CJMP  (c, l) -> sprintf ("CJMP %s, %s", c, l)
+  esac
+}
+
+public fun showSM (prg) {
+  map (fun (i) {showSMInsn (i) ++ "\n"}, prg).stringcat
+}
+
+-- Evaluation environment: keeps a mapping between labels and (sub)programs
+fun initEvalEnv (insns) {
+  local map =
+    fix (fun (rec) {
+          fun ([m, insns]) {
+            case insns of
+              {}               -> m
+            | LABEL (lab) : tl -> rec ([addMap (m, lab, insns), tl])
+            | _ : tl           -> rec ([m, tl])
+            esac
+          }
+        }) $ [emptyMap (), insns];
+
+  [fun (l) {
+     case findMap (map, l) of Some (insns) -> insns esac
+  }]
+}
+
+-- Accessor function
+fun fromLabel (env, lab) {
+  env [0] (lab)
+}
+
+-- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c@[sk, s, w], insns) {
-	case insns of
-		CONST (const) : i -> eval ([const : sk, s, w], i)
-		| READ : i -> case readWorld (w) of [v, nw] -> eval ([v : sk, s, nw], i) esac
-		| WRITE : i -> case sk of head : t ->	eval ([t, s, writeWorld (head, w)], i) esac
-		| ST (x) : i ->  case sk of	head : t -> eval ([t, s <- [x, head], w], i) esac
-		| LD (x) : i -> eval ([s (x) : sk, s, w], i)
-		| BINOP (o) : i -> case sk of r : l : t -> eval ([evalBinop (o, l, r) : t, s, w], i) esac
-		| {} -> c
-	esac
+fun eval (env, c@[sk, s, w], insns) {
+    case insns of
+          CONST(c):i ->  eval(env, [c:sk, s, w], i)
+        | BINOP(operation):i -> case sk of
+                                  right:left:rest -> eval(env, [evalBinop(operation, left, right):rest, s, w], i)
+                                esac
+        | LD(x):i -> eval(env, [s(x):sk, s, w], i)
+        | ST(x):i -> case sk of
+                       head:rest -> eval(env, [rest, s <- [x, head], w], i)
+                     esac
+        | READ:i -> case readWorld(w) of
+                      [value, newWorld] -> eval(env, [value:sk, s, newWorld], i)
+                    esac
+        | WRITE:i -> case sk of
+                       head:rest -> eval(env, [rest, s, writeWorld(head, w)], i)
+                     esac
+        | LABEL(l):i -> eval(env, c, i)
+        | JMP(l):i -> eval(env, c, fromLabel(env, l))
+        | CJMP(flag, l):i -> case flag of
+                               "nz" -> case sk of
+                                         0 : newStack -> eval(env, [newStack, s, w], i)
+                                         | _ : newStack -> eval(env, [newStack, s, w], fromLabel(env, l))
+                                       esac
+                               | "z" ->  case sk of
+                                            0 : newStack -> eval(env, [newStack, s, w], fromLabel(env, l))
+                                            | _ : newStack -> eval(env, [newStack, s, w], i)
+                                         esac
+                             esac
+        | {} -> c
+    esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
 public fun evalSM (input, insns) {
-  eval ([{}, emptyState, createWorld (input)], insns)[2].getOutput
+  eval (initEvalEnv (insns), [{}, emptyState, createWorld (input)], insns)[2].getOutput
+}
+
+-- Compilation environment: generates labels
+fun makeCompEnv (n) {
+  [fun () {
+     [sprintf ("L%d", n), makeCompEnv (n+1)]
+  }]
+}
+
+fun initCompEnv () {
+  makeCompEnv (0)
+}
+
+-- Accessor function: generates one label
+fun genLabel (env) {
+  env [0] ()
+}
+
+-- Utility function: generates n labels
+fun genLabels (env, n) {
+  fun inner (env, n) {
+    if n == 0
+    then singleton (env)
+    else case env.genLabel of
+           [lab, env] -> lab : inner (env, n-1)
+         esac
+    fi
+  }
+
+  listArray (inner (env, n))
 }
 
 -- Compiles an expression into a stack machine code.
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-	case expr of
-	    Const (x) -> singleton (CONST (x))
-	  | Var (x) -> singleton (LD (x))
-	  | Binop (op, l, r) -> {compileExpr (l), compileExpr(r), BINOP (op)}
-  	esac
+  case expr of
+    Const(x) -> singleton(CONST(x))
+    | Var(x) -> singleton(LD(x))
+    | Binop(operation, left, right) -> flatten({ compileExpr(left), compileExpr(right), singleton(BINOP(operation)) })
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  fun compile (stmt) {
-	case stmt of
-	    Skip -> {}
-	  | Assn (x, e) -> {compileExpr (e), ST (x)}
-	  | Read (x) -> { READ, ST (x) }
-	  | Write (x) -> {compileExpr (x), WRITE}
-	  | Seq (s1, s2) -> {compile (s1), compile (s2)}
-  	esac 
-  }
-  deepFlatten (compile (stmt))
+    fun compileIfStmt(x, stmt1, stmt2, env) {
+        case genLabels(env, 2) of [ls2, lexit, env1] ->
+          case compile(stmt1, env1) of [cs1, env2] ->
+            case compile(stmt2, env2) of [cs2, env3] ->
+              [{compileExpr(x), CJMP("z", ls2), cs1, JMP(lexit), LABEL(ls2), cs2, LABEL(lexit)}, env3]
+            esac
+          esac
+        esac
+    }
+
+    fun compileWhile(x, stmt, env) {
+        case genLabels(env, 2) of [le, ls, env1] ->
+          case compile(stmt, env1) of [cs1, env2] ->
+            [{JMP(le), LABEL(ls), cs1, LABEL(le), compileExpr(x), CJMP("nz", ls)}, env2]
+          esac
+        esac
+    }
+
+    fun compileRepeat(stmt, x, env) {
+        case genLabels(env, 1) of [ls, env1] ->
+          case compile(stmt, env1) of [cs1, env2] ->
+            [{LABEL(ls), cs1, compileExpr(x), CJMP("z", ls)}, env2]
+          esac
+        esac
+    }
+
+    fun compile(stmt, env) {
+      case stmt of
+        Read(x) -> [{ READ, ST(x) }, env]
+      | Write(value) -> [{ compileExpr(value), singleton(WRITE) }, env]
+      | Assn(x, value) -> [{ compileExpr(value), singleton(ST(x)) }, env]
+      | Seq(stmt1,stmt2) -> case compile(stmt1, env) of [cs1, env1] ->
+                                case compile(stmt2, env1) of [cs2, env2] ->
+                                  [{cs1, cs2}, env2]
+                                esac
+                            esac
+      | Skip -> [{}, env]
+      | If (x, stmt1, stmt2) -> { compileIfStmt(x, stmt1, stmt2, env) }
+      | While (x, stmt) -> { compileWhile(x, stmt, env) }
+      | Repeat (stmt, x) -> { compileRepeat(stmt, x, env) }
+      esac
+    }
+    deepFlatten(compile(stmt, initCompEnv())[0])
 }
