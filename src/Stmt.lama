@@ -15,18 +15,24 @@ import World;
 --        Skip                      |
 --        Read   (string)           |
 --        Write  (expr)             |
---        if     (expr, stmt, stmt) |
+--        If     (expr, stmt, stmt) |
 --        While  (expr, stmt)       |
 --        Repeat (stmt, expr)
 
-fun eval ([st, w], stmt) {
+fun eval (c@[st, w], stmt) {
   case stmt of
-    Seq (s1, s2) -> eval (eval ([st, w], s1), s2)
+    Skip -> c
+  | Seq (s1, s2) -> eval (eval (c, s1), s2)
   | Read (var) -> case w.readWorld of
                     [val, w1] -> [st <- [var, val], w1]
                   esac
   | Write (expr) -> [st, writeWorld (evalExpr (st, expr), w)]
   | Assn (var, expr) -> [st <- [var, evalExpr (st, expr)], w]
+  | If (expr, s1, s2) -> if evalExpr (st, expr) then
+                          eval (c, s1) else eval (c, s2) fi
+  | While (expr, s) -> if evalExpr (st, expr) then
+                        eval (eval (c, s), stmt) else c fi
+  | Repeat (s, expr) -> eval (eval (c, s), While (Binop ("==", expr, Const (0)), s))
   esac
 }
 
