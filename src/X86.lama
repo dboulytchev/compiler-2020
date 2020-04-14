@@ -383,6 +383,7 @@ fun compile (env, code) {
         | CJMP (c, l) -> case env.pop of 
                            [x, env] -> [env, code : cjmpOp(x, c, l)] 
                          esac
+        | SKIP -> [env, code]
         | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
