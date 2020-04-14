@@ -54,8 +54,34 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval (env, c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (env, c@[stack, st, w], insns) {
+  case insns of
+    {} -> c
+    | BINOP(op) : insns -> case stack of
+        x : y : stack -> eval(env, [assocOpt(op)(y, x) : stack, st, w], insns)
+      esac
+    | CONST(n) : insns -> eval(env, [n : stack, st, w], insns)
+    | READ : insns -> case readWorld(w) of
+        [n, w] -> eval(env, [n:stack, st, w], insns)
+      esac
+    | WRITE : insns -> case stack of
+        n : stack -> eval(env, [stack, st, writeWorld(n, w)], insns)
+      esac
+    | LD(x) : insns -> eval(env, [st(x) : stack, st, w], insns)
+    | ST(x) : insns -> case stack of
+        n : stack -> eval(env, [stack, st <- [x, n], w], insns)
+      esac
+    | LABEL (_) : insns -> eval(env, c, insns)
+    | JMP (label) : insns -> eval(env, c, fromLabel(env, label))
+    | CJMP ("nz", label) : insns -> case stack of
+        0 : stack -> eval(env, [stack, st, w], insns)
+        | _ : stack -> eval(env, [stack, st, w], fromLabel(env, label))
+      esac
+    | CJMP ("z", label) : insns -> case stack of
+        0 : stack -> eval(env, [stack, st, w], fromLabel(env, label))
+        | _ : stack -> eval(env, [stack, st, w], insns)
+      esac  
+    esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -96,26 +122,55 @@ fun genLabels (env, n) {
 -- Compiles an expression into a stack machine code.
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
-fun compileExpr (expr, acc) {
+fun compileExpr (expr) {
+  deepFlatten(doCompileExpr(expr))	
+}
+fun doCompileExpr (expr) {
   case expr of
-      Const(n) -> CONST(n) : acc
-    | Var(x)   -> LD(x) : acc
-    | Binop(opr, l, r) -> BINOP(opr) : compileExpr(r, compileExpr(l, acc))
+    Const(n) -> singleton(CONST(n))
+    | Var(x) -> singleton(LD(x))
+    | Binop(op, l, r) -> {doCompileExpr(l), doCompileExpr(r), BINOP(op)}
   esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
-public fun compileSM (stmt) {
-  fun compileSM (stmt, acc) {
-    case stmt of
-        Skip -> acc
-      | Assn(varStr, expr) -> ST(varStr) : compileExpr(expr, acc)
-      | Read(varStr) -> ST(varStr) : READ : acc
-      | Write(expr)  -> WRITE : compileExpr(expr, acc)
-      | Seq(s1, s2)  -> compileSM(s2, compileSM(s1, acc))
-    esac
-  }
-  reverse(compileSM(stmt, {}))
+public fun compileSM(stmt) {
+  deepFlatten(doCompileSM(stmt, initCompEnv())[0])
 }
+
+fun doCompileSM (stmt, env) {
+      case stmt of
+        Skip -> [{}, env]
+      | Assn(x, e) -> [{compileExpr(e), ST(x)}, env]
+      | Read(x) -> [{READ, ST(x)}, env]
+      | Write(e) -> [{compileExpr(e), WRITE}, env]
+      | Seq(s1, s2) -> 
+          case doCompileSM(s1, env) of [cs1, env1] -> 
+            case doCompileSM(s2, env1) of [cs2, env2] -> 
+              [{cs1, cs2}, env2]
+            esac
+          esac
+      | If(e, s1, s2) -> 
+          case genLabels(env, 2) of [ls2, lexit, env1] ->
+            case doCompileSM(s1, env1) of [cs1, env2] ->
+              case doCompileSM(s2, env2) of [cs2, env3] ->
+                [{compileExpr(e), CJMP("z", ls2), cs1, JMP(lexit), LABEL(ls2), cs2, LABEL(lexit)}, env3]
+              esac
+            esac 
+          esac
+      | While(e, s1) -> 
+          case genLabels(env, 2) of [le, ls, env1] ->
+            case doCompileSM(s1, env1) of [cs1, env2] ->
+              [{JMP(le), LABEL(ls), cs1, LABEL(le), compileExpr(e), CJMP("nz", ls)}, env2]
+            esac 
+          esac
+      | Repeat(s1, e) ->
+          case genLabels(env, 1) of [ls, env1] ->
+            case doCompileSM(s1, env1) of [cs1, env2] ->
+              [{LABEL(ls), cs1, compileExpr(e), CJMP("z", ls)}, env2]
+            esac 
+          esac
+      esac
+  }
