@@ -54,36 +54,48 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval ([stack, state, world], program) {
+fun eval (env, [stack, state, world], program) {
   case program of
     BINOP (op) : tail -> 
         case stack of
           right : left : stackTail -> 
-             eval ([evalBinop (op, left, right) : stackTail, state, world], tail) 
+             eval (env, [evalBinop (op, left, right) : stackTail, state, world], tail) 
         esac
 
-  | CONST (n) : tail -> 
-        eval ([n : stack, state, world], tail)
+  | CONST (n)   : tail -> 
+        eval (env, [n : stack, state, world], tail)
 
-  | READ      : tail -> 
+  | READ        : tail -> 
         local readResult = world.readWorld;
-        eval ([readResult[0] : stack, state, readResult[1]], tail)
+        eval (env, [readResult[0] : stack, state, readResult[1]], tail)
 
-  | WRITE      : tail ->
+  | WRITE       : tail ->
         case stack of
           top : stackTail -> 
-              eval ([stackTail, state, writeWorld (top, world)], tail)
+              eval (env, [stackTail, state, writeWorld (top, world)], tail)
         esac
 
-  | LD (x)    : tail ->
-        eval ([state (x) : stack, state, world], tail)
+  | LD (x)      : tail ->
+        eval (env, [state (x) : stack, state, world], tail)
 
-  | ST (x)    : tail ->
+  | ST (x)      : tail ->
         case stack of 
           top : stackTail ->
-              eval ([stackTail, state <- [x, top], world], tail)
-        esac  
-
+              eval (env, [stackTail, state <- [x, top], world], tail)
+        esac 
+  | LABEL (l)   : tail -> eval (env, [stack, state, world], tail)
+  | JMP (l)     : tail -> 
+        eval (env, [stack, state, world], fromLabel (env, l))
+  | CJMP ("nz", l) : tail ->
+        case stack of
+          0 : stackTail -> eval (env, [stackTail, state, world], tail)
+        | _ : stackTail -> eval (env, [stackTail, state, world], fromLabel (env, l))
+        esac
+  | CJMP ("z", l)  : tail -> 
+        case stack of
+          0 : stackTail -> eval (env, [stackTail, state, world], fromLabel (env, l))
+        | _ : stackTail -> eval (env, [stackTail, state, world], tail)
+        esac
   | _                -> [stack, state, world]
   esac 
 }
@@ -138,15 +150,59 @@ fun compileExpr (expr) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-    fun compile (stmt) {
+    fun compile (env, stmt) {
       case stmt of
-        Read (x)       -> { READ, ST (x) }
-      | Write (x)      -> { compileExpr (x), WRITE }
-      | Seq (x1, x2)   -> { compile (x1), compile (x2) }
-      | Assn (x, e)    -> { compileExpr (e), ST (x) }
-      | Skip           -> { }
+        Read (x)       -> [env, { READ, ST (x) }]
+      | Write (x)      -> [env, { compileExpr (x), WRITE }]
+      | Seq (x1, x2)   -> case compile (env, x1) of 
+                              [env1, prog1] ->
+                                  case compile (env1, x2) of 
+                                      [env2, prog2] -> [env2, { prog1, prog2 }]
+                                  esac
+                          esac
+      | Assn (x, e)    -> [env, { compileExpr (e), ST (x) }]
+      | While (e, s)   -> case genLabels (env, 2) of
+                              [lCond, lLoop, env1] ->
+                                  case compile (env1, s) of
+                                      [env2, prog] -> 
+                                          [env2, { 
+                                            JMP (lCond), 
+                                            LABEL (lLoop), 
+                                            prog, 
+                                            LABEL (lCond), 
+                                            compileExpr (e), 
+                                            CJMP ("nz", lLoop) }]
+                                  esac
+                          esac
+      | Repeat (s, e)  -> case genLabel (env) of
+                            [lLoop, env1] -> 
+                                case compile (env1, s) of 
+                                    [env2, prog] -> [env2, { 
+                                                        LABEL (lLoop), 
+                                                        prog,
+                                                        compileExpr (e), 
+                                                        CJMP ("z", lLoop) }] 
+                                esac
+                          esac
+      | If (e, s1, s2) -> case genLabels (env, 2) of
+                              [lElse, lEnd, env1] -> 
+                                  case compile (env1, s1) of
+                                      [env2, prog1] -> 
+                                          case compile (env2, s2) of
+                                              [env3, prog2] -> [env3, { 
+                                                  compileExpr (e), 
+                                                  CJMP ("nz", lElse), 
+                                                  prog2,
+                                                  JMP (lEnd),
+                                                  LABEL (lElse), 
+                                                  prog1,
+                                                  LABEL (lEnd) }]
+                                          esac
+                                  esac
+                          esac
+      | Skip           -> [env, { }]
       esac 
     }
 
-    stmt.compile.deepFlatten
+    deepFlatten((compile(initCompEnv(), stmt))[1])
 }
