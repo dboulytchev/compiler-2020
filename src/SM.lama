@@ -97,12 +97,47 @@ fun genLabels (env, n) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+      Const (c) -> { CONST (c) }
+    | Var (x) -> { LD (x) }
+    | Binop (op, l, r) -> { compileExpr(l), compileExpr(r), BINOP (op) }
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  fun compile (stmt, env) {
+      case stmt of
+        Assn (x, e) -> [{ compileExpr (e), ST (x) }, env]
+      | Read (x) -> [{ READ, ST (x) }, env]
+      | Write (e) -> [{ compileExpr (e), WRITE }, env]
+      | Seq (s1, s2) -> case compile (s1, env) of
+          [ns1, nenv1] -> case compile (s2, nenv1) of
+            [ns2, nenv2] -> [{ ns1, ns2 }, nenv2]
+          esac
+        esac
+      | Skip -> [{}, env]
+      | If (e, s1, s2) -> case genLabels (env, 2) of
+          [ls, l, nenv1] -> case compile (s1, nenv1) of
+            [ns1, nenv2] -> case compile (s2, nenv2) of
+              [ns2, nenv3] -> [{ compileExpr (e), CJMP ("z", ls), ns1, JMP (l), LABEL (ls), ns2, LABEL (l) }, nenv3]
+            esac
+          esac
+        esac
+      | While (e, s1) -> case genLabels (env, 2) of
+          [ls, l, nenv1] -> case compile (s1, nenv1) of [ns1, nenv2] ->
+            [{ JMP (ls), LABEL (l), ns1, LABEL (ls), compileExpr (e), CJMP ("nz", l) }, nenv2]
+          esac
+        esac
+      | Repeat (s1, e) -> case genLabels (env, 1) of
+          [l, nenv1] -> case compile (s1, nenv1) of
+            [ns1, nenv2] -> [{ LABEL (l), ns1, compileExpr (e), CJMP ("z", l) }, nenv2]
+          esac
+        esac
+      esac
+  }
+
+  deepFlatten (compile (stmt, initCompEnv ())[0])
 }
