@@ -9,11 +9,18 @@ import World;
 -- Returns a final configuration (if any)
 fun eval (c@[s, w], stmt) {
 	case stmt of
-		Read (x) -> case readWorld (w) of [v, nw] -> [s <- [x, v], nw] esac
-		| Write (e) -> [s, writeWorld (evalExpr (s, e), w)]
-		| Assn (x, e) -> [s <- [x, evalExpr (s, e)], w]
-		| Seq (s1, s2) -> eval (eval (c, s1), s2)
-		| Skip -> c
+		Assn(x, expr) -> [s <- [x, evalExpr(s, expr)], w]
+  | Seq(stmt1 , stmt2) -> eval(eval(c, stmt1), stmt2)
+  | Skip -> c
+  | Read(str) -> case readWorld(w) of
+                   [n, w] -> [s <- [str, n], w]
+                 esac
+  | Write(expr) -> [s, writeWorld(evalExpr(s, expr), w)]
+  | If (expr, stmt1, stmt2) -> if evalExpr(s, expr) != 0 then eval([s, w], stmt1) else eval([s, w], stmt2) fi
+  | While (expr, stmt1) -> if evalExpr(s, expr) != 0 then eval(eval([s, w], stmt1), stmt) else [s, w] fi
+  | Repeat (stmt1, expr) -> case eval([s, w], stmt1) of
+                              [sp, wp]-> if evalExpr(sp, expr) != 0 then [sp, wp] else eval([sp, wp], stmt) fi
+                            esac
 	esac
 }
 
