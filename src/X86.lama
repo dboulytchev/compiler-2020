@@ -315,6 +315,14 @@ fun compile (env, code) {
     }
   }
 
+  fun cjmpOp(x, op, l) {
+    {
+      Mov (L (0), eax)
+    , Binop ("cmp", x, eax)
+    , CJmp (op, l)
+    } 
+  }
+
   fun comparBinop(x, y, res, op) {
     {
       Mov (y, eax),
@@ -370,12 +378,17 @@ fun compile (env, code) {
                     esac
                 esac
             esac
+        | LABEL (l) -> [env, code : singleton (Label (l))] 
+        | JMP (l) -> [env, code : singleton (Jmp(l))]
+        | CJMP (c, l) -> case env.pop of 
+                           [x, env] -> [env, code : cjmpOp(x, c, l)] 
+                         esac
         | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
   }
 
-  compile (env, code) 
+  compile (env, code)
 }
 
 -- A top-level codegeneration function. Takes a driver's environment and a stack machine program,

@@ -54,44 +54,63 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval ([stack, state, world], insns) {
+fun eval (evalEnv, conf@[stack, state, world], insns) {
   case insns of 
-    CONST(z):tail -> eval([z:stack, state, world], tail)
+    CONST(z):tail -> eval(evalEnv, [z:stack, state, world], tail)
   | READ:tail -> 
       case readWorld(world) of 
-        [item, newWorld] -> eval([item:stack, state, newWorld], tail)
+        [item, newWorld] -> eval(evalEnv, [item:stack, state, newWorld], tail)
       esac
   | WRITE:tail -> 
       eval(
-        case stack of 
+        evalEnv
+      , case stack of 
           stackHead:rest -> [rest, state, writeWorld(stackHead, world)]
         esac
       , tail
       )
-  | LD(varName):tail -> eval([state(varName):stack, state, world], tail)
+  | LD(varName):tail -> eval(evalEnv, [state(varName):stack, state, world], tail)
   | ST(varName):tail -> 
       eval(
-        case stack of 
+        evalEnv
+      , case stack of 
           stackHead:rest -> [rest, state <- [varName, stackHead], world]
         esac
       , tail
       )
   | BINOP(op):tail -> 
       eval(
-        case stack of 
+        evalEnv
+      , case stack of 
           first:rest -> case rest of 
             second: rrest -> [callBinop(op, second, first):rrest, state, world]
           esac
         esac
       , tail
       )
-  | _ -> [stack, state, world]
+  | LABEL(s):tail -> eval(evalEnv, conf, tail)
+  | JMP(l):tail -> eval(evalEnv, conf, evalEnv.fromLabel(l))
+  | CJMP(cond, l):tail -> 
+      case stack of 
+        sHead:rest -> 
+          eval(
+            evalEnv
+          , [rest, state, world]
+          , case cond of 
+              "nz" -> if (sHead != 0) then evalEnv.fromLabel(l) else tail fi
+            | "z"  -> if (sHead == 0) then evalEnv.fromLabel(l) else tail fi
+            esac
+          )
+      esac
+  | _ -> conf
   esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
 public fun evalSM (input, insns) {
-  eval (initEvalEnv (insns), [{}, emptyState, createWorld (input)], insns)[2].getOutput
+  local inFlat = insns.deepFlatten;
+  --failure(inFlat.string)
+  eval (initEvalEnv (inFlat), [{}, emptyState, createWorld (input)], inFlat)[2].getOutput
 }
 
 -- Compilation environment: generates labels
@@ -139,10 +158,27 @@ fun compileExpr (expr) {
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-   case stmt of 
-    Assn(varName, expr) -> {compileExpr(expr), ST(varName)}
-  | Read(varName) -> {READ, ST(varName)}
-  | Write(expr) -> {compileExpr(expr), WRITE}
-  | Seq(s1, s2) -> {compileSM(s1), compileSM(s2)}
-  esac
+  fun compileWithEnv(stmt, env) {
+    case stmt of 
+      Assn(varName, expr) -> [{compileExpr(expr), ST(varName)}, env]
+    | Read(varName) -> [{READ, ST(varName)}, env]
+    | Write(expr) -> [{compileExpr(expr), WRITE}, env]
+    | Seq(s1, s2) -> case compileWithEnv(s1, env) of 
+                       [code1, env] -> 
+                         case compileWithEnv(s2, env) of 
+                          [code2, env] -> [{code1, code2}, env]
+                         esac
+                     esac
+    | While(e, statement) -> case env.genLabels (2) of 
+                               [l1, l2, env] -> 
+                                 case compileWithEnv(statement, env) of
+                                   [bodyCode, env] -> [{ JMP(l1), LABEL(l2), bodyCode, LABEL(l1), compileExpr(e), CJMP("nz", l2)}, env]
+                                 esac
+                             esac
+                                        
+    esac
+  }
+
+  compileWithEnv( stmt, initCompEnv()) [0]
+
 }
