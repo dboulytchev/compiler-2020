@@ -75,7 +75,7 @@ fun eval (env, c@[stack, st, w], insns) {
                            z : stack1 -> eval (env, [stack1, st <- [var, z], w], insns1)
                          esac
   | LABEL (_) : insns1 -> eval (env, c, insns1)
-  | JMP (l) : insns1 -> eval (env, c, fromLabel (insns1, l))
+  | JMP (l) : insns1 -> eval (env, c, fromLabel (env, l))
   | CJMP (c, l) : insns1 -> case c of 
                               "z" -> case stack of
                                        0 : stack1 -> eval (env, [stack1, st, w], fromLabel (env, l))
