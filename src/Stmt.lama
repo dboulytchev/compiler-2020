@@ -20,31 +20,29 @@ import World;
 --        Repeat (stmt, expr)
 
 fun eval (c@[state, world], stmt) {
-    --local state = c[0];
-    --local world = c[1];
+--     --local state = c[0];
+--     --local world = c[1];
     case stmt of
-      Assn(str, expr) -> [state <- [str, evalExpr(state, expr)], world]
+      Skip -> c
 
-    | Seq (stmtA, stmtB)-> eval(eval([state, world], stmtA), stmtB)
+    | Read (x) -> case readWorld (world) of
+                    [value, newworld] -> [state <- [x, value], newworld]
+                  esac
 
-    | Read(str) ->
-      case readWorld(world) of 
-        [value, restWorld] -> [state <-[str, value], restWorld]
-      esac
+    | Write (e) -> [state, writeWorld(state.evalExpr(e), world)]
 
-    | Write (expr) -> [state, writeWorld(evalExpr(state,expr), world)]
+    | Assn (x, e) -> [state <- [x, state.evalExpr(e)], world]
 
-    | Skip -> [state, world]
+    | Seq (l, r) -> c.eval(l).eval(r)
 
-    | If (expr, state1, state2)  -> if evalExpr (state, expr) != 0 then eval (c, state1) else eval (c, state2) fi
+    | If     (expr, st1, st2) -> if evalExpr(state, expr) != 0 then eval([state, world], st1) else eval([state, world], st2) fi
 
-    | While (expr, st)   -> if evalExpr (state, expr) != 0 then eval (eval (c, st), stmt) else c fi
-
-    | Repeat (st, expr)  -> local ret = eval (c, st);
-
-     if evalExpr (ret[0], expr) == 0 then eval (ret, stmt) else ret fi
-
-    esac
+    | While  (expr, st1)      -> if evalExpr(state, expr) != 0 then eval(eval([state, world], st1), stmt) else [state, world] fi
+    
+    | Repeat (st1, expr)      -> case eval([state, world], st1) of [new_state, new_world] -> if evalExpr(new_state, expr) != 0
+                                then [new_state, new_world] else eval([new_state, new_world], stmt) fi
+                                 esac
+  esac
 }
 
 -- Evaluates a program with a given input and returns an output
