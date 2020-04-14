@@ -265,6 +265,20 @@ fun move (from, to) {
   fi
 }
 
+-- Generates a binary operator, using
+-- intermediate register if needed
+fun binop (op, src, dest) {
+  if memOpnd (src) && memOpnd (dest)
+  then {Mov (src, eax), Binop (op, eax, dest)}
+  else singleton (Binop (op, src, dest))
+  fi
+}
+
+-- Generates a set instruction
+fun set (op, dest) {
+  {Mov (L (0), eax), Set (op.suffix, "%al"), Mov (eax, dest)}
+}
+
 -- Gets a suffix for Set instruction from
 -- source language comparison operator
 fun suffix (op) {
@@ -278,9 +292,43 @@ fun suffix (op) {
   esac
 }
 
+-- Returns predicate that compares x to other value
+fun equalTo (x) {
+  fun (e) {
+    if compare(x, e) then false else true fi
+  }
+}
+
+-- Returns true if list contains x
+fun contains (list, x) {
+  case equalTo(x).find(list) of
+    None     -> false
+  | Some (_) -> true 
+  esac 
+}
+
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
+
+  fun compileBinop (op, src, dest) { -- dest <op> src
+    if {"+", "-"}.contains(op) then
+      {binop (op, src, dest)}
+    elif {"&&", "!!"}.contains(op) then
+      {binop ("cmp", L (0), src), set ("!=", src), 
+       binop ("cmp", L (0), dest), set ("!=", dest), 
+       binop (op, src, dest)}
+    elif {"==", "!=", "<", "<=", ">", ">="}.contains(op) then
+      {binop ("cmp", src, dest), set (op, dest)}
+    else
+      case op of
+        "*" -> {move (dest, eax), Binop ("*", src, eax), move (eax, dest)}
+      | "/" -> {move (dest, eax), Cltd, IDiv (src),      move (eax, dest)}
+      | "%" -> {move (dest, eax), Cltd, IDiv (src),      move (edx, dest)}
+      esac
+    fi
+  }
+
   fun compile (env, code) {
     foldl (
       fun ([env, scode], i) {
@@ -294,7 +342,22 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | LD (x) ->
+            case env.addGlobal(x).allocate of
+              [s, env] -> [env, code : {move(env.loc(x), s)}]
+            esac
+        | ST (x) -> 
+            case env.addGlobal(x).pop of
+              [s, env] -> [env, code : {move(s, env.loc(x))}]
+            esac
+        | CONST (n) ->
+            case env.allocate of
+              [s, env] -> [env, code : singleton(Mov(L (n), s))]
+            esac
+        | BINOP (op) ->
+            case env.pop2 of
+              [src, dest, env] -> [env.push(dest), code : op.compileBinop(src, dest)]
+            esac
         esac
       }, [env, {}], code)
   }
