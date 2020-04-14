@@ -29,14 +29,9 @@ local operations = {
 -- Primary expression
 local primary = memo $ eta (decimal @ fun (c) {Const (stringInt (c))} |
                             lident  @ fun (x) {Var (x)} |
-<<<<<<< HEAD
-                            inbr (s ("("), exp, s (")"))),
-      exp = memo $ eta (failure ("expression parsing not implemented\n"));
-=======
                             inbr ("(", expression, ")"));
 
 local expression = memo $ eta (expr (operations, primary)(id));
->>>>>>> A03-straight-line-parser
 
 local statement = memo $ eta (
     kSkip  @  lift (Skip)
@@ -47,12 +42,8 @@ local statement = memo $ eta (
    
 
 -- Public top-level parser
-<<<<<<< HEAD
-public parse = stmt;
-=======
 public parse = memo $ eta (
     statement
   | statement |> fun (s1) { s (";") |> lift (parse @ fun (s2) {Seq (s1, s2)}) }
 );
              
->>>>>>> A03-straight-line-parser

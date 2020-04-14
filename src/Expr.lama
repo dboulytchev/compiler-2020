@@ -13,8 +13,6 @@ import State;
 --        Const (int)                |
 --        Binop (string, expr, expr)
 
-<<<<<<< HEAD
-=======
 public fun evalBinOperation(operation, first, second) {
   case operation of
     "+" -> first + second
@@ -33,7 +31,6 @@ public fun evalBinOperation(operation, first, second) {
   esac
 }
 
->>>>>>> A03-straight-line-parser
 public fun evalExpr (st, expr) {
   case expr of
     Var (s) -> st (s)
