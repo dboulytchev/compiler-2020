@@ -154,7 +154,7 @@ public fun compileSM (stmt) {
             esac
           esac
         esac
-      | While (e, s1) -> case genLabels(env, 2) of
+      | While (e, s1) -> case genLabels (env, 2) of
           [ls, l, nenv1] -> case compile (s1, nenv1) of [ns1, nenv2] ->
             [{ JMP (ls), LABEL (l), ns1, LABEL (ls), compileExpr (e), CJMP ("nz", l) }, nenv2]
           esac
