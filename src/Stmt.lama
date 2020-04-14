@@ -22,12 +22,17 @@ import World;
 fun eval (c@[s, w], stmt) {
   case stmt of
       Skip -> c
-    | Seq(stmt1, stmt2) -> eval(eval([s, w], stmt1), stmt2)
-    | Read(x) -> case readWorld(w) of 
-        [val, w2] -> [s <- [x, val], w2]
+    | Seq(stmt1, stmt2) -> eval (eval ([s, w], stmt1), stmt2)
+    | Read(x) -> case readWorld (w) of 
+        [n, w2] -> [s <- [x, n], w2]
       esac
-    | Write(val) -> [s, writeWorld(evalExpr(s, val), w)]
-    | Assn(x, val) -> [s <- [x, evalExpr(s, val)], w]
+    | Write(e) -> [s, writeWorld (evalExpr (s, e), w)]
+    | Assn(x, e) -> [s <- [x, evalExpr (s, e)], w]
+    | If(e, stmt1, stmt2) -> if evalExpr (s, e) != 0 then eval ([s, w], stmt1) else eval ([s, w], stmt2) fi
+    | While (e, stmt1) -> if evalExpr (s, e) != 0 then eval (eval ([s, w], stmt1), stmt) else [s, w] fi
+    | Repeat (stmt1, e) -> case eval ([s, w], stmt1) of
+                                [s, w] -> if evalExpr (s, e) != 0 then [s, w] else eval ([s, w], stmt) fi
+                           esac
   esac
 }
 
