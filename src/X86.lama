@@ -219,6 +219,7 @@ fun dataSection (text) {
   Meta ("\t.data\n") : text
 }
 
+
 -- Generates data definition
 fun dataDef (name) {
   singleton (Meta (sprintf ("%s:\t.int\t0\n", name)))
@@ -278,30 +279,6 @@ fun suffix (op) {
   esac
 }
 
--- Compiles stack machine code into a list of x86 instructions. Takes an environment
--- and stack machine code, returns an updated environment and x86 code.
-fun compile (env, code) {
-  fun compile (env, code) {
-    foldl (
-      fun ([env, scode], i) {
-        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
-        case i of
-          READ ->
-            case env.allocate of
-              [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
-            esac             
-        | WRITE ->
-            case env.pop of
-              [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
-            esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
-        esac
-      }, [env, {}], code)
-  }
-
-  compile (env, code) 
-}
-
 -- A top-level codegeneration function. Takes a driver's environment and a stack machine program,
 -- compiles the program into machine code, and compiles the machine code into an executable
 public fun compileX86 (args, code) {
@@ -330,3 +307,106 @@ public fun compileX86 (args, code) {
        system ({"gcc -g -m32 -o ", args.getBaseName, " ", runtime, " ", asmFile}.stringcat)
   esac
 }
+
+-- Compiles stack machine code into a list of x86 instructions. Takes an environment
+-- and stack machine code, returns an updated environment and x86 code.
+fun compile (env, code) {
+  fun compile (env, code) {
+    foldl (
+      fun ([env, scode], i) {
+        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+        
+        fun binary(instrGenerator) {
+          case env.pop2 of
+              [a, b, env] -> case env.allocate of
+                                 [target, env] -> [env, code : instrGenerator(a, b, target)]
+                             esac
+          esac
+        }
+
+        fun basicArith(op) {
+           binary(fun (a, b, target) {
+                {Mov(b, eax), Binop(op, a, eax), Mov(eax, target)}
+            })
+        }
+
+        fun divmod(isRemainder) {
+            binary(fun (a, b, target) {
+                {Mov(b, eax), Cltd, IDiv(a), Mov(if isRemainder then edx else eax fi, target)}
+            })
+        }
+
+        fun compare(op) {
+            binary(fun (a, b, target) {
+                {
+                    Mov(b, edx),
+                    Binop("^", eax, eax),
+                    Binop("cmp", a, edx),
+                    Set(suffix(op), "%al"),
+                    Mov(eax, target)
+                }
+            })
+        }
+
+        fun logical(op) {
+            binary(fun (a, b, target) {
+                {
+                     Binop("^", edx, edx),
+                     Binop("^", eax, eax),
+                     Binop("cmp", a, eax), Set(suffix("!="), "%al"),
+                     Binop("cmp", b, edx), Set(suffix("!="), "%dl"),
+                     Binop(op, eax, edx),
+                     Mov(edx, target)
+                }
+            })
+        }
+
+        
+        case i of
+         READ ->
+            case env.allocate of
+              [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
+            esac             
+        | WRITE ->
+            case env.pop of
+              [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
+            esac
+        | ST (name) ->
+            case env.addGlobal(name).pop of
+                [s, env] -> [env, code : move(s, env.loc(name))]
+            esac
+        | LD (name) ->
+            case env.addGlobal(name).allocate of
+                [s, env] -> [env, code : move(env.loc(name), s)]
+            esac
+        | CONST(value) ->
+            case env.allocate of
+                [s, env] -> [env, code : singleton(Mov(L(value), s))]
+            esac
+        | BINOP("*") -> basicArith("*")
+        | BINOP("+") -> basicArith("+")
+        | BINOP("-") -> basicArith("-")
+        | BINOP("/") -> divmod(0)
+        | BINOP("%") -> divmod(1)
+        | BINOP("<") -> compare("<")
+        | BINOP("<=") -> compare("<=")
+        | BINOP(">") -> compare(">")
+        | BINOP(">=") -> compare(">=")
+        | BINOP("==") -> compare("==")
+        | BINOP("!=") -> compare("!=")
+        | BINOP("&&") -> logical("&&")
+        | BINOP("!!") -> logical("!!")
+        | LABEL (value) -> [env, code : singleton(Label (value))]
+        | JMP (label) -> [env, code : singleton(Jmp (label))]
+        | CJMP (value, label) -> 
+            case env.pop of
+              [s, env] -> [env, code : {Binop ("cmp", L (0), s), CJmp(value, label)}]
+            esac
+        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        esac
+      }, [env, {}], code)
+  }
+
+  compile (env, code) 
+}
+

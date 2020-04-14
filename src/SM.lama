@@ -54,9 +54,36 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval (env, c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (env, [stack, state, world], insns) {
+  case insns of
+    CONST(value):next -> eval(env, [value:stack, state, world], next)
+  | READ:next         -> case readWorld(world) of
+                           [value, world2] -> eval(env, [value:stack, state, world2], next)
+                         esac
+  | ST(name):next     -> case stack of
+                           head:tail -> eval(env, [tail, state <- [name, head], world], next)
+                         esac
+  | LD(name):next     -> eval(env, [state(name):stack, state, world], next)
+  | BINOP(op):next    -> case stack of
+                           right:left:tail -> eval(env, [evalBinary(op, left, right):tail, state, world], next)
+                         esac
+  | WRITE:next        -> case stack of
+                            head:tail -> eval(env, [tail, state, writeWorld(head, world)], next) 
+                         esac
+  | LABEL (label):next -> eval(env, [stack, state, world], next)
+  | JMP (label) : next -> eval(env, [stack, state, world], fromLabel(env, label))
+  | CJMP ("nz", label) : rest -> case stack of
+                              0 : tail -> eval(env, [tail, state, world], rest)
+                            | _ : tail -> eval(env, [tail, state, world], fromLabel(env, label))
+                            esac
+  | CJMP ("z", label) : rest -> case stack of
+                              0 : tail -> eval(env, [tail, state, world], fromLabel(env, label))
+                            | _ : tail -> eval(env, [tail, state, world], rest)
+                            esac
+  | _ -> [stack, state, world]
+  esac
 }
+
 
 -- Runs a stack machine for a given input and a given program, returns an output
 public fun evalSM (input, insns) {
@@ -97,12 +124,53 @@ fun genLabels (env, n) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+  case expr of
+    Const(value) -> singleton(CONST(value))
+  | Var(name) -> singleton(LD(name))
+  | Binop(op, left, right) -> {compileExpr(left), compileExpr(right), singleton(BINOP(op))}
+  esac
 }
+
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  fun compileSM (stmt, env) {
+      case stmt of
+        Read (value) -> [{READ, ST (value)}, env]
+      | Write (expr) -> [{compileExpr(expr), WRITE}, env]
+      | Assn (name, value) -> [{compileExpr(value), ST (name)}, env]
+      | Seq (stmt1, stmt2) ->
+            case compileSM(stmt1, env) of [commands1, env1] ->
+              case compileSM(stmt2, env1) of [commands2, env2] ->
+                [{commands1, commands2}, env2]
+              esac
+            esac
+      | Skip -> [{}, env]
+      | If (value, onTrue, onFalse) ->
+            case genLabels(env, 2) of [lfalse, lexit, env1] ->
+              case compileSM(onTrue, env1) of [commands1, env2] ->
+                case compileSM(onFalse, env2) of [commands2, env3] ->
+                  [{compileExpr(value), CJMP("z", lfalse), commands1, JMP(lexit), LABEL(lfalse), commands2, LABEL(lexit)}, env3]
+                esac
+              esac 
+            esac
+      | While (value, body) -> 
+            case genLabels(env, 2) of [lexit, lbody, env1] ->
+              case compileSM(body, env1) of [commands1, env2] ->
+                [{JMP(lexit), LABEL(lbody), commands1, LABEL(lexit), compileExpr(value), CJMP("nz", lbody)}, env2]
+              esac 
+            esac
+      | Repeat (body, value) ->
+            case genLabels(env, 1) of [lbody, env1] ->
+              case compileSM(body, env1) of [commands1, env2] ->
+                [{LABEL(lbody), commands1, compileExpr(value), CJMP("z", lbody)}, env2]
+              esac 
+            esac
+      esac
+  }
+  
+  deepFlatten(compileSM(stmt, initCompEnv())[0])
 }
+
