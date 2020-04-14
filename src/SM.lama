@@ -52,6 +52,7 @@ fun fromLabel (env, lab) {
   env [0] (lab)
 }
 
+
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
 fun eval (env, [stack, state, world], insns) {

@@ -40,7 +40,10 @@ local wordSize = 4;
 --   Cltd                       -- see instruction set reference           
 --   Set   (string, string)     -- sets a value from flags; the first operand is the   
 --                                 suffix, which determines the value being set, the
---                                 the second --- (sub)register name 
+--                                 the second --- (sub)register name
+--   Jmp   (string)             -- unconditional jump to a label
+--   CJmp  (string, string)     -- conditional jump to a label
+--   Label (string)             -- a label
 --   Push  (opnd)               -- pushes the operand on the hardware stack
 --   Pop   (opnd)               -- pops from the hardware stack to the operand
 --   Call  (string)             -- calls a function by its name 
