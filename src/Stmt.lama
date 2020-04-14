@@ -16,15 +16,22 @@ import World;
 --        Read   (string)           |
 --        Write  (expr)             |
 
-fun eval ([st, w], stmt) {
-    case stmt of
-            Read(x) -> case readWorld(w) of [val, new_w] -> [st <- [x, val], new_w] esac
-        |   Write(e) -> [st, writeWorld(evalExpr(st, e), w)]
-        |   Assn(x, e) -> [st <- [x, evalExpr(st, e)], w]
-        |   Seq(s1, s2) -> eval(eval([st, w], s1), s2)
-        |   Skip -> [st, w]
-    esac
-}	
+fun eval (c@[state, world], stmt) {
+  case stmt of 
+    Assn(x, expr) -> [state <- [x, evalExpr(state, expr)], world]
+  | Seq(stmt1 , stmt2) -> eval(eval(c, stmt1), stmt2)
+  | Skip -> c
+  | Read(str) -> case readWorld(world) of
+                   [n, world] -> [state <- [str, n], world]
+                 esac
+  | Write(expr) -> [state, writeWorld(evalExpr(state, expr), world)]
+  | If (expr, stmt1, stmt2) -> if evalExpr(state, expr) != 0 then eval([state, world], stmt1) else eval([state, world], stmt2) fi
+  | While (expr, stmt1) -> if evalExpr(state, expr) != 0 then eval(eval([state, world], stmt1), stmt) else [state, world] fi
+  | Repeat (stmt1, expr) -> case eval([state, world], stmt1) of
+                              [statep, worldp]-> if evalExpr(statep, expr) != 0 then [statep, worldp] else eval([statep, worldp], stmt) fi
+                            esac
+  esac
+}
 
 -- Evaluates a program with a given input and returns an output
 public fun evalStmt (input, stmt) {
