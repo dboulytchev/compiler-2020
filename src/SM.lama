@@ -25,8 +25,34 @@ public fun showSM (prg) {
 
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
-fun eval (c, insns) {
-  failure ("SM eval not implemented\n")
+public fun eval ([stack, st, w], insts) {
+  case insts of
+        inst:p ->
+            case inst of
+                BINOP(op) ->
+                    case stack of
+                        y:x:zs -> eval([evalBinop(op, x, y):zs, st, w], p)
+                    |   _      -> failure("BINOP: required stack size >= 2\n")
+                    esac
+            |   CONST(c) -> eval([c:stack, st, w], p)
+            |   READ ->
+                    case readWorld(w) of
+                        [val, w_new] -> eval([val:stack, st, w_new], p)
+                    esac
+            |   WRITE ->
+                    case stack of
+                        head:tail -> eval([tail, st, writeWorld(head, w)], p)
+                    |   _        -> failure("WRITE: required stack size >= 1\n")
+                    esac
+            |   LD(x) -> eval([st(x):stack, st, w], p)
+            |   ST(x) ->
+                    case stack of
+                        head:tail -> eval([tail, st <- [x, head], w], p)
+                    |   _         -> failure("WRITE: required stack size >= 1\n")
+                    esac
+            esac
+    |   {} -> [stack, st, w]
+    esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -37,13 +63,26 @@ public fun evalSM (input, insns) {
 -- Compiles an expression into a stack machine code.
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
-fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+public fun compileExpr (expr) {
+  case expr of
+        Const(c) -> singleton(CONST(c))
+    |   Var(x) -> singleton(LD(x))
+    |   Binop(op, expr_l, expr_r) -> {compileExpr(expr_l), compileExpr(expr_r), BINOP(op)}
+    esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+    fun compile (stmt) {
+        case stmt of
+                Skip -> {}
+            |   Assn(x, e) -> {compileExpr(e), ST(x)}
+            |   Read(x) -> {READ, ST(x)}
+            |   Write(e) -> {compileExpr(e), WRITE}
+            |   Seq(s1, s2) -> {compile(s1), compile(s2)}
+        esac
+    }
+    deepFlatten (compile (stmt))
 }
