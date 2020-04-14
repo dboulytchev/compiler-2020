@@ -54,8 +54,36 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval (env, c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (env, [s, st, w], insns) {
+  case insns of
+    CONST (c) : o -> eval (env, [c : s, st, w], o)
+  | READ : o -> case readWorld (w) of
+      [v, nw] -> eval (env, [v : s, st, nw], o)
+    esac
+  | WRITE : o -> case s of
+      h : no -> eval (env, [no, st, writeWorld (h, w)], o)
+    esac
+  | BINOP (op) : o -> case s of
+      r : l : no -> eval (env, [evalBinop (op, l, r) : no, st, w], o)
+    esac
+  | LD (x) : o -> eval (env, [st (x) : s, st, w], o)
+  | ST (x) : o -> case s of
+      h : no -> eval (env, [no, st <- [x, h], w], o)
+    esac
+  | LABEL (l) : o -> eval (env, [s, st, w], o)
+  | JMP (l) : o -> eval (env, [s, st, w], fromLabel (env, l))
+  | CJMP (c, l) : o -> case c of
+      "z" -> case s of
+          0 : no -> eval (env, [no, st, w], fromLabel (env, l))
+        | _ : no -> eval (env, [no, st, w], o)
+        esac
+    | "nz" -> case s of
+          0 : no -> eval (env, [no, st, w], o)
+        | _ : no -> eval (env, [no, st, w], fromLabel (env, l))
+        esac
+    esac
+  | {} -> [s, st, w]
+  esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
