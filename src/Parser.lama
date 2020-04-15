@@ -15,7 +15,6 @@ fun bin (oper) {
   [s (oper), fun (l, r) {Binop (oper, l, r)}]
 }
 
-
 local oper = {
     [Left, singleton (bin ("!!"))],
     [Left, singleton (bin ("&&"))],
@@ -32,49 +31,13 @@ local primary = memo $ eta (decimal @ fun (c) {Const (stringInt (c))} |
                             inbr ("(", expression, ")"));
 
 local expression = memo $ eta (expr (oper, primary)(id));
-   
 
-local else_if = memo $ eta (
-      kElif |> lift (expression |> fun (s1) {
-      kThen |> lift (parse |> fun (s2) {
-      else_if @ fun (s3) {If (s1, s2, s3)} }) })|
-      kElse |> lift (parse |> fun (s3) {kFi @ lift (s3)})|
-      kFi @ lift (Skip)
+local statement = memo $ eta (
+    kSkip  @  lift (Skip)
+  | kWrite |> lift (expression @ fun (e) {Write (e)})
+  | kRead  |> lift (primary @ fun (Var (p)) {Read (p)})
+  | lident |> fun (x) { s (":=") |> lift (expression @ fun (e) {Assn (x, e)}) }
 );
-
-local statement = memo $ eta (kSkip @ lift (Skip)|
-
-   kRead |> lift (primary @ fun (Var (val)) { Read (val) })|
-
-
-   kWrite |> lift (expression @ fun (val) { Write (val) })|
-
-
-   lident |> fun (val) { s(":=") |> lift (expression @ fun (expr) { Assn (val, expr) }) }|
-
-
-   kWhile |> lift (expression |> fun (exp) {
-      kDo |> lift (parse |> fun (s) {
-      kOd @ lift (While (exp, s)) }) })|
-
- 
-   kIf |> lift (expression |> fun (s1) {
-      kThen |> lift (parse |> fun (s2) {
-      else_if @ fun (s3) { If (s1, s2, s3)} }) })|
-
-
-   kRepeat |> lift(parse |> fun(s1) {
-      kUntil |> lift (expression @ fun(s2) {
-      Repeat(s1, s2) }) })|
-
-
-   kFor |> lift (parse |> fun(s1) {
-      s(",") |> lift (expression |> fun (expr) {
-      s(",") |> lift (parse |> fun(s2) {
-      kDo |> lift (parse |> fun (s3) {
-      kOd @ lift (Seq (s1, While(expr,
-      Seq(s3, s2)))) }) }) }) }));
-
    
 
 -- Public top-level parser
@@ -82,3 +45,12 @@ public parse = memo $ eta (
     statement
   | statement |> fun (s1) { s (";") |> lift (parse @ fun (s2) {Seq (s1, s2)}) }
 );
+
+--    kIf |> lift (expression |> fun (condition) {
+--      kThen |> lift (parse |> fun (then_statment) {
+--        elif_statment @ fun (else_statment) { If (condition, then_statment, else_statment)}
+--      })
+--    })|
+
+
+ 
