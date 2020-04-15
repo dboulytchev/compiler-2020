@@ -15,46 +15,23 @@ import World;
 --        Skip                      |
 --        Read   (string)           |
 --        Write  (expr)             |
---        if     (expr, stmt, stmt) |
---        While  (expr, stmt)       |
---        Repeat (stmt, expr)
-
 
 fun eval ([state, world], stmt) {
-  case stmt of
+  	case stmt of
+		Read (value) -> 
+			case
+        readWorld (world) of [x, newworld] ->	[state <- [value, x], newworld]
+			esac
 
-    Assn(value2, value1) -> [state <- [value2, evalExpr(state, value1)], world]
+		| Seq (state1, state2) -> eval (eval ([state, world], state1), state2)
 
-  | Seq(state1, state2) -> eval(eval([state, world], state1), state2)
+    | Assn (value, expr) -> [state <- [value, evalExpr (state, expr)], world]
 
-  | Skip -> [state, world]
+    | Write (expr) -> [state, writeWorld (evalExpr (state, expr), world)]
 
-  | Read(value1) -> case readWorld(world) of
-      [value2, world2] -> [state <- [value1, value2], world2]
-    esac
-
-  | Write(val) -> [state, writeWorld(evalExpr(state, val), world)]
-
-  | If (exp, s1, s2) -> if evalExpr (state, exp) != 0
-      then eval ([state, world], s1)
-      else eval ([state, world], s2)
-    fi
-
-  | While (exp, statem) -> if evalExpr (state, exp) != 0
-      then eval (eval ([state, world], statem), stmt)
-      else [state, world]
-    fi
-
-  | Repeat (statem, expression) -> local value = eval ([state, world], statem);
-                                  if evalExpr (value[0], expression) == 0
-      then eval (value, stmt)
-      else value
-    fi
-
-  esac
+		| Skip -> [state, world]
+	esac
 }
-
-
 
 -- Evaluates a program with a given input and returns an output
 public fun evalStmt (input, stmt) {
