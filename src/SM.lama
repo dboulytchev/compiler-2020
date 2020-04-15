@@ -41,7 +41,7 @@ fun initEvalEnv (insns) {
             esac
           }
         }) $ [emptyMap (), insns];
-  
+
   [fun (l) {
      case findMap (map, l) of Some (insns) -> insns esac
   }]
@@ -54,8 +54,40 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval (env, c, insns) {
-  failure ("SM eval not implemented\n")
+public fun eval (env, [stack, st, w], insts) {
+	case insts of
+    {} -> [stack, st, w]
+  | CONST (c) : ins -> eval (env, [c : stack, st, w], ins)
+  | BINOP (op) : ins -> 
+      case stack of
+        r : l : t -> eval (env, [evalBinop (op, l, r) : t, st, w], ins)
+      esac
+  | READ : ins ->
+      case readWorld (w) of
+        [v, nw] -> eval (env, [v : stack, st, nw], ins)
+      esac
+  | WRITE : ins ->
+      case stack of
+        head : t -> eval (env, [t, st, writeWorld (head, w)], ins)
+      esac
+  | ST (x) : ins -> 
+      case stack of
+        head : t -> eval (env, [t, st <- [x, head], w], ins)
+      esac
+  | LD (x) : ins -> eval (env, [st (x) : stack, st, w], ins)
+  | LABEL (_) : ins -> eval (env, [stack, st, w], ins)
+  | JMP (l) : ins -> eval (env, [stack, st, w], env.fromLabel (l))
+  | CJMP (c, l) : ins ->
+      case stack of
+        head : t ->
+          case assoc ({["z", 0], ["nz", 1]}, c) of Some (y) ->
+            if y != (head > 0) 
+              then eval (env, [stack, st, w], ins)
+              else eval (env, [stack, st, w], env.fromLabel (l))
+            fi
+          esac
+      esac
+	esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -97,12 +129,52 @@ fun genLabels (env, n) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+	case expr of
+    Const (x)        -> CONST (x) : {}
+  | Var   (x)        -> LD (x) : {}
+  | Binop (op, l, r) -> {compileExpr (l), compileExpr (r), BINOP (op)}
+	esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+    fun compileNestedSM (env, stmt) {
+      case stmt of
+        Skip                 -> [env, {}]
+      | Read  (x)            -> [env, {READ, ST (x)}]
+      | Write (expr)         -> [env, {compileExpr (expr), WRITE}]
+      | Assn  (x, expr)      -> [env, {compileExpr (expr), ST (x)}]
+      | Seq (s1, s2) ->
+          case compileNestedSM (env, s1) of 
+            [env1, p1] ->
+              case compileNestedSM (env1, s2) of
+                [env2, p2] -> [env2, {p1, p2}]
+              esac
+          esac
+      | If (e, s1, s2) ->
+          case env.genLabels (2) of [l_false, l_end, env] ->
+            case compileNestedSM (env, s1) of [env, p1] ->
+              case compileNestedSM (env, s2) of [env, p2] ->
+                  [env, {compileExpr (e), CJMP ("z", l_false), p1, JMP (l_end), LABEL (l_false), p2, LABEL (l_end)}]
+              esac
+            esac
+          esac
+      | While (e, s) ->
+          case env.genLabels (2) of [l_body, l_condition, env] ->
+            case compileNestedSM (env, s) of [env, body] ->
+              [env, {JMP (l_condition), LABEL (l_body), body, LABEL (l_condition), compileExpr (e), CJMP ("nz", l_body)}]
+            esac
+          esac
+      | Repeat (s, e) ->
+          case env.genLabel of [l_body, env] ->
+            case compileNestedSM (env, s) of [env, body] ->
+              [env, {LABEL (l_body), body, compileExpr (e), CJMP ("z", l_body)}]
+            esac
+          esac
+      esac
+    }
+
+    deepFlatten (compileNestedSM (initCompEnv (), stmt)[1])
 }

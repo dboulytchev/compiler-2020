@@ -36,7 +36,7 @@ local wordSize = 4;
 --   Mov   (opnd, opnd)         -- copies a value from the first to the second operand  
 --   Binop (string, opnd, opnd) -- makes a binary operation; note, the first operand   
 --                                 designates x86 operator, not the source language one
---   IDiv  (opnd)               -- x86 integer division, see instruction set reference 
+--   IDiv  (opnd)               -- x86 integer DIV, see instruction set reference 
 --   Cltd                       -- see instruction set reference           
 --   Set   (string, string)     -- sets a value from flags; the first operand is the   
 --                                 suffix, which determines the value being set, the
@@ -278,6 +278,23 @@ fun suffix (op) {
   esac
 }
 
+-- Operator types for choosing appropriate assembler code 
+local op_types = {
+  ["+",  SMP],
+  ["-",  SMP],
+  ["*",  SMP],
+  ["/",  DIV],
+  ["%",  DIV],
+  ["<",  CMP],
+  ["<=", CMP],
+  [">",  CMP],
+  [">=", CMP],
+  ["==", CMP],
+  ["!=", CMP],
+  ["!!", BLN],
+  ["&&", BLN]
+};
+
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
@@ -286,7 +303,11 @@ fun compile (env, code) {
       fun ([env, scode], i) {
         local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
         case i of
-          READ ->
+          CONST(c) ->
+            case env.allocate of
+              [s, env] -> [env, code : singleton(Mov (L (c), s))]
+            esac
+        | READ ->
             case env.allocate of
               [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
             esac             
@@ -294,7 +315,73 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | ST(x) -> 
+            case env.pop of
+              [s, env] -> [env.addGlobal(x), code : move(s, env.loc(x))]
+            esac
+        | LD(x) ->
+            case env.allocate of
+              [s, env] -> [env, code : singleton(move(env.loc(x), s))] 
+            esac
+        | BINOP(op) ->
+            case env.pop2 of 
+              [x, y, env] ->
+                case env.push (y) of 
+                  env ->
+                    case assoc (op_types, op) of
+                      Some (t) ->
+                        case t of
+                          SMP -> [env, code: {
+                            Mov   (y, eax), 
+                            Binop (op, x, eax), 
+                            Mov   (eax, y)
+                          }]
+                        | DIV -> 
+                            [env, code: {
+                              Push  (ebx),
+                              Mov   (y, eax), 
+                              Cltd, 
+                              Mov   (x, ebx), 
+                              IDiv  (ebx), 
+                              Pop   (ebx),
+                              Mov   (
+                                case op of 
+                                  "/" -> eax 
+                                | "%" -> edx 
+                                esac, y
+                              )
+                            }]
+                        | CMP -> 
+                            [env, code: {
+                              Binop ("^", edx, edx),
+                              Mov   (x, eax),
+                              Binop ("cmp", eax, y),
+                              Set   (suffix(op), "%dl"),
+                              Mov   (edx, y)
+                            }]
+                        | BLN -> 
+                            [env, code: {
+                              Binop ("^", eax, eax), 
+                              Binop ("cmp", y, eax), 
+                              Set   (suffix("!="), "%al"),
+                              Binop ("^", edx, edx),
+                              Binop ("cmp", x, edx), 
+                              Set   (suffix("!="), "%dl"),
+                              Binop (op, edx, eax), 
+                              Mov   (eax, y)
+                            }]
+                        esac
+                    esac
+                esac
+            esac
+        | LABEL (l)    -> [env, code : Label (l) : {}]
+        | JMP (l)      -> [env, code : Jmp (l) : {}]
+        | CJMP (c, l)  ->
+            case env.pop of 
+              [head, env] -> 
+                [env, code : { Binop ("cmp", L (0), head), CJmp (c, l) }]
+            esac
+        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
   }
