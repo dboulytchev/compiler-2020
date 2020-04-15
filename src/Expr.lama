@@ -19,13 +19,13 @@ public fun evalExpr (state, expr)
   case expr of
     Var(value) -> state(value)
   | Const(value) -> value   
-  | Binop(operation, l, r) -> evalBinOp(operation, evalExpr(state, l), evalExpr(state, r))
+  | Binop(operation, l, r) -> evalBinop(operation, evalExpr(state, l), evalExpr(state, r))
   esac
 }
 
-public fun evalBinOp(oper, l, r)
+public fun evalBinop(operation, l, r)
 {
-  case oper of
+  case operation of
     "+" -> l + r
   | "-" -> l - r
   | "*" -> l * r
@@ -35,7 +35,7 @@ public fun evalBinOp(oper, l, r)
   | "<=" -> l <= r
   | ">" -> l > r
   | ">=" -> l >= r
-  | "==" -> l ++ r
+  | "==" -> l == r
   | "!=" -> l != r
   | "!!" -> l !! r
   | "&&" -> l && r
