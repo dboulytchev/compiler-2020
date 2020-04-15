@@ -13,16 +13,17 @@ import State;
 --        Const (int)                |
 --        Binop (string, expr, expr)
 
+
 public fun evalExpr (state, expr)
 {
   case expr of
     Var(value) -> state(value)
   | Const(value) -> value   
-  | Binop(operation, l, r) -> evalBinOp(operation, evalExpr(state, l), evalExpr(state, r))
+  | Binop(operation, l, r) -> evalBinop(operation, evalExpr(state, l), evalExpr(state, r))
   esac
 }
 
-public fun evalBinOp(operation, l, r)
+public fun evalBinop(operation, l, r)
 {
   case operation of
     "+" -> l + r
@@ -34,10 +35,9 @@ public fun evalBinOp(operation, l, r)
   | "<=" -> l <= r
   | ">" -> l > r
   | ">=" -> l >= r
-  | "==" -> l ++ r
+  | "==" -> l == r
   | "!=" -> l != r
   | "!!" -> l !! r
   | "&&" -> l && r
   esac
 }
-
