@@ -276,11 +276,14 @@ fun suffix (op) {
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 
+
+
+
 fun compile (env, code) {
   fun compile (env, code) {
     foldl (
-      fun ([env, code], i) {           
       fun ([env, code], i) {
+
 
         fun bin(operation) {
             case env.pop2 of 
@@ -310,7 +313,7 @@ fun compile (env, code) {
                   [s, env] -> [env, code : {Mov (value2, edx), Binop ("^", eax, eax), Binop ("cmp", value1, edx), Set (suffix(operation), "%al"), Mov (eax, s)}]
                 esac
             esac
-        }
+        }    
 
         case i of
 
@@ -319,10 +322,10 @@ fun compile (env, code) {
             case env.allocate of
               [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
             esac             
-            esac
+            
+     
 
-
-        | WRITE ->
+          | WRITE ->
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
@@ -377,19 +380,13 @@ fun compile (env, code) {
         | BINOP (">")  -> match(">")
         | BINOP ("<=") -> match("<=")
         | BINOP (">=") -> match(">=")
-
-
-
-
-        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
-        esac
+	esac
       }, [env, {}], code)
   }
 
   compile (env, code) 
-  compile (env, code)
-  }
 }
+
 -- A top-level codegeneration function. Takes a stack machine program
 -- and returns x86 listing as a string
 public fun compileX86 (code) {
