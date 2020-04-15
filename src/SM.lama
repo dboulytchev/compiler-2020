@@ -9,6 +9,7 @@ import Util;
 -- Stack machine interpreter. Takes an SM-configuration and a program,
 -- returns a final configuration
 
+
 fun eval (config@[stack, state, world], instr) {
   case instr of 
    
@@ -25,7 +26,7 @@ fun eval (config@[stack, state, world], instr) {
  
   | BINOP (operation) : rmd -> case 
   
-  stack of r : l : stackrmd -> eval ([evalBinOp(operation, l, r) : stackrmd, state, world], rmd)
+  stack of r : l : stackrmd -> eval ([evalBinop(operation, l, r) : stackrmd, state, world], rmd)
   
    esac
 
@@ -45,6 +46,9 @@ fun eval (config@[stack, state, world], instr) {
 }
 
 
+
+
+
 -- Runs a stack machine for a given input and a given program, returns an output
 public fun evalSM (input, insns) {
   eval ([{}, emptyState, createWorld (input)], insns)[2].getOutput
@@ -54,28 +58,27 @@ public fun evalSM (input, insns) {
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
 fun compileExpr (expr) {
-    case expr of
-
+  case expr of
     Var   (value) -> singleton(LD (value))
   | Const (value) -> singleton(CONST (value))
-  | Binop (operation, l, r) -> flatten({compileExpr(l), compileExpr(r),singleton( BINOP (operation))})
-  
-   esac
+  | Binop (operation, l, r) -> deepFlatten (compileExpr (l) +++ compileExpr(r) +++ singleton (BINOP (operation)))
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
-public fun compileSM (state) {
-
-
-    case state of
-      Assn (value, expr) -> flatten({compileExpr (expr), singleton(ST (value))})
-    | Seq (state1, state2) -> flatten({compileSM (state1), compileSM (state2)})
-    | Read (value) -> {READ, ST (value)}
-    | Write (expr) -> flatten({compileExpr (expr), singleton(WRITE)})
-    | Skip -> {}
-    esac
-
-  
+public fun compileSM (stmt) {
+  case stmt of
+    Assn (value, expr) -> deepFlatten (compileExpr (expr) +++ singleton (ST (value)))
+  | Read (value) -> { READ, ST (value) }
+  | Write (value) -> deepFlatten (compileExpr (value) +++ singleton (WRITE))
+  | Seq (state1,state2 ) -> deepFlatten (compileSM (state1) +++ compileSM (state2))
+  | Skip -> {}
+  esac 
 }
+
+
+
+
+
