@@ -40,10 +40,7 @@ local wordSize = 4;
 --   Cltd                       -- see instruction set reference           
 --   Set   (string, string)     -- sets a value from flags; the first operand is the   
 --                                 suffix, which determines the value being set, the
---                                 the second --- (sub)register name
---   Jmp   (string)             -- unconditional jump to a label
---   CJmp  (string, string)     -- conditional jump to a label
---   Label (string)             -- a label
+--                                 the second --- (sub)register name 
 --   Push  (opnd)               -- pushes the operand on the hardware stack
 --   Pop   (opnd)               -- pops from the hardware stack to the operand
 --   Call  (string)             -- calls a function by its name 
@@ -90,6 +87,7 @@ fun insnString (insn) {
   | Meta  (m)          -> m
   esac
 }
+
 
 -- Environment for symbolic interpreter
 -- An environment holds
@@ -280,22 +278,117 @@ fun suffix (op) {
 
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
+
 fun compile (env, code) {
   fun compile (env, code) {
     foldl (
-      fun ([env, scode], i) {
-        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+      fun ([env, code], i) {
+
+
+        fun bin(operation) {
+            case env.pop2 of 
+              [value1, value2, env] -> case env.allocate of
+                               [s, env] -> [env, code : {Mov (value2, eax), Binop (operation, value1, eax), Mov (eax, s)}]
+                             esac
+            esac
+        }
+
+        fun logic (operation) {
+            case env.pop2 of
+              [value1, value2, env] -> 
+                case env.allocate of
+                  [s, env] -> [env, code : {
+                        Mov (value2, edx), Binop ("^", eax, eax), Binop ("cmp", L (0), edx), Set (suffix("!="), "%al"), Push (eax),
+                        Mov (value1, edx), Binop ("^", eax, eax), Binop ("cmp", L (0), edx), Set (suffix("!="), "%al"), Pop (edx),
+                        Binop ("+", edx, eax), move(eax, edx), Binop ("^", eax, eax), Binop ("cmp", L (operation), edx),
+                        Set (suffix(">"), "%al"), Mov (eax, s)}]
+                esac
+            esac
+        }
+
+        fun match (operation) {
+            case env.pop2 of 
+              [value1, value2, env] -> 
+                case env.allocate of
+                  [s, env] -> [env, code : {Mov (value2, edx), Binop ("^", eax, eax), Binop ("cmp", value1, edx), Set (suffix(operation), "%al"), Mov (eax, s)}]
+                esac
+            esac
+        }    
+
         case i of
+
+
           READ ->
             case env.allocate of
               [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
             esac             
-        | WRITE ->
+            
+     
+
+          | WRITE ->
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
-        esac
+
+
+        | LD (value)       ->
+            case env.addGlobal(value).allocate of
+              [s, env] -> [env, code : move(env.loc(value), s)]
+            esac
+        | ST (value) ->
+            case env.addGlobal(value).pop of
+              [s, env] -> [env, code : move(s, env.loc(value))]
+            esac
+
+
+        | CONST (value)    ->
+            case env.allocate of
+              [s, env] -> [env, code : singleton(Mov(L (value), s))]
+            esac
+
+
+        | BINOP ("&&") -> logic(1)
+        | BINOP ("!!") -> logic(0)
+
+
+
+        | BINOP ("+")  -> bin("+")
+        | BINOP ("-")  -> bin("-")
+        | BINOP ("*")  -> bin("*")
+
+        
+
+        | BINOP ("/")  -> 
+            case env.pop2 of 
+              [value1, value2, env] -> case env.allocate of
+                               [s, env] -> [env, code : {Mov (value2, eax), Cltd, IDiv (value1), Mov (eax, s)}]
+                             esac
+            esac
+
+
+        | BINOP ("%") -> 
+            case env.pop2 of 
+              [value1, value2, env] -> case env.allocate of
+                               [s, env] -> [env, code : {Mov (value2, eax), Cltd, IDiv (value1), Mov (edx, s)}]
+                             esac
+            esac
+
+
+        | BINOP ("==") -> match("==")
+        | BINOP ("!=") -> match("!=")
+        | BINOP ("<")  -> match("<")
+        | BINOP (">")  -> match(">")
+        | BINOP ("<=") -> match("<=")
+        | BINOP (">=") -> match(">=")
+
+        | LABEL (l) -> [env, code : singleton (Label (l))]
+        | JMP (l) -> [env, code : singleton (Jmp (l))]
+        | CJMP (c, l) -> 
+            case env.pop of
+              [s, env] -> [env, code : {Binop ("cmp", L (0), s), CJmp(c, l)}]
+            esac
+
+	esac
       }, [env, {}], code)
   }
 
@@ -330,3 +423,5 @@ public fun compileX86 (args, code) {
        system ({"gcc -g -m32 -o ", args.getBaseName, " ", runtime, " ", asmFile}.stringcat)
   esac
 }
+
+
