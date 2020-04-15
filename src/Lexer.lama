@@ -7,26 +7,26 @@ import Collection;
 import List;
 
 -- A set of all keywords
-local keywords =
-   foldl (addSet,
-          emptySet (),
-          {"read",
-           "write",
-           "skip",
-           "if",
-           "then",
-           "else",
-           "elif",
-           "fi",
-           "while",
-           "do",
-           "od",
-           "for",
-           "repeat",
-           "until"});
+local keywords = listSet({
+  "read",
+  "write", 
+  "skip", 
+  "if",
+  "then", 
+  "else", 
+  "elif", 
+  "fi",
+  "while", 
+  "do", 
+  "od", 
+  "for",
+  "repeat", 
+  "until"
+});
 
 -- Regular expression definitions
-public rWhiteSpace  = createRegexp ("\\(\\([ \n\r\t]*\\)\\|\\(--[^\n]*[ \n\r\t]*\\)\\)*", "whitespace"),
+public 
+      rWhiteSpace  = createRegexp ("\\(\\([ \n\r\t]*\\)\\|\\(--[^\n]*[ \n\r\t]*\\)\\)*", "whitespace"),
       rDecimal     = createRegexp ("-?[0-9]+", "decimal constant"),
       rLident      = createRegexp ("[a-z][a-z_A-Z0-9]*", "lowercase identifier"),
       rRead        = createRegexp ("read\\b", """read"""),
@@ -51,32 +51,36 @@ local whiteSpace = token (rWhiteSpace);
 public fun s (t) {memo $ whiteSpace |> lift (token (t))}
 
 -- Some individual tokens
-public kRead    = s (rRead),
-       kWrite   = s (rWrite),
-       kSkip    = s (rSkip),
-       kIf      = s (rIf),
-       kThen    = s (rThen),
-       kElse    = s (rElse),
-       kElif    = s (rElif),
-       kFi      = s (rFi),
-       kWhile   = s (rWhile),
-       kDo      = s (rDo),
-       kOd      = s (rOd),
-       kRepeat  = s (rRepeat),
-       kUntil   = s (rUntil),
-       kFor     = s (rFor),
-       decimal  = s (rDecimal),
-       end      = memo $ whiteSpace |> lift (eof),
-       lident   = memo $       
-         whiteSpace |> lift (fun (k) {
-                                fun (s) {
-                                  k (case s.matchRegexp (rLident) of
-                                       a@Succ (v, _) -> if memSet (keywords, v)
-                                                        then Fail ("lowercase identifier expected", s.getLine, s.getCol)
-                                                        else a
-                                                        fi
-                                     | a             -> a
-                                     esac)
-                                }
-                              });
+public
+      lbr      = s ("("),
+      rbr      = s (")"),
+      comma    = s (","),
+      kRead    = s (rRead),
+      kWrite   = s (rWrite),
+      kSkip    = s (rSkip),
+      kIf      = s (rIf),
+      kThen    = s ("then"),
+      kElse    = s (rElse),
+      kElif    = s (rElif),
+      kFi      = s (rFi),
+      kWhile   = s (rWhile),
+      kDo      = s (rDo),
+      kOd      = s (rOd),
+      kRepeat  = s ("repeat"),
+      kUntil   = s (rUntil),
+      kFor     = s (rFor),
+      decimal  = s (rDecimal),
+      end      = memo $ whiteSpace |> lift (eof),
+      lident   = memo $
+        whiteSpace |> lift (fun (k) {
+                              fun (s) {
+                                k (case s.matchRegexp (rLident) of
+                                      a@Succ (v, _) -> if memSet (keywords, v)
+                                                      then Fail ("lowercase identifier expected", s.getLine, s.getCol)
+                                                      else a
+                                                      fi
+                                    | a             -> a
+                                    esac)
+                              }
+                            });
 

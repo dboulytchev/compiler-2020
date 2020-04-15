@@ -18,9 +18,38 @@ import World;
 --        if     (expr, stmt, stmt) |
 --        While  (expr, stmt)       |
 --        Repeat (stmt, expr)
-
-fun eval (c, stmt) {
-  failure ("Stmt eval not implemented\n")
+fun eval (conf@[s, w], stmt) {
+	case stmt of
+    Assn (x, expr) -> [s <- [x, evalExpr (s, expr)], w]
+  | Seq (stmt1, stmt2) -> eval (eval (conf, stmt1), stmt2)
+  | Skip -> conf
+  | Read (x) -> 
+      case readWorld (w) of 
+        [value, nw] -> [s <- [x, value], nw]
+      esac
+  | Write (expr) -> [s, writeWorld (evalExpr (s, expr), w)]
+  | If (cond, stmt_true, stmt_false) -> 
+      if evalExpr (s, cond) then 
+        eval (conf, stmt_true) 
+      else
+        eval (conf, stmt_false) 
+      fi
+  | While (cond, body) -> 
+      if evalExpr (s, cond) then 
+        eval (eval (conf, body), stmt)
+      else 
+        conf 
+      fi
+  | Repeat (body, cond) ->
+      case eval (conf, body) of
+        new_conf@[new_s, _] ->
+          if evalExpr (new_s, cond) == 0 then 
+            eval (new_conf, stmt) 
+          else 
+            new_conf 
+          fi
+      esac
+	esac
 }
 
 -- Evaluates a program with a given input and returns an output
