@@ -58,8 +58,53 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval (env, c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (env, state@[stack, st, w], insns) {
+  case insns of
+    inst:p -> -- printf("%s\n%s\n", stack.string, inst.string);
+      case inst of
+        BINOP(op) ->
+          case stack of
+            y:x:zs -> eval(env, [evalOp(op, x, y):zs, st, w], p)
+          | _      -> failure("BINOP: required stack size >= 2\n")
+          esac
+      | DROP -> case stack of x:xs -> eval(env, [xs, st, w], p) esac
+      | CONST(c) -> eval(env, [c:stack, st, w], p)
+      | READ ->
+          case readWorld(w) of
+            [val, w_new] -> eval(env, [val:stack, st, w_new], p)
+          esac
+      |  WRITE ->
+          case stack of
+            head:tail -> eval(env, [tail, st, writeWorld(head, w)], p)
+          |   _       -> failure("WRITE: required stack size >= 1\n")
+          esac
+      |  LD(x) -> eval(env, [st(x):stack, st, w], p)
+      |  ST(x) ->
+          case stack of
+            head:tail -> eval(env, [stack, st <- [x, head], w], p)
+          | _         -> failure("WRITE: required stack size >= 1\n")
+          esac
+      | LABEL(_) -> eval(env, state, p)
+      | JMP(l)   -> eval(env, state, env.fromLabel(l))
+      | CJMP(c, l) ->
+          case stack of
+            x:tail ->
+              case assoc({["z", 0], ["nz", 1]}, c) of Some(y) ->
+                if (x >= 1) == y
+                  then eval(env, [tail, st, w], env.fromLabel(l))
+                  else eval(env, [tail, st, w], p)
+                fi
+              esac
+          | _ -> failure("CJMP: required stack size >= 1")
+          esac
+      | LDA(x) -> eval(env, [Ref(x):stack, st, w], p)
+      | STI ->
+          case stack of v:Ref(x):xs ->
+            eval(env, [v:xs, st <- [x, v], w], p)
+          esac
+      esac
+    | {} -> [stack, st, w]
+    esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -101,5 +146,68 @@ fun genLabels (env, n) {
 -- Takes an expression, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  fun compile (env, stmt) {
+    case stmt of
+      Const(x) -> [env, singleton(CONST(x))]
+    | Var(x) ->   [env, singleton(LD(x))]
+    | Ref(x) ->   [env, singleton(LDA(x))]
+    | Binop(op, s1, s2) ->
+        case compile(env, s1) of
+          [env, p1] -> 
+            case compile(env, s2) of
+              [env, p2] -> [env, {p1, p2, BINOP(op)}]
+            esac
+        esac
+    | Ignore(x) ->
+        case compile(env, x) of
+          [env, p] -> [env, {p, DROP}]
+        esac
+    | Skip -> [env, {}]
+    | Assn(s1, s2) ->
+        case compile(env, s1) of
+          [env, p1] ->
+            case compile(env, s2) of
+              [env, p2] -> [env, {p1, p2, STI}]
+            esac
+        esac
+    | Read(x) ->     [env, {READ, ST(x), DROP}]
+    | Write(s) ->
+        case compile(env, s) of
+          [env, p] -> [env, {p, WRITE}]
+        esac
+    | Seq(s1, s2) ->
+        case compile(env, s1) of [env1, p1] ->
+          case compile(env1, s2) of
+            [env2, p2] -> [env2, {p1, p2}]
+          esac
+        esac
+    | If(s, s1, s2) ->
+        case env.genLabels(2) of [l_false, l_end, env] ->
+          case compile(env, s1) of [env, p1] ->
+            case compile(env, s2) of [env, p2] ->
+              case compile(env, s) of [env, p] ->
+                [env, {p, CJMP("z", l_false), p1, JMP(l_end), LABEL(l_false), p2, LABEL(l_end)}]
+              esac
+            esac
+          esac
+        esac
+    | While(e, s) ->
+        case env.genLabels(2) of [l_body, l_condition, env] ->
+          case compile(env, s) of [env, body] ->
+            case compile(env, e) of [env, condition] ->
+              [env, {JMP(l_condition), LABEL(l_body), body, LABEL(l_condition), condition, CJMP("nz", l_body)}]
+            esac
+          esac
+        esac
+    | Repeat(s, e) ->
+        case env.genLabel of [l_body, env] ->
+          case compile(env, s) of [env, body] ->
+            case compile(env, e) of [env, condition] ->
+              [env, {LABEL(l_body), body, condition, CJMP("z", l_body)}]
+            esac
+          esac
+        esac
+    esac
+  }
+  deepFlatten(compile(initCompEnv(), stmt)[1])
 }

@@ -198,6 +198,10 @@ fun makeEnv (stack, stackSlots, globals, barrier, stackMap) {
     esac
   }
 
+  fun getStack() {
+    stack
+  }
+
   [envString,
    allocate,
    push,
@@ -211,7 +215,8 @@ fun makeEnv (stack, stackSlots, globals, barrier, stackMap) {
    isBarrier,
    setBarrier,
    setStack,
-   retrieveStack]
+   retrieveStack,
+   getStack]
 }
 
 -- Exported accessors
@@ -269,6 +274,10 @@ fun setStack (env, l) {
 
 fun retrieveStack (env, l) {
   env [13] (l)
+}
+
+fun getStack(env) {
+  env[14]()
 }
 
 -- Creates an initial environment
@@ -333,6 +342,18 @@ fun move (from, to) {
   fi
 }
 
+fun lea(from, to) {
+  if memOpnd (from) == 0 then
+    failure("lea: excpected from in memory")
+  fi;
+
+  if memOpnd(to) then
+    {Lea(from, eax), Mov(eax, to)}
+  else
+    singleton (Lea(from, to))
+  fi
+}
+
 -- Gets a suffix for Set instruction from
 -- source language comparison operator
 fun suffix (op) {
@@ -345,6 +366,22 @@ fun suffix (op) {
   | ">"  -> "g"
   esac
 }
+
+local binop_groups = {
+  ["+",  ASM],
+  ["-",  ASM],
+  ["*",  ASM],
+  ["/",  DIV],
+  ["%",  DIV],
+  ["==", CMP],
+  ["!=", CMP],
+  ["<",  CMP],
+  ["<=", CMP],
+  [">",  CMP],
+  [">=", CMP],
+  ["&&", BLN],
+  ["!!", BLN]
+};
 
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
@@ -362,6 +399,63 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
+        | DROP -> case env.pop of [_, env] -> [env, code] esac
+        | CONST(c) ->
+            case env.allocate of
+              [s, env] -> [env, code : singleton(Mov (L (c), s))]
+            esac
+        | ST(x) ->
+            case env.peek of
+              head -> [addGlobal(env, x), code : move(head, env.loc(x))]
+            esac
+        | STI ->
+            case env.pop2 of [y, x, env] ->
+              case env.push(x) of env ->
+                if memOpnd(y) then
+                  [env, code : {Mov(y, eax), Mov(x, edx), Mov(eax, I(0, edx), Mov(eax, x))}]
+                else
+                  [env, code : {Mov(x, edx), Mov(y, I(0, edx)), Mov(y, x)}]
+                fi
+              esac
+            esac
+        | LD(x) -> 
+            case env.allocate of
+              [s, env] -> [addGlobal(env, x), code : {move(env.loc(x), s)}]
+            esac
+        | LDA(x) ->
+            case env.allocate of
+              [head, env] -> [addGlobal(env, x), code : {lea(env.loc(x), head)}]
+            esac
+        | BINOP(op) ->
+            case env.pop2 of
+              [x, y, env] ->
+                case env.push(y) of env ->
+                  case assoc(binop_groups, op) of
+                    Some(group) ->
+                      case group of
+                        ASM -> [env, code: {Mov (y, eax), Binop (op, x, eax), Mov (eax, y)}]
+                      | DIV -> [env, code: {Push (ebx), Mov (y, eax), Cltd, Mov (x, ebx), IDiv (ebx), Pop (ebx),
+                                            Mov(case op of "/" -> eax | "%" -> edx esac, y)}]
+                      | CMP -> [env, code: {Binop("^", edx, edx), Mov(x, eax), Binop("cmp", eax, y),
+                                            Set(suffix(op), "%dl"), Mov(edx, y)}]
+                      | BLN -> [env, code: {Binop("^", eax, eax), Binop("cmp", y, eax), Set(suffix("!="), "%al"),
+                                            Binop("^", edx, edx), Binop("cmp", x, edx), Set(suffix("!="), "%dl"),
+                                            Binop(op, edx, eax), Mov(eax, y)}]
+                      esac
+                  esac
+                esac
+            esac
+        | LABEL(l) -> 
+            [if env.isBarrier
+              then env.retrieveStack(l)
+              else env
+             fi, code : singleton(Label(l))]
+        | JMP(l)   ->
+            [env.setStack(l).setBarrier, code : singleton(Jmp(l))]
+        | CJMP(c, l) ->
+          case env.pop of 
+            [head, env] -> [env.setStack(l), code : {Binop("cmp", L(0), head), CJmp(c, l)}]
+          esac
         | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
