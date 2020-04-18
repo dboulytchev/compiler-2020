@@ -1,0 +1,51 @@
+-- Statement evaluator.
+
+import State;
+import Expr;
+import World;
+
+-- Evaluates a statement "stmt" in a configuration "c".
+-- A configuration is a pair of a state "s" and a world "w".
+-- Returns a final configuration (if any)
+--
+-- A statement is represented by a data structure of the following shape:
+--
+-- stmt = Assn   (string, expr)     |
+--        Seq    (stmt, stmt)       |
+--        Skip                      |
+--        Read   (string)           |
+--        Write  (expr)             |
+--        if     (expr, stmt, stmt) |
+--        While  (expr, stmt)       |
+--        Repeat (stmt, expr)
+
+fun eval (conf@[state, world], stmt) {
+  case stmt of 
+    Assn(varName, expr) -> [state <- [varName, evalExpr(state, expr)], world]
+  | Read(varName) -> {
+      local res = readWorld(world);
+      [state <- [varName, res[0]], res[1]]
+    }
+  | Write(expr) -> [state, writeWorld(evalExpr(state, expr), world)]
+  | Seq(s1, s2) -> eval(eval([state, world], s1), s2)
+  | Skip -> conf
+  | If(e, s1, s2) -> if (evalExpr(state, e) != 0) then eval(conf, s1) else eval(conf, s2) fi
+  | While(e, statement) -> if (evalExpr(state, e) == 0) 
+                           then conf 
+                           else eval(eval(conf, statement), While(e, statement))
+                           fi
+  | Repeat(statement, e) -> case eval(conf, statement) of 
+                              newConf@[nState, nWorld] -> {
+                                if (evalExpr(nState, e) == 0) 
+                                then eval(newConf, Repeat(statement, e)) 
+                                else newConf
+                                fi
+                              }
+                            esac
+  esac
+}
+
+-- Evaluates a program with a given input and returns an output
+public fun evalStmt (input, stmt) {
+  eval ([emptyState, createWorld (input)], stmt).snd.getOutput
+}

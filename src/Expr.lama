@@ -29,10 +29,6 @@ public fun evalOp (op, l, r) {
   esac
 }
 
--- Evaluates an expression "expr" in a configuration "c".
--- A configuration is a pair of a state "s" and a world "w".
--- Returns a final configuration (if any)
---
 -- A expression is represented by a data structure of the following shape:
 --
 -- expr = Assn   (string, expr)       |
@@ -63,8 +59,12 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+fun eval (c@[st, w], expr) {
+  case expr of 
+    Const(x) -> x
+  | Var(x) -> st(x)
+  | Binop(op, l, r) -> evalOp(op, evalExpr(st, l), evalExpr(st, r))
+  esac
 }
 
 
