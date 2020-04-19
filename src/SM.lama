@@ -15,7 +15,7 @@ public fun showSMInsn (i) {
   case i of
     READ         -> "READ"
   | WRITE        -> "WRITE"
-  | SKIP         -> sprintf ("SKIP")
+  | SKIP         -> "SKIP"
   | BINOP (s)    -> sprintf ("BINOP %s", s)
   | LD    (x)    -> sprintf ("LD %s", x)
   | LDA   (x)    -> sprintf ("LDA %s", x)
@@ -75,12 +75,29 @@ fun eval (evalEnv, conf@[stack, state, world], insns) {
         esac
       , tail
       )
-  | LD(varName):tail -> eval(evalEnv, [state(varName):stack, state, world], tail)
+  | LD (var) : tail -> eval (evalEnv, [state (var) : stack, state, world], tail)
+  | LDA (var) : tail -> eval (evalEnv, [REF (var) : stack, state, world], tail)
   | ST(varName):tail -> 
       eval(
         evalEnv
       , case stack of 
-          stackHead:rest -> [rest, state <- [varName, stackHead], world]
+          stackHead:rest -> [stack, state <- [varName, stackHead], world]
+        esac
+      , tail
+      )
+  | STI : tail -> 
+      eval(
+        evalEnv
+      , case stack of
+          val : REF (x) : stackTail -> [val : stackTail, state <- [x, val], world]
+        esac
+      , tail
+      )
+  | DROP : tail -> 
+      eval(
+        evalEnv
+      , case stack of
+          val: stackTail -> [stackTail, state, world]
         esac
       , tail
       )
@@ -89,7 +106,7 @@ fun eval (evalEnv, conf@[stack, state, world], insns) {
         evalEnv
       , case stack of 
           first:rest -> case rest of 
-            second: rrest -> [callBinop(op, second, first):rrest, state, world]
+            second: rrest -> [evalOp(op, second, first):rrest, state, world]
           esac
         esac
       , tail
@@ -114,8 +131,7 @@ fun eval (evalEnv, conf@[stack, state, world], insns) {
 
 -- Runs a stack machine for a given input and a given program, returns an output
 public fun evalSM (input, insns) {
-  local inFlat = insns.deepFlatten;
-  eval (initEvalEnv (inFlat), [{}, emptyState, createWorld (input)], inFlat)[2].getOutput
+  eval (initEvalEnv (insns), [{}, emptyState, createWorld (input)], insns)[2].getOutput
 }
 
 -- Compilation environment: generates labels
@@ -166,9 +182,32 @@ public fun compileSM (stmt) {
   fun compileWithEnv (stmt, env) {
     case stmt of 
       Skip -> [singleton(SKIP), env]
-    | Assn(varName, expr) -> [{compileExpr(expr), ST(varName)}, env]
-    | Read(varName) -> [{READ, ST(varName)}, env]
-    | Write(expr) -> [{compileExpr(expr), WRITE}, env]
+    | Ref (x) -> [singleton (LDA (x)), env]
+    | Var(x) -> [singleton(LD(x)), env]
+    | Const(n) -> [singleton(CONST(n)), env]
+    | Binop(op, l, r) -> 
+        case compileWithEnv (l, env) of 
+          [lComp, env] -> 
+            case compileWithEnv (r, env) of
+              [rComp, env] -> [{ lComp, rComp, BINOP (op) }, env]
+            esac
+        esac
+    | Assn(lExpr, rExpr) -> 
+        case compileWithEnv (lExpr, env) of 
+          [code, env] ->
+            case compileWithEnv (rExpr, env) of 
+              [rCode, env] -> [{ code, rCode, STI }, env]
+            esac
+        esac
+    | Read(varName) -> [{ READ, ST (varName), DROP }, env]
+    | Write(expr) -> 
+        case compileWithEnv (expr, env) of 
+          [code, env] -> [{ code, WRITE }, env]
+        esac
+    | Ignore (expr) -> 
+        case compileWithEnv (expr, env) of
+          [code, env] -> [{code, DROP}, env]
+        esac
     | Seq(s1, s2) -> case compileWithEnv(s1, env) of 
                        [code1, env] -> 
                          case compileWithEnv(s2, env) of 
@@ -202,6 +241,5 @@ public fun compileSM (stmt) {
     esac
   }
 
-  compileWithEnv( stmt, initCompEnv()) [0]
-
+  compileWithEnv (stmt, initCompEnv()) [0].deepFlatten
 }

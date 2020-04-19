@@ -427,9 +427,20 @@ fun compile (env, code) {
             case env.addGlobal (x).allocate of 
               [s, env] -> [env, code : move(env.loc (x), s)]
             esac
+        | LDA (x) -> 
+            case env.addGlobal (x).allocate of
+              [s, env] -> [env, if memOpnd (s) then code : { Lea (env.loc (x), eax), Mov (eax, s) } else code: singleton(Lea (env.loc (x), s)) fi ]
+            esac
         | ST (x) -> 
-            case env.addGlobal (x).pop of
-              [s, env] -> [env, code : move(s, env.loc (x))]
+            case env.addGlobal (x) of
+              env -> [env, code : move(env.peek, env.loc (x))]
+            esac
+        | STI -> 
+            case env.pop2 of 
+              [x, y, env] -> 
+                  case env.allocate of 
+                    [res, env] -> [env, code : move (x, I (0, y)) : move (x, res)]
+                  esac
             esac
         | CONST (n) -> 
             case env.allocate of 
@@ -446,12 +457,13 @@ fun compile (env, code) {
                     esac
                 esac
             esac
-        | LABEL (l) -> [env, code : singleton (Label (l))] 
-        | JMP (l) -> [env, code : singleton (Jmp(l))]
+        | LABEL (l) -> [if env.isBarrier then env.retrieveStack (l) else env fi, code : singleton (Label (l))] 
+        | JMP (l) -> [setBarrier (setStack (env, l)), code : singleton (Jmp(l))]
         | CJMP (c, l) -> case env.pop of 
-                           [x, env] -> [env, code : cjmpOp(x, c, l)] 
+                           [x, env] -> [setStack (env, l), code : cjmpOp(x, c, l)] 
                          esac
         | SKIP -> [env, code]
+        | DROP -> case env.pop of [x, env] -> [env, code] esac
         | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
@@ -463,14 +475,14 @@ fun compile (env, code) {
 -- A top-level codegeneration function. Takes a driver's environment and a stack machine program,
 -- compiles the program into machine code, and compiles the machine code into an executable
 public fun compileX86 (args, code) {
-  case compile (initEnv (), code.deepFlatten) of
-    [env, code] ->
+  case compile (initEnv (), code) of
+    [env, code] -> 
        local asmFile = args.getBaseName ++ ".s",
              runtime = case getEnv ("LAMA_RUNTIME") of
                          #unboxed -> "../runtime/"
                        | path     -> path
                        esac ++ "/runtime.o";
-       
+
        fwrite (asmFile,
                map (insnString, 
                     deepFlatten ({
