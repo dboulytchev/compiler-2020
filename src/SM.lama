@@ -8,6 +8,7 @@ import World;
 import State;
 import Expr;
 import Util;
+import Ref;
 
 -- Stack code printer. Takes a list of SM instructions, return its
 -- string representation.
@@ -56,10 +57,51 @@ fun fromLabel (env, lab) {
   env [0] (lab)
 }
 
+fun isEmpty(lst) {
+  case lst of
+    {} -> true
+  | _  -> false
+  esac 
+}
+
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval (env, c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (env, conf, insns) {
+  local stack = conf[0];
+  local state = conf[1];
+  local world = conf[2];
+
+  -- Unpleasant C-style because otherwise app runs out of memory :c
+  while insns.isEmpty != true do
+    local nextInsns = tl(insns);
+    case [hd(insns), stack] of
+      [BINOP(opr), x : y : s] -> stack := evalOp(opr, y, x) : s
+    | [CONST(n)  ,         s] -> stack := n : s
+    | [CJMP(by, lab), z : s ] -> 
+        if case by of "z" -> z == 0 | "nz" -> z != 0 esac
+        then nextInsns := env.fromLabel(lab); stack := s
+        else stack := s
+        fi
+    | [DROP    , _ : s] -> stack := s
+    | [JMP(lab),     _] -> nextInsns := env.fromLabel(lab)
+    | [LABEL(x),     _] -> skip 
+    | [LD(x)   ,     s] -> stack := state(x) : s
+    | [LDA(x)  ,     s] -> stack := Ref(x) : s
+    | [READ    ,     s] -> case readWorld(world) of
+                             [n, w] -> stack := n : s;
+                                       world := w
+                           esac
+    | [ST(x)   , z : s] -> stack := z : s;
+                           state := state <- [x, z]
+    | [STI     , v : Ref(x) : s] -> stack := v : s;
+                                    state := state <- [x, v]
+    | [WRITE   , z : s] -> stack := s; 
+                           world := writeWorld(z, world)
+    esac;
+    insns := nextInsns
+  od;
+
+  [stack, state, world]
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -69,8 +111,12 @@ public fun evalSM (input, insns) {
 
 -- Compilation environment: generates labels
 fun makeCompEnv (n) {
+  local cnt = ref(n);
+
   [fun () {
-     [sprintf ("L%d", n), makeCompEnv (n+1)]
+    local res = sprintf ("L%d", deref(cnt));
+    cnt ::= deref(cnt) + 1;
+    res
   }]
 }
 
@@ -84,22 +130,74 @@ fun genLabel (env) {
 }
 
 -- Utility function: generates n labels
-fun genLabels (env, n) {
-  fun inner (env, n) {
-    if n == 0
-    then singleton (env)
-    else case env.genLabel of
-           [lab, env] -> lab : inner (env, n-1)
-         esac
-    fi
-  }
+-- fun genLabels (env, n) {
+--   fun inner (env, n) {
+--     if n == 0
+--     then singleton (env)
+--     else case env.genLabel of
+--            [lab, env] -> lab : inner (env, n-1)
+--          esac
+--     fi
+--   }
 
-  listArray (inner (env, n))
-}
+--   listArray (inner (env, n))
+-- }
 
--- Compiles an expression into a stack machine code.
--- Takes an expression, returns a list of stack machine
+-- flipped list constructor
+infixl :> after : (tail, head) { head : tail }
+
+-- Compiles a statement into a stack machine code.
+-- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  local env = initCompEnv();
+
+  infix +> at :> (tail, head) {
+    compileSMTo(head, tail)
+  }
+
+  fun compileSMTo(stmt, acc) {
+    case stmt of
+      Binop(opr, l, r) -> acc +> l +> r :> BINOP(opr)
+    | Const(n)   -> acc :> CONST(n)
+    | Var(x)     -> acc :> LD(x)
+    | Ref(x)     -> acc :> LDA(x)
+    | Ignore(e)  -> acc +> e :> DROP
+    | Skip       -> acc
+    | Assn(l, r) -> acc +> l +> r :> STI
+    | Read(x)    -> acc :> READ :> ST(x) :> DROP
+    | Write(e)   -> acc +> e :> WRITE
+    | Seq(s1, s2) -> acc +> s1 +> s2
+    | If(e, s1, s2) ->
+        local elseLab = genLabel(env);
+        local outLab  = genLabel(env);
+        acc
+        +> e
+        :> CJMP("z", elseLab)
+        +> s1
+        :> JMP(outLab)        
+        :> LABEL(elseLab)     
+        +> s2
+        :> LABEL(outLab)
+    | While(cond, body) ->
+        local condLab = genLabel(env);
+        local bodyLab = genLabel(env);
+        acc
+        :> JMP(condLab)
+        :> LABEL(bodyLab)
+        +> body
+        :> LABEL(condLab)
+        +> cond
+        :> CJMP("nz", bodyLab)
+    | Repeat(body, cond) ->
+        local bodyLab = genLabel(env);
+        acc
+        :> LABEL(bodyLab)
+        +> body
+        +> cond
+        :> CJMP("z", bodyLab)
+    esac
+  }
+
+  reverse(compileSMTo(stmt, {}))
 }

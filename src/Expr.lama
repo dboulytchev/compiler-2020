@@ -63,8 +63,53 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+-- @type [State, World] -> <Val Int | Ref String | Void>
+fun eval (c@[state, world], expr) {
+  case expr of
+    Const(n)  -> [c, Val(n)]
+  | Var(x)    -> [c, state(x)]
+  | Ref(x)    -> [c, Ref(x)]
+  | Ignore(e) -> [eval(c, e).fst, Void]
+  | Binop(op, l, r) -> 
+      case evalList(c, {l, r}) of
+        [c@[state, world], {Val(n1), Val(n2)}] -> [c, Val(evalOp(op, n1, n2))]
+      esac
+  | Skip -> [c, Void]
+  | Assn(l, r) ->
+      case evalList(c, {l, r}) of
+        [c@[state, world], {Ref(x), v}] -> [[state <- [x, v], world], v]
+      esac
+  | Read(x) ->
+      case readWorld(world) of 
+        [n, w] -> [[state <- [x, Val(n)], w], Void]
+      esac
+  | Write(e) -> 
+      case eval(c, e) of
+        [[s, w], Val(n)] -> [[s, writeWorld(n, w)], Void]
+      esac
+  | Seq(s1, s2) -> 
+      case evalList(c, {s1, s2}) of
+        [c, {_, r}] -> [c, r]
+      esac
+  | If(e, s1, s2) ->
+      case eval(c, e) of
+        [c, Val(n)] ->
+          if   n != 0
+          then eval(c, s1)
+          else eval(c, s2)
+          fi
+      esac
+  | cycle@While(cond, body) ->
+      case eval(c, cond) of
+        [c, Val(n)] ->
+          if   n != 0
+          then eval(eval(c, body).fst, cycle)
+          else [c, Void]
+          fi
+      esac
+  | Repeat(body, cond) -> 
+      eval(eval(c, body).fst, While(Binop("==", cond, Const(0)), body))
+  esac
 }
 
 
