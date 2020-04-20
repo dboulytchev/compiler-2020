@@ -52,19 +52,58 @@ fun binop (op) {
   ]
 }
 
-local primary  = memo $ eta syntax (
-                                    -- decimal constant
-                                    loc=pos x=decimal                                 {fun (a) {assertValue (a, Const (stringInt (x)), loc)}}     |
-
-                                    -- identifier
-                                    x=lident                                          {fun (a) {
-                                                                                         case a of
-                                                                                           Ref  -> Ref (x)
-                                                                                         | Void -> Ignore (Var (x))
-                                                                                         | _    -> Var (x)
-                                                                                         esac
-                                                                                      }} |
-                                    $(failure ("the rest of primary parsing in not implemented\n"))),
+local primary  = memo $ eta (
+                             pos |>    fun(loc) { decimal @ fun (x) { fun(a) { assertValue(a, Const (stringInt (x)), loc) } } } 
+                           | lident  @ fun (val) { fun(a) { case a of
+                                                            Ref -> Ref (val)
+                                                          | Val -> Var (val)
+                                                          | Void -> Ignore (Var (val))
+                                                          esac } } 
+                           | pos |>    fun(loc) { kSkip  @  lift (fun(val) { assertVoid(val, Skip, loc) } ) } 
+                           | pos |>    fun(loc) { kRead  |> lift (inbr (s("("), lident, s(")")) @ fun(val) { fun(cond) { assertVoid(cond, Read (val), loc) } } ) } 
+                           | pos |>    fun(loc) { kWrite |> lift (inbr (s("("), exp,    s(")")) @ fun(val) { fun(cond) { assertVoid(cond, Write (val(Val)),  loc) } } ) } 
+                           | pos |>    fun(loc) { kWhile |> lift (exp |> fun (e) {
+                                                  kDo    |> lift (exp |> fun (s) {
+                                                  kOd    @  lift (fun(a) { assertVoid(a, While (e(Val), s(Void)), loc) })
+                                                    })
+                                                    }) 
+                                                    } 
+                           | pos |>    fun(loc) { kRepeat |> lift (exp   |> fun (state) {
+                                                  kUntil  |> lift (basic @  fun (expr) { fun(val) { assertVoid(val, Repeat (state(Void), expr(Val)), loc) } })
+                                                }) } 
+                           | pos |>    fun(loc) { kFor    |> lift (exp |> fun (statement) {
+                                                  s(",")  |> lift (exp |> fun (expr) {
+                                                  s(",")  |> lift (exp |> fun (statement2) {
+                                                  kDo     |> lift (exp |> fun (statement3) {
+                                                  kOd     @  lift (fun(val) { 
+                                                  assertVoid(val, Seq (statement(Void), While (expr(Val), Seq(statement3(Void), statement2(Void)))), loc) 
+                                                    })
+                                                    })
+                                                    })
+                                                    })
+                                                    }) }
+                           | pos |>    fun(loc) { kIf      |> lift (exp |> fun (expr) {
+                                                  kThen    |> lift (exp |> fun (statement) {
+                                                  kElse    |> lift (exp |> fun (statement2) {
+                                                  kFi      @  lift (fun(val) { If (expr(Val), statement(val), statement2(val)) })
+                                                    }) | 
+                                                  kFi      @  lift (fun(val) { If (expr(Val), statement(val), assertVoid(val, Skip, pos)) }) | 
+                                                  elif_st  @  fun (statement2) {fun(val) { If (expr(Val), statement(val), statement2(val)) }}
+                                                    })
+                                                }) } 
+                          | inbr (s ("("), exp, s (")"))
+                            ),
+      
+      elif_st = memo $ eta (pos |>    fun(loc) { kElif     |> lift (exp |> fun (expr) {
+                                                  kThen    |> lift (exp |> fun (statement) {
+                                                  kElse    |> lift (exp |> fun (statement2) {
+                                                  kFi      @  lift (fun(val) { If (expr(Val), statement(val), statement2(val)) })
+                                                    }) | 
+                                                  kFi      @  lift (fun(val) { If (expr(Val), statement(val), assertVoid(val, Skip, pos)) }) | 
+                                                  elif_st  @  fun (statement2) {fun(val) { If (expr(Val), statement(val), statement2(val)) }}
+                                                    })
+                                                }) } 
+                          ),             
       basic    = memo $ eta (expr ({[Right, singleton ([s (":="),
                                                         fun (l, loc, r) {
                                                           fun (a) {assertValue (a, Assn (l (Ref), r (Val)), loc)}

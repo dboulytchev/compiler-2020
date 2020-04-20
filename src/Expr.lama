@@ -63,8 +63,45 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+fun eval (c@[state, world], expr) {
+  case expr of
+    Const (val)             -> [c, val]
+  | Var   (val)             -> [c, state(val)]
+  | Ref   (val)             -> [c, Ref (val)]
+  | Binop (op, left, right) -> case evalList(c, {left, right}) of
+                               [new_c, {left_val, right_val}] -> [new_c, evalOp(op, left_val, right_val)]
+                               esac
+  | Assn (left, right)      -> case evalList(c, {left, right}) of
+                               [[new_state, new_world], {Ref (left_val), right_val}] -> [[new_state <- [left_val, right_val], new_world], right_val]
+                               esac
+  | Read (val)              -> case readWorld(world) of 
+                               [z, world_reminder] -> [[state <- [val, z], world_reminder], Void]
+                               esac              
+  | Write (val)             -> case eval(c, val) of
+                               [[new_state, new_world], v] -> [[new_state, writeWorld(v, new_world)], Void]
+                               esac
+  | Seq (s1, s2)            -> case eval(c, s1) of
+                               [c1, _] -> eval(c1, s2)
+                               esac
+  | If (val, s1, s2)        -> case eval(c, val) of
+                               [c1, 0] -> eval(c1, s2)
+                             | [c1, _] -> eval(c1, s1)
+                               esac
+  | While (val, s1)         -> case eval(c, val) of
+                               [c1, 0] -> [c1, Void]
+                             | [c1, _] -> case eval(c1, s1) of [c2, _] -> eval(c2, expr) esac
+                               esac
+  | Repeat (s1, val)        -> case eval(c, s1) of
+                               [c1, _] -> case eval (c1, val) of
+                                          [c2, 0] -> eval(c2, expr)
+                                        | [c2, _] -> [c2, Void]
+                                          esac
+                               esac
+  | Skip                    -> [c, Void]
+  | Ignore (val)            -> case eval(c, val) of 
+                               [c1, _] -> [c1, Void] 
+                               esac 
+  esac
 }
 
 
