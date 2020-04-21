@@ -4,19 +4,6 @@ import List;
 import State;
 import World;
 
-<<<<<<< HEAD
-local ops = {
-  ["+", infix +],
-  ["-", infix -],
-  ["*", infix *],
-  ["/", infix /],
-  ["%", infix %],
-  ["==", infix ==],
-  ["!=", infix !=],
-  ["<", infix <],
-  ["<=", infix <=],
-  [">", infix >],
-=======
 -- As association map which maps "\otimes" into "\oplus"
 local ops = {
   ["+" , infix + ],
@@ -29,30 +16,10 @@ local ops = {
   ["<" , infix < ],
   ["<=", infix <=],
   [">" , infix > ],
->>>>>>> 26bdd66800647cf6329a6967b8a2dc442feac576
   [">=", infix >=],
   ["&&", infix &&],
   ["!!", infix !!]
 };
-<<<<<<< HEAD
-
-public fun evalBinop(op, left, right){
-  case assoc (ops, op) of
-    Some (f) -> f(left, right)
-  esac
-}
-
--- The evaluator itself: takes a state and an expression,
--- returns integer value
-public fun evalExpr (st, expr) {
-  case expr of
-    Const (x) -> x 
-    | Var (x) -> st (x) 
-    | Binop (o, l, r) -> evalBinop (o, evalExpr (st, l), evalExpr (st, r) )
-  esac
-}
-
-=======
 
 -- The evaluator for infix operators: takes an operator as a string
 -- and two operand values, and returns the result
@@ -96,9 +63,49 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
-}
+fun eval (c@[state, world], expr) {
+case expr of
+    Const (x)     -> [c, x]
+  | Var (x)       -> [c, state (x)]
+  | Ref (x)       -> [c, Ref (x)]
+  | Binop (operation, left, right)    ->  case evalList(c, {left, right}) of
+                                              [c1, {lRes, rRes}] -> [c1, evalOp(operation, lRes, rRes)]
+                                          esac
+  | Skip          -> [c, BOTTOM]
+  | Assn (left, right)                ->  case evalList(c, {left, right}) of
+                                              [[newState, newWorld], {Ref (lVal), rVal}] -> [[newState <- [lVal, rVal], newWorld], rVal]
+                                          esac
+  | Read (x)      -> case readWorld(world) of
+                          [val, newWorld] -> [[state <- [x, val], newWorld], BOTTOM]
+                     esac
+  | Write (e)     -> case eval(c, e) of
+                          [[newState, newWorld], val] -> [[newState, writeWorld(val, newWorld)], BOTTOM]
+                     esac
+  | Seq (s1, s2)  -> case eval(c, s1) of
+                      [c1, _] -> eval(c1, s2)
+                     esac
+  | If (e, thenExpr, elseExpr)    ->  case eval(c, e) of
+                                            [c1, 0] -> eval(c1, elseExpr)
+                                          | [c1, _] -> eval(c1, thenExpr)
+                                      esac
+  | While (e, s1)                 ->  case eval(c, e) of
+                                           [c1, 0] -> [c1, BOTTOM]
+                                         | [c1, _] -> case eval(c1, s1) of
+                                                          [c2, _] -> eval(c2, expr)
+                                                      esac
+                                      esac
+  | Repeat (s1, e) -> case eval(c, s1) of
+                        [c1, _] -> case eval (c1, e) of
+                                     [c2, 0] -> eval(c2, expr)
+                                   | [c2, _] -> [c2, BOTTOM]
+                                   esac
+                      esac
+
+  | Ignore (state) -> case eval(c, state) of
+                          [c1, _] -> [c1, BOTTOM]
+                      esac
+  esac
+  }
 
 
 -- Evaluates a program with a given input and returns an output
@@ -107,4 +114,3 @@ public fun evalExpr (input, expr) {
     [c, _] -> c.snd.getOutput
   esac
 }
->>>>>>> 26bdd66800647cf6329a6967b8a2dc442feac576
