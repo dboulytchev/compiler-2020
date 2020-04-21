@@ -4,7 +4,7 @@ import State;
 import Expr;
 import World;
 
--- Evaluates a statement "stmt" in a configuration "c".
+-- Evaluates a statement "stmt" in a configuration "state".
 -- A configuration is a pair of a state "s" and a world "w".
 -- Returns a final configuration (if any)
 --
@@ -19,25 +19,25 @@ import World;
 --        While  (expr, stmt)       |
 --        Repeat (stmt, expr)
 
-fun eval (c@[st, w], stmt) {
+fun eval (state@[st, w], stmt) {
   case stmt of
-    Skip          -> c
+    Skip          -> state
   | Assn(x, val)  -> [st <- [x, evalExpr(st, val)], w]
-  | Seq(st1, st2) -> eval(eval(c, st1), st2)
+  | Seq(st1, st2) -> eval(eval(state, st1), st2)
   | Read(x)       -> case readWorld(w) of [val, w2] -> [st <- [x, val], w2] esac
   | Write(val)    -> [st, writeWorld(evalExpr(st, val), w)]
   | If(e, s1, s2) -> 
       if   evalExpr(st, e) != 0
-      then eval(c, s1)
-      else eval(c, s2)
+      then eval(state, s1)
+      else eval(state, s2)
       fi
   | cycle@While(cond, body) ->
       if   evalExpr(st, cond) != 0
-      then eval(eval(c, body), cycle)
-      else c
+      then eval(eval(state, body), cycle)
+      else state
       fi
   | Repeat(body, cond) -> 
-      eval(eval(c, body), While(Binop("==", cond, Const(0)), body))
+      eval(eval(state, body), While(Binop("==", cond, Const(0)), body))
   esac
 }
 

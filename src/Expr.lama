@@ -19,7 +19,6 @@ public fun evalBinop(op, l, r) {
   | ">=" -> l >= r
   | "&&" -> l && r
   | "!!" -> l !! r
-  | _    -> failure ("Unexpected error in evalBinop\n")
   esac
 }
 
@@ -37,6 +36,5 @@ public fun evalExpr (st, expr) {
     Binop(op, l, r) -> evalBinop(op, evalExpr(st, l), evalExpr(st, r))
   | Const(x)        -> x
   | Var(x)          -> st(x)
-  | _               -> failure ("Unexpected error in evalExpr\n")
   esac
 }
