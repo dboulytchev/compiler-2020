@@ -45,7 +45,7 @@ local wordSize = 4;
 --                                 the second --- (sub)register name
 --   Jmp   (string)             -- unconditional jump to a label
 --   CJmp  (string, string)     -- conditional jump to a label
---   Label (string)             -- a label
+--   Label (string)             -- a Label
 --   Push  (opnd)               -- pushes the operand on the hardware stack
 --   Pop   (opnd)               -- pops from the hardware stack to the operand
 --   Call  (string)             -- calls a function by its name
