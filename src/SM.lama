@@ -54,8 +54,24 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval (env, c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (c@[stack, st, w], insns) {
+  case insns of
+    CONST(c):other  -> eval([c:stack, st, w], other)
+  | BINOP(op):other -> case stack of
+                         r:l:rest -> eval([evalBinop(op, l, r):rest, st, w], other)
+                       esac
+  | LD(x):other     -> eval([st(x):stack, st, w], other)
+  | ST(x):other     -> case stack of
+                         head:rest -> eval([rest, st <- [x, head], w], other)
+                       esac
+  | READ:other      -> case readWorld(w) of
+                         [val, w2] -> eval([val:stack, st, w2], other)
+                       esac
+  | WRITE:other     -> case stack of
+                         head:rest -> eval([rest, st, writeWorld(head, w)], other)
+                       esac
+  | {}              -> c
+  esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -96,13 +112,26 @@ fun genLabels (env, n) {
 -- Compiles an expression into a stack machine code.
 -- Takes an expression, returns a list (of, possibly, lists)
 -- of stack machine instructions
-fun compileExpr (expr) {
-  failure ("compileExpr not implemented\n")
+fun compileExpr (expr, acc) {
+  case expr of
+    Const(n) -> CONST(n) : acc
+  | Var(x)   -> LD(x) : acc
+  | Binop(opr, l, r) -> BINOP(opr) : compileExpr(r, compileExpr(l, acc))
+  esac
 }
 
 -- Compiles a statement into a stack machine code.
 -- Takes a statement, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  fun compileSM (stmt, acc) {
+    case stmt of
+      Skip -> acc
+    | Assn(varStr, expr) -> ST(varStr) : compileExpr(expr, acc)
+    | Read(varStr) -> ST(varStr) : READ : acc
+    | Write(expr)  -> WRITE : compileExpr(expr, acc)
+    | Seq(s1, s2)  -> compileSM(s2, compileSM(s1, acc))
+    esac
+  }
+  reverse(compileSM(stmt, {}))
 }
