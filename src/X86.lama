@@ -7,13 +7,13 @@ import Util;
 import Manifest;
 
 -- Assembler language interface
--- The registers: 
+-- The registers:
 local regs = ["%ebx", "%ecx", "%esi", "%edi", "%eax", "%edx", "%ebp", "%esp"];
 
 -- We can not freely operate with all register; only with 4 by now
 local nRegs = regs.length - 5;
 
--- For convenience we define the following synonyms for the registers: 
+-- For convenience we define the following synonyms for the registers:
 local ebx = R (0),
       ecx = R (1),
       esi = R (2),
@@ -26,42 +26,42 @@ local ebx = R (0),
 -- We need to know the word size to calculate offsets correctly
 local wordSize = 4;
 
--- We need to distinguish the following operand types: 
---    R (int)       -- hard register                    
---    S (int)       -- a position on the hardware stack 
---    M (string)    -- a named memory location          
+-- We need to distinguish the following operand types:
+--    R (int)       -- hard register
+--    S (int)       -- a position on the hardware stack
+--    M (string)    -- a named memory location
 --    L (int)       -- an immediate operand
 --    I (int, opnd) -- an indirect operand with offset
 
 -- Some x86 instruction (we do not need all of them):
---   Mov   (opnd, opnd)         -- copies a value from the first to the second operand  
+--   Mov   (opnd, opnd)         -- copies a value from the first to the second operand
 --   Lea   (opnd, opnd)         -- loads an address of the first operand into the second
---   Binop (string, opnd, opnd) -- makes a binary operation; note, the first operand   
+--   Binop (string, opnd, opnd) -- makes a binary operation; note, the first operand
 --                                 designates x86 operator, not the source language one
---   IDiv  (opnd)               -- x86 integer division, see instruction set reference 
---   Cltd                       -- see instruction set reference           
---   Set   (string, string)     -- sets a value from flags; the first operand is the   
+--   IDiv  (opnd)               -- x86 integer division, see instruction set reference
+--   Cltd                       -- see instruction set reference
+--   Set   (string, string)     -- sets a value from flags; the first operand is the
 --                                 suffix, which determines the value being set, the
 --                                 the second --- (sub)register name
 --   Jmp   (string)             -- unconditional jump to a label
 --   CJmp  (string, string)     -- conditional jump to a label
---   Label (string)             -- a label
+--   Label (string)             -- a Label
 --   Push  (opnd)               -- pushes the operand on the hardware stack
 --   Pop   (opnd)               -- pops from the hardware stack to the operand
---   Call  (string)             -- calls a function by its name 
+--   Call  (string)             -- calls a function by its name
 --   Ret                        -- returns from a function
 --   Meta  (string)             -- metainformation (declarations, etc.)
-                                                               
+
 -- Machine instruction printer
 fun insnString (insn) {
-  
+
   fun binopString (op) {
     case op of
       "+"   -> "addl"
     | "-"   -> "subl"
     | "*"   -> "imull"
     | "&&"  -> "andl"
-    | "!!"  -> "orl" 
+    | "!!"  -> "orl"
     | "^"   -> "xorl"
     | "cmp" -> "cmpl"
     esac
@@ -77,7 +77,7 @@ fun insnString (insn) {
     | I (n, x) -> sprintf ("%d(%s)", n, opndString (x))
     esac
   }
-  
+
   case insn of
     Cltd               -> "\tcltd\n"
   | Set   (suf, s)     -> sprintf ("\tset%s\t%s\n", suf, s)
@@ -114,12 +114,12 @@ fun makeEnv (stack, stackSlots, globals, barrier, stackMap) {
   fun envString () {
     sprintf ("Stack     : %s\nStackSlots: %d\nGlobals   : %s\n", stack.string, stackSlots, elements (globals).string)
   }
-  
+
   -- Allocates a new position on the symbolic stack;
   -- returns a pair: a location for allocated item and
   -- an updated environment
   fun allocate () {
-    case 
+    case
       case stack of
         {}        -> [ebx, 0]
       | S (n) : _ -> [S (n+1), n+2]
@@ -154,7 +154,7 @@ fun makeEnv (stack, stackSlots, globals, barrier, stackMap) {
   fun peek () {
     stack.fst
   }
-  
+
   -- Adds a global variable; returns an updated environment
   fun addGlobal (name) {
     makeEnv (stack, stackSlots, addSet (globals, globalName (name)), barrier, stackMap)
@@ -164,7 +164,7 @@ fun makeEnv (stack, stackSlots, globals, barrier, stackMap) {
   fun loc (name) {
     M (globalName (name))
   }
-  
+
   -- Gets a list of global variables from the environment
   fun getGlobals () {
     globals.elements
@@ -312,7 +312,7 @@ fun stackOpnd (opnd) {
   case opnd of
     S (_) -> true
   | _     -> false
-  esac      
+  esac
 }
 
 -- Checks if an operand resides in memory
@@ -353,21 +353,103 @@ fun compile (env, code) {
     foldl (
       fun ([env, scode], i) {
         local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+
+        fun simpleBinop (op) {
+            case env.pop2 of
+              [x, y, env] -> case env.allocate of
+                               [s, env] -> [env, code : {Mov (y, eax), Binop (op, x, eax), Mov (eax, s)}]
+                             esac
+            esac
+        }
+
+        fun compareBinop (op) {
+          case env.pop2 of
+            [x, y, env] ->
+              case env.allocate of
+                [s, env] -> [env, code : {Mov (y, edx), Binop ("^", eax, eax), Binop ("cmp", x, edx),
+                                          Set (suffix(op), "%al"), Mov (eax, s)}]
+              esac
+          esac
+        }
+
+        fun logicBinop (op) {
+            case env.pop2 of
+              [x, y, env] ->
+                case env.allocate of
+                  [s, env] -> [env, code : {
+                        Mov (y, edx), Binop ("^", eax, eax), Binop ("cmp", L (0), edx), Set (suffix("!="), "%al"), Push (eax),
+                        Mov (x, edx), Binop ("^", eax, eax), Binop ("cmp", L (0), edx), Set (suffix("!="), "%al"), Pop (edx),
+                        Binop ("+", edx, eax), move(eax, edx), Binop ("^", eax, eax), Binop ("cmp", L (op), edx),
+                        Set (suffix(">"), "%al"), Mov (eax, s)}]
+                esac
+            esac
+        }
+
         case i of
           READ ->
             case env.allocate of
               [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
-            esac             
+            esac
         | WRITE ->
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | LD (x) ->
+            case env.addGlobal(x).allocate of
+              [s, env] -> [env, code : move(env.loc(x), s)]
+            esac
+        | ST (x) ->
+            case env.addGlobal(x) of
+              env -> [env, code : move(env.peek, env.loc(x))]
+            esac
+        | CONST (x) ->
+            case env.allocate of
+              [s, env] -> [env, code : singleton(Mov(L (x), s))]
+            esac
+        | BINOP ("+") -> simpleBinop("+")
+        | BINOP ("-") -> simpleBinop("-")
+        | BINOP ("*") -> simpleBinop("*")
+        | BINOP ("/") ->
+            case env.pop2 of
+              [x, y, env] -> case env.allocate of
+                               [s, env] -> [env, code : {Mov (y, eax), Cltd, IDiv (x), Mov (eax, s)}]
+                             esac
+            esac
+        | BINOP ("%") ->
+            case env.pop2 of
+              [x, y, env] -> case env.allocate of
+                               [s, env] -> [env, code : {Mov (y, eax), Cltd, IDiv (x), Mov (edx, s)}]
+                             esac
+            esac
+        | BINOP ("<") -> compareBinop("<")
+        | BINOP ("<=") -> compareBinop("<=")
+        | BINOP ("==") -> compareBinop("==")
+        | BINOP ("!=") -> compareBinop("!=")
+        | BINOP (">") -> compareBinop(">")
+        | BINOP (">=") -> compareBinop(">=")
+        | BINOP ("&&") -> logicBinop(1)
+        | BINOP ("!!") -> logicBinop(0)
+        | LABEL (l) -> if isBarrier(env) then [retrieveStack(env, l), code : singleton(Label (l))]
+                                         else [env, code : singleton(Label (l))] fi
+        | JMP (l) -> [setBarrier(setStack(env, l)), code : singleton(Jmp (l))]
+        | CJMP (c, l) ->
+            case env.pop of
+              [s, env] -> [setStack(env, l), code : {Binop ("cmp", L (0), s), CJmp(c, l)}]
+            esac
+        | LDA (x) ->
+            case env.addGlobal(x).allocate of
+              [s, env] -> [env, code : {Lea (env.loc(x), eax), Mov (eax, s)}]
+            esac
+        | STI ->
+            case env.pop2 of
+              [x, y, env] -> [env.push(y), code : {Mov (x, eax), Mov (y, edx), Mov (eax, I (0, edx)), Mov (eax, y)}]
+            esac
+        | DROP -> case env.pop of [_, env] -> [env, code] esac
         esac
       }, [env, {}], code)
   }
 
-  compile (env, code) 
+  compile (env, code)
 }
 
 -- A top-level codegeneration function. Takes a driver's environment and a stack machine program,
@@ -380,9 +462,9 @@ public fun compileX86 (args, code) {
                          #unboxed -> "../runtime/"
                        | path     -> path
                        esac ++ "/runtime.o";
-       
+
        fwrite (asmFile,
-               map (insnString, 
+               map (insnString,
                     deepFlatten ({
                       Meta ("\t.global\tmain\n"),
                       dataSection (
@@ -394,7 +476,7 @@ public fun compileX86 (args, code) {
                         code,
                         epilogue ()})
                     })).stringcat);
-                    
+
        system ({"gcc -g -m32 -o ", args.getBaseName, " ", runtime, " ", asmFile}.stringcat)
   esac
 }
