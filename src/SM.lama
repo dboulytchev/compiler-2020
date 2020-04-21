@@ -15,17 +15,17 @@ public fun showSMInsn (i) {
   case i of
     READ         -> "READ"
   | WRITE        -> "WRITE"
-  | BINOP (s)    -> sprintf ("BINOP %s", s)
-  | LD    (x)    -> sprintf ("LD %s", x)
-  | LDA   (x)    -> sprintf ("LDA %s", x)
-  | ST    (x)    -> sprintf ("ST %s", x)
+  | BINOP (state)    -> sprintf ("BINOP %state", state)
+  | LD    (x)    -> sprintf ("LD %state", x)
+  | LDA   (x)    -> sprintf ("LDA %state", x)
+  | ST    (x)    -> sprintf ("ST %state", x)
   | STI          -> "STI"
   | CONST (n)    -> sprintf ("CONST %d", n)
-  | LABEL (s)    -> sprintf ("LABEL %s", s)
-  | JMP   (l)    -> sprintf ("JMP %s", l)
-  | CJMP  (c, l) -> sprintf ("CJMP %s, %s", c, l)
+  | LABEL (state)    -> sprintf ("LABEL %state", state)
+  | JMP   (l)    -> sprintf ("JMP %state", l)
+  | CJMP  (c, l) -> sprintf ("CJMP %state, %state", c, l)
   | DUP          -> "DUP"
-  | DROP         -> "DROP"  
+  | DROP         -> "DROP"
   esac
 }
 
@@ -64,36 +64,36 @@ fun eval (env, c @ [stack, state, world], insns) {
         | BINOP(operation):other    ->  case stack of
                                             right:left:rest -> eval(env, [evalOp(operation, left, right):rest, state, world], other)
                                         esac
-        | LD(x):other               ->  eval(env, [state(x):stack, state, world], other)
-        | LDA (x):other             ->  eval(env, [Ref (x) : stack, state, world], other)
-        | ST(x):other               ->  case stack of
-                                            head:rest -> eval(env, [rest, state <- [x, head], world], other)
-                                        esac
-        | STI : other               ->  case stack of
-                                            head:Ref (x):rest -> eval(env, [head:rest, state <- [x, head], world], other)
-                                        esac
         | READ:other                ->  case readWorld(world) of
                                             [value, newWorld] -> eval(env, [value:stack, state, newWorld], other)
                                         esac
         | WRITE:other               ->  case stack of
                                             head:rest -> eval(env, [rest, state, writeWorld(head, world)], other)
                                         esac
-        | LABEL(x):other             -> eval(env, c, other)
-        | JMP(x):other               -> eval(env, c, fromLabel(env, x))
-        | CJMP(flag, x):other        -> case flag of
+        | LD(x):other               ->  eval(env, [state(x):stack, state, world], other)
+        | LDA (x):other             ->  eval(env, [Ref (x) : stack, state, world], other)
+        | ST(x):other               ->  case stack of
+                                            head:rest -> eval(env, [stack, state <- [x, head], world], other)
+                                        esac
+        | STI : other               ->  case stack of
+                                            head:Ref (x):rest -> eval(env, [head:rest, state <- [x, head], world], other)
+                                        esac
+        | LABEL(l):other             -> eval(env, c, other)
+        | JMP(l):other               -> eval(env, c, fromLabel(env, l))
+        | CJMP(flag, l):other        -> case flag of
                                        "nz" ->   case stack of
                                                       0 : newStack -> eval(env, [newStack, state, world], other)
-                                                    | _ : newStack -> eval(env, [newStack, state, world], fromLabel(env, x))
+                                                    | _ : newStack -> eval(env, [newStack, state, world], fromLabel(env, l))
                                                 esac
                                      | "z" ->  case stack of
-                                                      0 : newStack -> eval(env, [newStack, state, world], fromLabel(env, x))
+                                                      0 : newStack -> eval(env, [newStack, state, world], fromLabel(env, l))
                                                     | _ : newStack -> eval(env, [newStack, state, world], other)
                                                 esac
                                        esac
         | DROP:other                -> case stack of
                                          head:rest -> eval(env, [rest, state, world], other)
                                        esac
-        | {}                        ->  c
+        | _ -> c
     esac
 }
 
