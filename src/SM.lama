@@ -58,8 +58,41 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval (env, c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (env, c@[st, s, w], insns) {
+    case insns of  
+      CONST (x) : rest  -> eval(env, [x:st, s, w], rest)
+      | BINOP (op) : rest -> case st of
+                         y : x : stt -> eval(env, [binop(op, x, y) : stt, s, w], rest)
+                       esac
+      | READ : rest -> case readWorld(w) of
+                         [z, wd] -> eval(env, [z:st, s, wd], rest)
+                       esac
+      | WRITE : rest -> case st of
+                         z : stt -> eval(env, [stt, s, writeWorld(z, w)], rest)
+                        esac
+      | LD (x) : rest -> eval(env, [s(x):st, s, w], rest)
+      | LDA (x) : rest ->  eval(env, [Ref (x) : st, s, w], rest)
+      | ST (x) : rest -> case st of
+                         z : stt -> eval(env, [stt, s <- [x, z], w], rest)
+                        esac
+      | STI : rest ->  case st of
+                         z : Ref(x) : stt -> eval(env, [z:st, s <- [x, z], w], rest)
+                        esac
+      | LABEL (l) : rest -> eval(env, c, rest)
+      | JMP (l) : rest -> eval(env, c, fromLabel(env, l))
+      | CJMP ("nz", l) : rest -> case st of
+                         0 : stt -> eval(env, [stt, s, w], rest)
+                        | _ : stt -> eval(env, [stt, s, w], fromLabel(env, l))
+                        esac
+      | CJMP ("z", l) : rest -> case st of
+                         0 : stt -> eval(env, [stt, s, w], fromLabel(env, l))
+                        | _ : stt -> eval(env, [stt, s, w], rest)
+                        esac
+      | DROP : rest -> case st of
+                         _ : stt -> eval(env, [st, s, w], rest)
+                        esac
+      | _ -> c
+    esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -101,5 +134,63 @@ fun genLabels (env, n) {
 -- Takes an expression, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
-}
+  fun compile (stmt, env) {
+      case stmt of
+          Const (x) -> [singleton(CONST (x)), env]
+        | Var (x) -> [singleton(LD (x)), env]
+        | Ref (x) -> [singleton(LDA (x)), env]
+        | Read (x) -> [{READ, ST (x), DROP}, env]
+        | Write (e) -> case compile(e, env) of [ce, env1] ->
+                          [{ce, WRITE}, env1]
+                       esac
+        | Assn (x, e) -> case compile(x, env) of [cs1, env1] ->
+                          case compile(e, env1) of [cs2, env2] ->
+                               [{cs1, cs2, STI}, env2]
+                          esac
+                         esac
+        | Seq (s1, s2) -> 
+              case compile(s1, env) of [cs1, env1] -> 
+                case compile(s2, env1) of [cs2, env2] -> 
+                  [{cs1, cs2}, env2]
+                esac
+              esac
+        | Skip -> [{}, env]
+        | If (e, s1, s2) -> 
+             case genLabels(env, 2) of [ls2, lexit, env1] ->
+                case compile(s1, env1) of [cs1, env2] ->
+                  case compile(s2, env2) of [cs2, env3] ->
+                    case compile(e, env3) of [ce, env3] ->
+                      [{ce, CJMP("z", ls2), cs1, JMP(lexit), LABEL(ls2), cs2, LABEL(lexit)}, env3]
+                    esac
+                  esac
+                esac
+              esac
+        | While (e, s1) -> 
+              case genLabels(env, 2) of [le, ls, env1] ->
+                case compile(s1, env1) of [cs1, env2] ->
+                  case compile(e, env2) of [ce, env2] ->
+                    [{JMP(le), LABEL(ls), cs1, LABEL(le), ce, CJMP("nz", ls)}, env2]
+                  esac
+                esac
+              esac
+        | Repeat (s1, e) ->
+              case genLabels(env, 1) of [ls, env1] ->
+                case compile(s1, env1) of [cs1, env2] ->
+                  case compile(e, env2) of [ce, env2] ->
+                    [{LABEL(ls), cs1, ce, CJMP("z", ls)}, env2]
+                  esac
+                esac
+              esac
+        | Ignore (state) -> case compile(state, env) of [cs1, env1] ->
+                              [{cs1, DROP}, env1]
+                            esac
+        | Binop (op, l, r) -> case compile(l, env) of [cs1, env1] ->
+                                case compile(r, env1) of [cs2, env2] ->
+                                  [{cs1, cs2, BINOP(op)}, env2]
+                                esac
+                              esac
+      esac
+  }
+  
+  deepFlatten(compile(stmt, initCompEnv())[0])
+  }
