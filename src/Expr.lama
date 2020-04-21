@@ -2,7 +2,9 @@
 
 import List;
 import State;
+import World;
 
+<<<<<<< HEAD
 local ops = {
   ["+", infix +],
   ["-", infix -],
@@ -14,10 +16,25 @@ local ops = {
   ["<", infix <],
   ["<=", infix <=],
   [">", infix >],
+=======
+-- As association map which maps "\otimes" into "\oplus"
+local ops = {
+  ["+" , infix + ],
+  ["-" , infix - ],
+  ["*" , infix * ],
+  ["/" , infix / ],
+  ["%" , infix % ],
+  ["==", infix ==],
+  ["!=", infix !=],
+  ["<" , infix < ],
+  ["<=", infix <=],
+  [">" , infix > ],
+>>>>>>> 26bdd66800647cf6329a6967b8a2dc442feac576
   [">=", infix >=],
   ["&&", infix &&],
   ["!!", infix !!]
 };
+<<<<<<< HEAD
 
 public fun evalBinop(op, left, right){
   case assoc (ops, op) of
@@ -32,5 +49,60 @@ public fun evalExpr (st, expr) {
     Const (x) -> x 
     | Var (x) -> st (x) 
     | Binop (o, l, r) -> evalBinop (o, evalExpr (st, l), evalExpr (st, r) )
+  esac
+=======
+
+-- The evaluator for infix operators: takes an operator as a string
+-- and two operand values, and returns the result
+public fun evalOp (op, l, r) {
+  case assoc (ops, op) of
+    Some (f) -> f (l, r)
+  esac
+}
+
+-- Evaluates an expression "expr" in a configuration "c".
+-- A configuration is a pair of a state "s" and a world "w".
+-- Returns a final configuration (if any)
+--
+-- A expression is represented by a data structure of the following shape:
+--
+-- expr = Assn   (string, expr)       |
+--        Seq    (expr, expr)         |
+--        Skip                        |
+--        Read   (string)             |
+--        Write  (expr)               |
+--        if     (expr, expr, expr)   |
+--        While  (expr, expr)         |
+--        Repeat (expr, expr)         |
+--        Var    (string)             |
+--        Ref    (string)             |
+--        Const  (int)                |
+--        Binop  (string, expr, expr) |
+--        Ignore (expr)
+
+-- Evaluates a list of expressions, properly threading a configurations.
+-- Returns the final configuration and the list of values
+fun evalList (c, exprs) {
+  case foldl (fun ([c, vals], e) {
+                case eval (c, e) of
+                  [c, val] -> [c, val : vals]
+                esac
+              },
+              [c, {}],
+              exprs) of
+    [c, vals] -> [c, reverse (vals)]
+  esac
+}
+
+fun eval (c@[s, w], expr) {
+  failure ("evalExpr not implemented\n")
+>>>>>>> 26bdd66800647cf6329a6967b8a2dc442feac576
+}
+
+
+-- Evaluates a program with a given input and returns an output
+public fun evalExpr (input, expr) {
+  case eval ([emptyState, createWorld (input)], expr) of
+    [c, _] -> c.snd.getOutput
   esac
 }
