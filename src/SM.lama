@@ -71,7 +71,7 @@ fun eval(env, c@[stack, s, w], insns) {
     | WRITE : ins -> case stack of
                       z : stmt -> eval(env, [stmt, s, writeWorld(z, w)], ins)
                     esac
-    | LD(x) : ins -> eval(env, [state(x):stack, s, w], ins)
+    | LD(x) : ins -> eval(env, [s(x):stack, s, w], ins)
     | ST(x) : ins -> case stack of
                        z : stmt -> eval(env, [stack, s <- [x, z], w], ins)
                      esac
