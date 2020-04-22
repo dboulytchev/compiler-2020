@@ -15,17 +15,17 @@ public fun showSMInsn (i) {
   case i of
     READ         -> "READ"
   | WRITE        -> "WRITE"
-  | BINOP (s)    -> sprintf ("BINOP %s", s)
-  | LD    (x)    -> sprintf ("LD %s", x)
-  | LDA   (x)    -> sprintf ("LDA %s", x)
-  | ST    (x)    -> sprintf ("ST %s", x)
+  | BINOP (state)    -> sprintf ("BINOP %state", state)
+  | LD    (x)    -> sprintf ("LD %state", x)
+  | LDA   (x)    -> sprintf ("LDA %state", x)
+  | ST    (x)    -> sprintf ("ST %state", x)
   | STI          -> "STI"
   | CONST (n)    -> sprintf ("CONST %d", n)
-  | LABEL (s)    -> sprintf ("LABEL %s", s)
-  | JMP   (l)    -> sprintf ("JMP %s", l)
-  | CJMP  (c, l) -> sprintf ("CJMP %s, %s", c, l)
+  | LABEL (state)    -> sprintf ("LABEL %state", state)
+  | JMP   (l)    -> sprintf ("JMP %state", l)
+  | CJMP  (c, l) -> sprintf ("CJMP %state, %state", c, l)
   | DUP          -> "DUP"
-  | DROP         -> "DROP"  
+  | DROP         -> "DROP"
   esac
 }
 
@@ -58,8 +58,70 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval (env, c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (env, conf @ [sk, st, w], insns) {
+  case insns of
+    CONST (c) : ins ->
+      eval (env, [c : sk, st, w], ins)	
+    | 
+    READ : ins ->
+      case readWorld (w) of [v, nw] -> 
+      eval (env, [v : sk, st, nw], ins)
+      esac	
+    | 
+    WRITE : ins ->
+      case sk of head : t -> 
+        local nw = writeWorld (head, w);
+        eval (env, [t, st, nw], ins)
+      esac	
+    | 
+    ST (x) : ins -> 
+      case sk of head : t -> 
+        eval (env, [sk, st <- [x, head], w], ins)
+      esac
+ 	  | 
+    LD (x) : ins -> 
+      eval (env, [st (x) : sk, st, w], ins)	
+    | 
+    BINOP (o) : ins -> 
+      case sk of r : l : t -> 
+        local res = evalOp (o, l, r);
+        eval (env, [res : t, st, w], ins)
+      esac
+    | 
+    LABEL (_) : instr -> 
+      eval (env, conf, instr)
+    | 
+    JMP (lb) : instr ->
+      eval (env, conf, fromLabel (env, lb))
+    |
+    CJMP ("z", lb) : instr ->
+      case sk of 
+        0 : rest -> eval (env, [rest, st, w], fromLabel (env, lb))
+        |
+        _ : rest -> eval (env, [rest, st, w], instr)
+      esac
+    |
+    CJMP ("nz", lb) : instr ->
+      case sk of 
+        0 : rest -> eval (env, [rest, st, w], instr)
+        |
+        _ : rest -> eval (env, [rest, st, w], fromLabel (env, lb))
+      esac
+    | DROP : instr -> 
+      case sk of
+        head : rest -> eval (env, [rest, st, w], instr)
+      esac
+    | 
+    LDA (x) : instr ->
+      eval(env, [Ref (x) : sk, st, w], instr)
+    | 
+    STI : instr -> 
+      case sk of head : Ref (x) : rest -> 
+        eval(env, [head : rest, st <- [x, head], w], instr)
+      esac
+
+		| {} -> [sk, st, w]
+	esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -101,5 +163,79 @@ fun genLabels (env, n) {
 -- Takes an expression, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  fun compile_ (stmt, env) {
+      case stmt of
+        Skip -> [{}, env]
+        |
+        Read (x) -> [{READ, ST (x), DROP}, env]
+        | 
+        Write (e) -> 
+          case compile_ (e, env) of [instr, env1] ->
+            [{instr, WRITE}, env1]
+          esac
+        | 
+        Assn (x, e) -> 
+          case compile_ (x, env) of [instr1, env1] ->
+            case compile_ (e, env1) of [instr2, env2] ->
+              [{instr1, instr2, STI}, env2]
+            esac
+          esac
+        |
+        Seq (s1, s2) ->
+          case compile_ (s1, env) of [instr1, env1] ->
+            case compile_ (s2, env1) of [instr2, env2] ->
+              [{instr1, instr2}, env2]
+            esac
+          esac
+        |
+        While (e, body) ->
+          case genLabels (env,2) of [lBody, lCheck, envL] ->
+            case compile_ (body, envL) of [instr1, env1] ->
+              case compile_ (e, env1) of [instr2, env2] ->
+                [{JMP (lCheck), LABEL (lBody), instr1, LABEL (lCheck), instr2, CJMP ("nz", lBody)}, env2]
+                esac
+            esac
+          esac
+        |
+        If (e, sIf, sElse) -> 
+          case genLabels (env, 2) of [lElse, lFi, envL] ->
+            case compile_ (sIf, envL) of [instr1, env1] ->
+              case compile_ (sElse, env1) of [instr2, env2] ->
+                case compile_ (e, env2) of [instr3, env3] ->
+                  [{instr3, CJMP ("z", lElse), instr1, JMP (lFi), LABEL (lElse), instr2, LABEL (lFi)}, env3]
+                esac
+              esac
+            esac
+          esac
+        |
+        Repeat (body, e) ->
+          case genLabels (env, 1) of [lBody, envL] ->
+            case compile_ (body, envL) of [instr1, env1] ->
+              case compile_ (e, env1) of [instr2, env2] ->
+                [{LABEL (lBody), instr1, instr2, CJMP ("z", lBody)}, env2]
+              esac
+            esac
+          esac
+        | 
+        Ignore (s) -> 
+          case compile_ (s, env) of [instr1, env1] -> 
+            [{instr1, DROP}, env1]
+          esac
+        | 
+        Binop (op, l, r) -> 
+          case compile_ (l, env) of [instr1, env1] ->
+            case compile_ (r, env1) of [instr2, env2] ->
+              [{instr1, instr2, BINOP (op)}, env2]
+            esac
+          esac
+        | 
+        Var (x) -> [singleton (LD (x)), env]
+        |
+        Const (x) -> [singleton (CONST (x)), env]
+        | 
+        Ref (x) -> [singleton (LDA (x)), env]
+      esac
+  }
+  
+  deepFlatten (compile_ (stmt, initCompEnv ()).fst)
 }
