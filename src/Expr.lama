@@ -63,10 +63,58 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
-}
-
+fun eval (cfg@[state, world], expr) {
+  case expr of 
+    Const(value) -> [cfg, value]
+  | Var(name) -> [cfg, state(name)]
+  | Ref(name) -> [cfg, Ref(name)]
+  | Ignore (expr) -> 
+      case eval(cfg, expr) of 
+        [cfg, value]  -> [cfg, Bottom]
+      esac
+  | Binop (op, left, right) -> 
+      case evalList(cfg, {left, right}) of 
+        [cfg, {leftValue, rightValue}] -> [cfg, evalOp(op, leftValue, rightValue)]
+      esac
+  | Skip -> [cfg, Bottom]
+  | Assn (left, right) -> 
+      case evalList(cfg, {left, right}) of 
+        [[newState, newWorld], {leftValue, rightValue}] -> 
+          case leftValue of 
+            Ref(name) -> [[newState <- [name, rightValue], newWorld], rightValue]
+          esac
+      esac
+  | Read (name) -> 
+      case readWorld(world) of 
+        [value, newWorld] -> [[state <- [name, value], newWorld], value]
+      esac
+  | Write (value) -> 
+      case eval(cfg, value) of 
+        [[state, world], result] -> [[state, writeWorld(result, world)], Bottom]
+      esac
+  | Seq (stmt1, stmt2) -> 
+      case evalList (cfg, {stmt1, stmt2}) of 
+        [cfg, {_, value}]  -> [cfg, value]
+      esac 
+  | If (cond, onTrue, onFalse) -> 
+      case eval (cfg, cond) of
+        [cfg, value] -> eval (cfg, if value != 0 then onTrue else onFalse fi)
+      esac
+  | While (cond, body) -> 
+      case eval (cfg, cond) of
+        [cfg, value] -> if value != 0
+                      then case eval (cfg, body) of 
+                             [cfg, _] -> eval (cfg, While (cond, body))
+                           esac
+                      else [cfg, Bottom]
+                      fi
+      esac
+  | Repeat (body, cond) ->
+      case eval (cfg, body) of
+        [cfg, _] -> eval (cfg, While (Binop ("==", Const (0), cond), body))
+      esac
+  esac
+} 
 
 -- Evaluates a program with a given input and returns an output
 public fun evalExpr (input, expr) {
@@ -74,3 +122,4 @@ public fun evalExpr (input, expr) {
     [c, _] -> c.snd.getOutput
   esac
 }
+

@@ -214,7 +214,6 @@ fun makeEnv (stack, stackSlots, globals, barrier, stackMap) {
    retrieveStack]
 }
 
--- Exported accessors
 fun envString (env) {
   env [0] ()
 }
@@ -353,6 +352,53 @@ fun compile (env, code) {
     foldl (
       fun ([env, scode], i) {
         local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+
+        fun binary(instrGenerator) {
+          case env.pop2 of
+              [a, b, env] -> case env.allocate of
+                                 [target, env] -> [env, code : instrGenerator(a, b, target)]
+                             esac
+          esac
+        }
+
+        fun basicArith(op) {
+           binary(fun (a, b, target) {
+                {Mov(b, eax), Binop(op, a, eax), Mov(eax, target)}
+            })
+        }
+
+        fun divmod(isRemainder) {
+            binary(fun (a, b, target) {
+                {Mov(b, eax), Cltd, IDiv(a), Mov(if isRemainder then edx else eax fi, target)}
+            })
+        }
+
+        fun compare(op) {
+            binary(fun (a, b, target) {
+                {
+                    Mov(b, edx),
+                    Binop("^", eax, eax),
+                    Binop("cmp", a, edx),
+                    Set(suffix(op), "%al"),
+                    Mov(eax, target)
+                }
+            })
+        }
+
+        fun logical(op) {
+            binary(fun (a, b, target) {
+                {
+                     Binop("^", edx, edx),
+                     Binop("^", eax, eax),
+                     Binop("cmp", a, eax), Set(suffix("!="), "%al"),
+                     Binop("cmp", b, edx), Set(suffix("!="), "%dl"),
+                     Binop(op, eax, edx),
+                     Mov(edx, target)
+                }
+            })
+        }
+
+
         case i of
           READ ->
             case env.allocate of
@@ -362,25 +408,84 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | ST(name) -> 
+            case env.addGlobal(name) of
+              env -> [env, code : move(env.peek, env.loc(name))]
+            esac
+        | STI -> 
+            case env.pop2 of 
+              [s1, s2, env] -> 
+                  case env.allocate of 
+                    [result, env] -> [env, code : move (s1, I(0, s2)) : move (s1, result)]
+                  esac
+            esac
+        | LD (name) ->
+            case env.addGlobal(name).allocate of
+                [s, env] -> [env, code : move(env.loc(name), s)]
+            esac
+        | LDA (name) -> 
+            case env.addGlobal (name).allocate of
+              [s, env] -> [env, 
+                           if memOpnd (s) 
+                           then code : { Lea (env.loc (name), eax), Mov (eax, s) }
+                           else code: singleton(Lea (env.loc (name), s)) 
+                           fi
+                          ]
+            esac
+        | CONST(value) ->
+            case env.allocate of
+                [s, env] -> [env, code : singleton(Mov(L(value), s))]
+            esac
+
+        | BINOP("*") -> basicArith("*")
+        | BINOP("+") -> basicArith("+")
+        | BINOP("-") -> basicArith("-")
+        | BINOP("/") -> divmod(0)
+        | BINOP("%") -> divmod(1)
+        | BINOP("<") -> compare("<")
+        | BINOP("<=") -> compare("<=")
+        | BINOP(">") -> compare(">")
+        | BINOP(">=") -> compare(">=")
+        | BINOP("==") -> compare("==")
+        | BINOP("!=") -> compare("!=")
+        | BINOP("&&") -> logical("&&")
+        | BINOP("!!") -> logical("!!")
+        | LABEL(value) -> [if env.isBarrier
+                            then env.retrieveStack(value)
+                            else env
+                            fi,
+                            code : singleton (Label(value))
+                           ] 
+        | JMP (label) -> [setBarrier (setStack (env, label)), code : singleton(Jmp(label))]
+        | CJMP (value, label) -> case env.pop of 
+                                     [s, env] -> [setStack (env, label), 
+                                                  code : { Mov (L (0), eax),
+                                                           Binop ("cmp", s, eax),
+                                                           CJmp (value, label)
+                                                         }
+                                                 ]
+                                 esac
+        | SKIP -> [env, code]
+        | DROP -> case env.pop of [_, env] -> [env, code] esac
+        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
   }
 
-  compile (env, code) 
+  compile (env, code)
 }
 
 -- A top-level codegeneration function. Takes a driver's environment and a stack machine program,
 -- compiles the program into machine code, and compiles the machine code into an executable
 public fun compileX86 (args, code) {
   case compile (initEnv (), code) of
-    [env, code] ->
+    [env, code] -> 
        local asmFile = args.getBaseName ++ ".s",
              runtime = case getEnv ("LAMA_RUNTIME") of
                          #unboxed -> "../runtime/"
                        | path     -> path
                        esac ++ "/runtime.o";
-       
+
        fwrite (asmFile,
                map (insnString, 
                     deepFlatten ({
@@ -398,3 +503,4 @@ public fun compileX86 (args, code) {
        system ({"gcc -g -m32 -o ", args.getBaseName, " ", runtime, " ", asmFile}.stringcat)
   esac
 }
+
