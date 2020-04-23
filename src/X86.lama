@@ -419,9 +419,9 @@ fun compile (env, code) {
         local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
         case i of
           READ ->
-          case env.allocate of [s, env] -> 
-            [env, code : {Call ("Lread"), Mov (eax, s)}]
-          esac             
+            case env.allocate of [s, env] -> 
+              [env, code : {Call ("Lread"), Mov (eax, s)}]
+            esac             
           | 
           WRITE ->
             case env.pop of [s, env] -> 
@@ -475,7 +475,8 @@ fun compile (env, code) {
             case env.pop2 of [x, y, env] -> 
               [env.push (y), code : { Mov (x, eax), Mov (y, edx), Mov (eax, I (0, edx)), Mov (eax, y) }]
             esac
-          | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
+          | 
+          _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
   }
