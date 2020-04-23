@@ -59,7 +59,56 @@ fun fromLabel (env, lab) {
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
 fun eval (env, c, insns) {
-  failure ("SM eval not implemented\n")
+  local stack = c[0];
+    local state = c[1];
+    local world = c[2];
+    case insns of
+          CONST(c):other            ->  eval(env, [c:stack, state, world], other)
+
+        | BINOP(operation):other    ->  case stack of
+                                            right:left:rest -> eval(env, [evalOp(operation, left, right):rest, state, world], other)
+                                        esac
+
+        | READ:other                ->  case readWorld(world) of
+                                            [value, newWorld] -> eval(env, [value:stack, state, newWorld], other)
+                                        esac
+
+        | WRITE:other               ->  case stack of
+                                            head:rest -> eval(env, [rest, state, writeWorld(head, world)], other)
+                                        esac
+
+        | LD(x):other               ->  eval(env, [state(x):stack, state, world], other)
+
+        | LDA (x):other             ->  eval(env, [Ref (x) : stack, state, world], other)
+
+        | ST(x):other               ->  case stack of
+                                            head:rest -> eval(env, [stack, state <- [x, head], world], other)
+                                        esac
+
+        | STI : other               ->  case stack of
+                                            head:Ref (x):rest -> eval(env, [head:rest, state <- [x, head], world], other)
+                                        esac
+
+        | LABEL(l):other             -> eval(env, c, other)
+
+        | JMP(l):other               -> eval(env, c, fromLabel(env, l))
+
+        | CJMP(flag, l):other        -> case flag of
+                                       "nz" ->   case stack of
+                                                      0 : newStack -> eval(env, [newStack, state, world], other)
+                                                    | _ : newStack -> eval(env, [newStack, state, world], fromLabel(env, l))
+                                                esac
+                                     | "z" ->  case stack of
+                                                      0 : newStack -> eval(env, [newStack, state, world], fromLabel(env, l))
+                                                    | _ : newStack -> eval(env, [newStack, state, world], other)
+                                                esac
+                                       esac
+
+        | DROP:other                -> case stack of
+                                         head:rest -> eval(env, [rest, state, world], other)
+                                       esac
+        | _ -> c
+    esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -101,5 +150,84 @@ fun genLabels (env, n) {
 -- Takes an expression, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+     fun innerCompileIfStmt(e, s1, s2, env) {
+        case genLabels(env, 2) of [ls2, lexit, env1] ->
+          case innerCompile(s1, env1) of [cs1, env2] ->
+            case innerCompile(s2, env2) of [cs2, env3] ->
+              case innerCompile(e, env3) of [ce, env3] ->
+                [{ce, CJMP("z", ls2), cs1, JMP(lexit), LABEL(ls2), cs2, LABEL(lexit)}, env3]
+              esac
+            esac
+          esac
+        esac
+    }
+
+    fun innerCompileWhile(e, s1, env) {
+        case genLabels(env, 2) of [le, ls, env1] ->
+          case innerCompile(s1, env1) of [cs1, env2] ->
+            case innerCompile(e, env2) of [ce, env2] ->
+              [{JMP(le), LABEL(ls), cs1, LABEL(le), ce, CJMP("nz", ls)}, env2]
+            esac
+          esac
+        esac
+    }
+
+    fun innerCompileRepeat(s1, e, env) {
+        case genLabels(env, 1) of [ls, env1] ->
+          case innerCompile(s1, env1) of [cs1, env2] ->
+            case innerCompile(e, env2) of [ce, env2] ->
+              [{LABEL(ls), cs1, ce, CJMP("z", ls)}, env2]
+            esac
+          esac
+        esac
+    }
+
+    fun innerCompile (stmt, env) {
+          case stmt of
+            Const (x)               -> [singleton(CONST (x)), env]
+
+          | Var (x)                 -> [singleton(LD (x)), env]
+
+          | Ref (x)                 -> [singleton(LDA (x)), env]
+
+          | Read (x)                -> [{READ, ST (x), DROP}, env]
+
+          | Write (e)               -> case innerCompile(e, env) of [ce, env1] ->
+                                        [{ce, WRITE}, env1]
+                                      esac
+
+          | Assn (x, e)             -> case innerCompile(x, env) of [cs1, env1] ->
+                                        case innerCompile(e, env1) of [cs2, env2] ->
+                                          [{cs1, cs2, STI}, env2]
+                                        esac
+                                      esac
+
+          | Seq (s1, s2)            -> case innerCompile(s1, env) of [cs1, env1] ->
+                                        case innerCompile(s2, env1) of [cs2, env2] ->
+                                          [{cs1, cs2}, env2]
+                                        esac
+                                      esac
+
+          | Skip -> [{}, env]
+
+          | Ignore (state)          -> case innerCompile(state, env) of [cs1, env1] ->
+                                                          [{cs1, DROP}, env1]
+                                        esac
+
+          | Binop (op, l, r)        -> case innerCompile(l, env) of [cs1, env1] ->
+                                          case innerCompile(r, env1) of [cs2, env2] ->
+                                              [{cs1, cs2, BINOP(op)}, env2]
+                                          esac
+                                        esac
+
+          | If (x, stmt1, stmt2)    ->  { innerCompileIfStmt(x, stmt1, stmt2, env) }
+
+          | While (x, stmt)         ->  { innerCompileWhile(x, stmt, env) }
+
+          | Repeat (stmt, x)        ->  { innerCompileRepeat(stmt, x, env) }
+
+        esac
+      }
+
+      deepFlatten(innerCompile(stmt, initCompEnv())[0])
 }
