@@ -52,6 +52,12 @@ fun binop (op) {
   ]
 }
 
+local else_if = memo $ eta syntax (
+                                  kFi { fun (a) { Skip } }
+                                | kElse ex=exp kFi  { fun (a) { ex (a) } }
+                                | kElif ex=exp kThen state_1=exp state_2=else_if { fun (a) { If (ex (Val), state_1 (a), state_2 (a)) }}
+);
+
 local primary  = memo $ eta syntax (
                                     -- decimal constant
                                     loc=pos x=decimal                                 {fun (a) {assertValue (a, Const (stringInt (x)), loc)}}     |
@@ -64,7 +70,74 @@ local primary  = memo $ eta syntax (
                                                                                          | _    -> Var (x)
                                                                                          esac
                                                                                       }} |
-                                    $(failure ("the rest of primary parsing in not implemented\n"))),
+                                    loc=pos kRead val=inbr[s("("), lident, s(")")]{ 
+
+                                      fun (a) {
+                                       
+                                        assertVoid (a, Read (val), loc) 
+                                        
+                                        } 
+                                    } |
+
+                                    loc=pos kWrite s["("] ex=exp s[")"]{
+
+                                      fun (a) {
+                                       
+                                        assertVoid (a, Write (ex (Val)), loc)
+                                        
+                                        } 
+                                    } | 
+                                                  
+                                    loc=pos kSkip { 
+                                      
+                                      fun (a) { 
+                                        
+                                        assertVoid (a, Skip, loc) 
+
+                                        } 
+                                    } |
+
+                                    loc=pos kRepeat state=exp kUntil ex=basic              { 
+                                      
+                                      fun (a) { 
+                                        
+                                        assertVoid (a, Repeat ( state (Void), ex (Val)), loc) 
+                                        
+                                        } 
+                                    } |
+
+                                    loc=pos kIf ex=exp kThen state_1=exp state_2=else_if  { 
+                                      
+                                      fun (a) { 
+                                        
+                                        If (ex (Val), state_1 (a), state_2 (a)) 
+                                      
+                                       } 
+                                    } |
+                                    
+                                    loc=pos kWhile ex=exp n_state=inbr[s("do"), exp, s("od")] { 
+                                      
+                                      fun (a) { 
+                                        
+                                        assertVoid (a, While (ex (Val), n_state (Void)), loc)
+
+                                        } 
+                                    } |
+
+                                    loc=pos kFor state_1=exp s[","] ex=basic s[","] state_2=exp s["do"] state_3=exp s["od"] { 
+                                      
+                                      fun (a) { 
+                                        
+                                        Seq (state_1 (Void), While (ex (Val), Seq (state_3 (a), state_2 (a)))) 
+                                        
+                                        } 
+                                    } |
+
+                                    inbr[s("("), exp, s(")")]
+                                    
+                                     ),
+
+
       basic    = memo $ eta (expr ({[Right, singleton ([s (":="),
                                                         fun (l, loc, r) {
                                                           fun (a) {assertValue (a, Assn (l (Ref), r (Val)), loc)}
