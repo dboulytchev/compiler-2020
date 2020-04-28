@@ -63,8 +63,71 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+fun eval (config@[state, world], expr) {
+  case expr of
+
+    Skip -> [config, BOTTOM]
+
+  | Const (value) -> [config, value]
+  
+  | Var (value) -> [config, state (value)]
+
+  | Ref (value) -> [config, Ref (value)]
+    
+
+  | Read (value) ->
+                                          case readWorld (world) of 
+                                            [nv, n_world] -> [[state <- [value, nv], n_world], BOTTOM]
+                                          esac  
+
+  | Write (exp) ->
+                                          case eval (config, exp) of
+                                          [[n_state, n_world], val] -> [[n_state, writeWorld (val, n_world)], BOTTOM]
+                                          esac
+
+  | Binop (oper, left, right) ->
+                                          case evalList (config, { left, right }) of
+                                            [n_c, { n_left, n_right }] -> [n_c, evalOp (oper, n_left, n_right)]
+                                          esac
+
+
+  | Assn (left, right) ->
+                                          case evalList (config, { left, right }) of
+                                            [[n_state, n_world], { Ref (n_left), n_right }] -> [[n_state <- [n_left, n_right], n_world], n_right]
+                                          esac
+
+  | Seq (state_1, state_2) ->
+                                          case eval (config, state_1) of
+                                            [n_c, _] -> eval (n_c, state_2)
+                                          esac
+
+  | Ignore (state) ->
+                                          case eval (config, state) of
+                                            [n_c, _] -> [n_c, BOTTOM]
+                                          esac
+
+  | If (exp, state_1, state_2) ->
+                                          case eval (config, exp) of
+                                            [n_c, 0] -> eval (n_c, state_2)
+                                          | [n_c, _] -> eval (n_c, state_1)
+                                          esac
+  | While (exp, n_state) ->
+                                          case eval (config, exp) of
+                                            [n_c, 0] -> [n_c, BOTTOM]
+                                          | [n_c1, _] ->
+                                              case eval (n_c1, n_state) of
+                                                [n_c2, _] -> eval (n_c2, expr)
+                                              esac
+                                              esac
+  | Repeat (n_state, exp) ->
+                                          case eval (config, n_state) of
+                                            [n_c1, _] ->
+                                              case eval (n_c1, exp) of
+                                                [n_c2, 0] -> eval (n_c2, expr)
+                                                | [n_c2, _] -> [n_c2, BOTTOM]
+                                              esac
+                                          esac
+                                          esac
 }
 
 
