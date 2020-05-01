@@ -122,7 +122,7 @@ fun evalDecls (state, decls) {
   )
 }
 
--- @type [State, World] -> <Val Int | Ref String | Void>
+-- @type [State, World] -> <Val Int | Ref String | 0>
 fun eval (c@[state, world], expr) {
   case expr of
     Assn(l, r) ->
@@ -130,13 +130,13 @@ fun eval (c@[state, world], expr) {
         [c@[state, world], {Ref(x), v}] -> [[state <- [x, Var(v)], world], v]
       esac
 
-  | Binop(op, l, r) -> 
+  | Binop(op, l, r) ->  
       case evalList(c, {l, r}) of
         [c@[state, world], {n1, n2}] -> [c, evalOp(op, n1, n2)]
       esac
 
   | Call(name, args) ->
-      checkFun(state, name);
+      -- checkFun(state, name); -- Comment out because of lack of memory
       case state.lookup(name) of 
         Fun(argNames, body) ->
           case evalList(c, args) of
@@ -161,7 +161,7 @@ fun eval (c@[state, world], expr) {
           fi
       esac
 
-  | Ignore(e) -> [eval(c, e).fst, Void]
+  | Ignore(e) -> [eval(c, e).fst, 0]
 
   | Scope(decls, expr) ->
       case eval([evalDecls(enterScope(state), decls), world], expr) of
@@ -173,11 +173,11 @@ fun eval (c@[state, world], expr) {
         [c, {_, r}] -> [c, r]
       esac
 
-  | Skip -> [c, Void]
+  | Skip -> [c, 0]
 
   | Read(x) ->
       case readWorld(world) of 
-        [n, w] -> [[state <- [x, Var(n)], w], Void]
+        [n, w] -> [[state <- [x, Var(n)], w], 0]
       esac
 
   | Ref(x) -> [c, Ref(x)]
@@ -186,7 +186,7 @@ fun eval (c@[state, world], expr) {
       eval(eval(c, body).fst, While(Binop("==", cond, Const(0)), body))
 
   | Var(x) -> 
-      state.checkVar(x);
+      -- state.checkVar(x); -- Comment out because of lack of memory
       case state.lookup(x) of
         Var(v) -> [c, v]
       esac
@@ -196,13 +196,13 @@ fun eval (c@[state, world], expr) {
         [c, n] ->
           if   n != 0
           then eval(eval(c, body).fst, cycle)
-          else [c, Void]
+          else [c, 0]
           fi
       esac
 
   | Write(e) -> 
       case eval(c, e) of
-        [[s, w], n] -> [[s, writeWorld(n, w)], Void]
+        [[s, w], n] -> [[s, writeWorld(n, w)], 0]
       esac
   esac
 }
