@@ -105,63 +105,66 @@ fun distributeScope (expr, exprConstructor) {
   esac
 }
 
-local primary    = memo $ eta ( pos |> fun(loc) { decimal @ fun (x) { fun(a) { assertValue(a, Const (stringInt (x)), loc) } } } |
-                                lident |> fun(x) { opt(inbr(s("("), list0 ( exp @ fun(e) { e(Val) } ), s(")"))) @ fun(args) {
-                                           fun(a) { case args of
-                                                      None -> case a of
-                                                               Ref  -> Ref (x)
-                                                             | Void -> Ignore (Var (x))
-                                                             | _    -> Var (x)
-                                                             esac
-                                                    | Some (args) -> assertValue (a, Call (x, args))
-                                                    esac
-                                                  } } } |
-                               pos |> fun(loc) { kSkip @ lift( fun(a) { assertVoid(a, Skip, loc) } ) } |
-                               pos |> fun(loc) { kRead |> lift (inbr (s("("), lident, s(")")) @ fun(x) { fun(a) { assertVoid(a, Read (x), loc) } } ) } |
-                               pos |> fun(loc) { kWrite |> lift (inbr (s("("), exp, s(")")) @ fun (x) { fun (a) { assertVoid(a, Write (x(Val)),  loc) } } ) } |
-                               pos |> fun(loc) { kWhile |> lift (exp |> fun (e) {
-                                                  kDo |> lift (exp |> fun (s) {
-                                                      kOd @ lift (fun(a) { assertVoid(a, While (e(Val), s(Void)), loc) })
-                                                      })
-                                                  }) } |
-                               pos |> fun(loc) { kRepeat |> lift (exp |> fun (s) {
-                                                  kUntil |> lift (basic @ fun (e) { fun(a) { assertVoid(a, distributeScope(s(Void), fun(s) { Repeat (s, e(Val)) }), loc) } })
-                                                  }) } |
-                               pos |> fun(loc) { kFor |> lift (exp |> fun (s1) {
-                                                  s(",") |> lift (exp |> fun (e) {
-                                                      s(",") |> lift (exp |> fun (s2) {
-                                                          kDo |> lift (exp |> fun (s3) {
-                                                              kOd @ lift (fun(a) {
-                                                                  assertVoid(a, distributeScope (
-                                                                   s1(Void), fun(s1) {Seq (s1, While (e(Val), Seq(s3(Void), s2(Void))))}), loc
-                                                                  )})
-                                                              })
-                                                          })
-                                                      })
-                                                  }) } |
-                               pos |> fun(loc) { kIf |> lift (exp |> fun (e) {
-                                                  kThen |> lift (exp |> fun (s1) {
-                                                      kElse |> lift (exp |> fun (s2) {
-                                                              kFi @ lift (fun(a) { If (e(Val), s1(a), s2(a)) })
-                                                          }) |
-                                                      kFi @ lift (fun(a) { If (e(Val), s1(a), assertVoid(a, Skip, pos)) }) |
-                                                      stElif @ fun (s2) {fun(a) { If (e(Val), s1(a), s2(a)) }}
-                                                      })
-                                                  }) } |
-                              inbr (s ("("), exp, s (")")) |
-                              inbr (s ("{"), scopeExpr, s ("}"))
+local primary = memo $ eta ( pos |> fun(loc) { decimal @ fun (x) { fun(a) { assertValue(a, Const (stringInt (x)), loc) } } } |
+                             lident |> fun(x) { opt(inbr(s("("), list0 ( exp @ fun(e) { e(Val) } ), s(")"))) @ fun(args) {
+                                        fun(a) { case args of
+                                                   None -> case a of
+                                                            Ref  -> Ref (x)
+                                                          | Void -> Ignore (Var (x))
+                                                          | _    -> Var (x)
+                                                          esac
+                                                 | Some (args) -> assertValue (a, Call (x, args))
+                                                 esac
+                                               } } } |
+                             pos |> fun(loc) { kSkip @ lift( fun(a) { assertVoid(a, Skip, loc) } ) } |
+                             pos |> fun(loc) { kRead |> lift (inbr (s("("), lident, s(")")) @ fun(x) { fun(a) { assertVoid(a, Read (x), loc) } } ) } |
+                             pos |> fun(loc) { kWrite |> lift (inbr (s("("), exp, s(")")) @ fun (x) { fun (a) { assertVoid(a, Write (x(Val)),  loc) } } ) } |
+                             pos |> fun(loc) { kWhile |> lift (exp |> fun (e) {
+                                                kDo |> lift (scopeExpr |> fun (s) {
+                                                    kOd @ lift (fun(a) { assertVoid(a, While (e(Val), s(Void)), loc) })
+                                                    })
+                                                }) } |
+                             pos |> fun(loc) { kRepeat |> lift (scopeExpr |> fun (s) {
+                                                kUntil |> lift (basic @ fun (e) { fun(a) {
+                                                  assertVoid(a, distributeScope(s(Void), fun(s) { Repeat (s, e(Val)) }), loc) } })
+                                                }) } |
+                             pos |> fun(loc) { kFor |> lift (scopeExpr |> fun (s1) {
+                                                s(",") |> lift (exp |> fun (e) {
+                                                    s(",") |> lift (exp |> fun (s2) {
+                                                        kDo |> lift (scopeExpr |> fun (s3) {
+                                                            kOd @ lift (fun(a) {
+                                                              assertVoid(a, distributeScope (
+                                                               s1(Void), fun(s1) {Seq (s1, While (e(Val), Seq(s3(Void), s2(Void))))}), loc
+                                                              )})
+                                                            })
+                                                        })
+                                                    })
+                                                }) } |
+
+                             pos |> fun(loc) { kIf |> lift (exp |> fun (e) {
+                                                kThen |> lift (scopeExpr |> fun (s1) {
+                                                    kElse |> lift (scopeExpr |> fun (s2) {
+                                                            kFi @ lift (fun(a) { If (e(Val), s1(a), s2(a)) })
+                                                        }) |
+                                                    kFi @ lift (fun(a) { If (e(Val), s1(a), assertVoid(a, Skip, loc)) }) |
+                                                    stElif @ fun (s2) {fun(a) { If (e(Val), s1(a), s2(a)) }}
+                                                    })
+                                                }) } |
+                            inbr (s ("("), exp, s (")")) |
+                            inbr (s ("{"), scopeExpr, s ("}"))
                           ),
 
-                                            stElif = memo $ eta (pos |> fun(loc) { kElif |> lift (exp |> fun (e) {
-                                                                                      kThen |> lift (exp |> fun (s1) {
-                                                                                          kElse |> lift (exp |> fun (s2) {
-                                                                                                  kFi @ lift (fun(a) { If (e(Val), s1(a), s2(a)) })
-                                                                                              }) |
-                                                                                          kFi @ lift (fun(a) { If (e(Val), s1(a), assertVoid(a, Skip, pos)) }) |
-                                                                                          stElif @ fun (s2) {fun(a) { If (e(Val), s1(a), s2(a)) }}
-                                                                                          })
-                                                                                      }) }
-                                                                ),
+      stElif = memo $ eta (pos |> fun(loc) { kElif |> lift (exp |> fun (e) {
+                                                kThen |> lift (scopeExpr |> fun (s1) {
+                                                    kElse |> lift (scopeExpr |> fun (s2) {
+                                                            kFi @ lift (fun(a) { If (e(Val), s1(a), s2(a)) })
+                                                        }) |
+                                                    kFi @ lift (fun(a) { If (e(Val), s1(a), assertVoid(a, Skip, loc)) }) |
+                                                    stElif @ fun (s2) {fun(a) { If (e(Val), s1(a), s2(a)) }}
+                                                    })
+                                                }) }
+                          ),
+
       scopeExpr  = memo $ eta ( rep0(definition) |> fun(defs) {
                                   opt(exp) @ fun(e) {
                                     fun(a) { fun(e) {
