@@ -168,8 +168,8 @@ fun eval (c@[state, world], expr) {
     | Scope (defs, e) -> case eval([evalDefs(enterScope(state), defs), world], e) of
                             [[s1, w1], vv] -> [[leaveScope(s1), w1], vv]
                          esac
-    | Call (f, args) -> checkFun(state, fun);
-                        case lookup(state, fun) of
+    | Call (f, args) -> checkFun(state, f);
+                        case lookup(state, f) of
                         Fun (as, e) ->
                           case evalList(c, args) of
                             [[s1, w1], vs] -> case eval ([addNamesValues(enterFunction(s1), as, vs), w1], e) of
