@@ -86,6 +86,29 @@ fun addNames (state, names) {
 fun addFunction (state, name, args, body) {
   state.addName (name, Fun (args, body))
 }
+
+fun addNamesValues (state, names, values) {
+  foldl (
+    fun (state, [name, value]) {
+        state.addName (name, Var (value))
+    },
+    state,
+    zip(names, values)
+  )
+}
+
+fun evalDefs(state, defs) {
+  foldl (
+    fun (state, def) {
+      case def of
+        Local (names) -> addNames(state, names)
+      | Fun (fName, args, expr) -> addFunction(state, fName, args, expr)
+      esac
+    },
+    state,
+    defs
+  )
+}
                                         
 -- Evaluates a list of expressions, properly threading a configurations.
 -- Returns the final configuration and the list of values
@@ -141,6 +164,18 @@ fun eval (c@[state, world], expr) {
 
     | Ignore (state) -> case eval(c, state) of
                             [c1, _] -> [c1, BOTTOM]
+                        esac
+    | Scope (defs, e) -> case eval([evalDefs(enterScope(state), defs), world], e) of
+                            [[s1, w1], vv] -> [[leaveScope(s1), w1], vv]
+                         esac
+    | Call (f, args) -> checkFun(state, fun);
+                        case lookup(state, fun) of
+                        Fun (as, e) ->
+                          case evalList(c, args) of
+                            [[s1, w1], vs] -> case eval ([addNamesValues(enterFunction(s1), as, vs), w1], e) of
+                                                [[s2, w2], vv] -> [[leaveFunction(s1, getGlobal(s2)), w2], vv]
+                                              esac
+                          esac
                         esac
     esac
 }
