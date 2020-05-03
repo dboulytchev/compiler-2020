@@ -100,16 +100,6 @@ fun genLabels (env, n) {
 -- Compiles an expression into a stack machine code.
 -- Takes an expression, returns a list of stack machine
 -- instructions.
-public fun compileSM(stmt) {
-  deepFlatten(doCompileSM(stmt))
-}
-
-fun doCompileSM(stmt) {
-  case stmt of
-      Assn(x, e) -> {compileExpr(e), ST(x)}
-    | Seq(s1, s2) -> {doCompileSM(s1), doCompileSM(s2)}
-    | Skip -> {}
-    | Read(x) -> {READ, ST(x)}
-    | Write(e) -> {compileExpr(e), WRITE}
-  esac
+public fun compileSM (stmt) {
+  failure ("compileSM not implemented\n")
 }
