@@ -101,8 +101,89 @@ fun evalList (c, exprs) {
   esac
 }
 
+fun evalDefs (s, defs) {
+  fun evalDef (s, def) {
+    case def of
+      Local (xs) -> addNames (s, xs)
+    | Fun (f, args, e) -> addFunction (s, f, args, e)  
+    esac
+  }
+
+  foldl(evalDef, s, defs)
+}
+
+fun addNamedValues (s, names, vals) {
+  fun addNamedValue (s, [name, val]) {
+    s.addName (name, Var (val))
+  }
+
+  foldl (addNamedValue, s, zip (names, vals))
+}
+
 fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+  case expr of
+    Assn (x, e) ->
+      case evalList (c, {x, e}) of
+        [[ns, nw], {Ref (xv), ev}] -> [[ns <- [xv, Var (ev)], nw], ev]
+      esac
+  | Seq (s1, s2) -> 
+      case eval (c, s1) of
+        [nc, _] -> eval (nc, s2)
+      esac
+  | Skip -> [c, Void]
+  | Read (x) -> checkVar(s, x); case readWorld (w) of [val, nw] -> [[s <- [x, Var (val)], nw], Void] esac
+  | Write (e) ->
+      case eval (c, e) of
+        [[ns, nw], val] -> [[ns, writeWorld (val, nw)], Void]
+      esac
+  | If (e, s1, s2) -> 
+      case eval (c, e) of
+        [nc, cond] -> eval (nc, if cond then s1 else s2 fi)
+      esac
+  | While (e, body) ->
+      case eval (c, e) of
+        [c, cond] ->
+          if cond then
+            case eval (c, body) of 
+              [c, _] -> eval (c, expr) 
+            esac
+          else [c, Void] fi 
+      esac
+  | Repeat (body, e) -> 
+      case eval (c, body) of
+        [c, _] -> 
+          case eval (c, e) of
+            [c, cond] ->
+              if cond == 0 then eval (c, expr) else [c, Void] fi
+          esac
+      esac
+  | Var (x) -> checkVar (s, x); [c, case lookup (s, x) of Var (v) -> v esac]
+  | Ref (x) -> checkVar (s, x); [c, Ref (x)]
+  | Const (x) -> [c, x]
+  | Binop (op, l, r) ->
+      case evalList (c, {l, r}) of
+        [nc, {lv, rv}] -> [nc, evalOp (op, lv, rv)]
+      esac
+  | Scope (defs, e) -> 
+      case eval ([evalDefs (enterScope (s), defs), w], e) of
+        [[s1, w1], ev] -> [[leaveScope (s1), w1], ev]
+      esac
+  | Call (f, args) -> 
+      checkFun (s, f);
+      case lookup (s, f) of
+        Fun (as, e) ->
+          case evalList (c, args) of
+            [[s1, w1], cv] -> 
+              case eval ([addNamedValues (enterFunction (s1), as, cv), w1], e) of
+                [[s2, w2], vv] -> [[leaveFunction (s1, getGlobal (s2)), w2], vv]
+              esac
+          esac                
+      esac
+  | Ignore (x) -> 
+      case eval (c, x) of
+        [nc, _] -> [nc, Void]
+      esac
+  esac
 }
 
 
@@ -112,3 +193,4 @@ public fun evalExpr (input, expr) {
     [c, _] -> c.snd.getOutput
   esac
 }
+
