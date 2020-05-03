@@ -32,7 +32,7 @@ public fun evalOp (op, l, r) {
 }
 
 -- Evaluates an expression "expr" in a configuration "c".
--- A configuration is a pair of a state "s" and a world "w".
+-- A configuration is a pair of a s "s" and a world "world".
 -- Returns a final configuration (if any)
 --
 -- A expression is represented by a data structure of the following shape:
@@ -60,38 +60,38 @@ public fun evalOp (op, l, r) {
 --       Fun   (string, string list, expr)
 
 -- Helper function: checks that given name designates a regular variable in
--- a given state
-fun checkVar (state, name) {
-  case state.lookup (name) of
+-- a given s
+fun checkVar (s, name) {
+  case s.lookup (name) of
     Var (_) -> skip
   | _       -> error (sprintf ("the name ""%s"" does not designate a variable", name), getLoc (name))
   esac
 }
 
 -- Helper function: checks that given name designates a function in
--- a given state
-fun checkFun (state, name) {
-  case state.lookup (name) of
+-- a given s
+fun checkFun (s, name) {
+  case s.lookup (name) of
     Fun (_, _) -> skip
   | _          -> error (sprintf ("the name ""%s"" does not designate a function", name), getLoc (name))
   esac
 }
 
 -- Helper function: adds a bunch of regular variables current scope
-fun addNames (state, names) {
-  foldl (fun (s, name) {s.addName (name, Var (0))}, state, names)
+fun addNames (s, names) {
+  foldl (fun (s, name) {s.addName (name, Var (0))}, s, names)
 }
 
 -- Helper function: adds a function in current scope
-fun addFunction (state, name, args, body) {
-  state.addName (name, Fun (args, body))
+fun addFunction (s, name, args, body) {
+  s.addName (name, Fun (args, body))
 }
                                         
 -- Evaluates a list of expressions, properly threading a configurations.
 -- Returns the final configuration and the list of values
 fun evalList (c, exprs) {
-  case foldl (fun ([c, vals], e) {
-                case eval (c, e) of
+  case foldl (fun ([c, vals], exp) {
+                case eval (c, exp) of
                   [c, val] -> [c, val : vals]
                 esac
               },
@@ -101,10 +101,154 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+
+fun eval (config@[state, world], expr) {
+
+  case expr of
+  
+
+    Skip ->                               [config, BOTTOM]
+
+
+  | Const (value) ->                      [config, value]
+  
+
+  | Var (value) ->                        [config, case lookup (state, value) of
+
+                                          Var (n_value) -> n_value
+
+                                          esac]
+
+  | Ref (value) ->                        [config, Ref (value)]
+    
+
+  | Read (value) ->
+                                          case readWorld (world) of 
+
+                                            [n_value, n_world] ->
+                                            [[state <- [value, Var (n_value)], n_world], BOTTOM]
+
+                                          esac  
+
+  | Write (exp) ->
+                                          case eval (config, exp) of
+
+                                          [[n_state, n_world], value] ->
+                                          [[n_state, writeWorld (value, n_world)], BOTTOM]
+
+                                          esac
+
+  | Binop (oper, left, right) ->
+                                          case evalList (config, { left, right }) of
+
+                                            [n_c, { n_left, n_right }] 
+                                            -> [n_c, evalOp (oper, n_left, n_right)]
+
+                                          esac
+
+
+  | Assn (left, right) ->
+                                          case evalList (config, { left, right }) of
+
+                                            [[n_state, n_world], { Ref (n_left), n_right }] 
+                                            -> [[n_state <- [n_left, Var (n_right)], n_world], n_right]
+
+                                          esac
+  
+  | Seq (state_1, state_2) ->
+                                          case eval (config, state_1) of
+
+                                            [n_c, _] -> eval (n_c, state_2)
+
+                                          esac
+
+  | Ignore (state) ->
+                                          case eval (config, state) of
+
+                                            [n_c, _] -> [n_c, BOTTOM]
+
+                                          esac
+
+  | If (exp, state_1, state_2) ->
+                                          case eval (config, exp) of
+
+                                            [n_c, 0] -> eval (n_c, state_2)
+                                          | [n_c, _] -> eval (n_c, state_1)
+
+                                          esac
+  | While (exp, n_state) ->
+                                          case eval (config, exp) of
+
+                                            [n_c, 0] -> [n_c, BOTTOM]
+                                          | [n_c1, _] ->
+
+                                          case eval (n_c1, n_state) of
+                                          
+                                            [n_c2, _] -> eval (n_c2, expr)
+
+                                          esac
+                                          esac
+  | Repeat (n_state, exp) ->
+                                          case eval (config, n_state) of
+
+                                            [n_c1, _] ->
+
+                                          case eval (n_c1, exp) of
+
+                                            [n_c2, 0] -> eval (n_c2, expr)
+                                          | [n_c2, _] -> [n_c2, BOTTOM]
+
+                                          esac
+                                          esac
+
+  | Scope (def, exp) ->                   case eval ([evalScope (enterScope (state), def), world], exp) of
+
+                                          [[n_state, n_world], value] ->
+                                          [[leaveScope (n_state), n_world], value]
+
+                                          esac
+
+
+  | Call (f, args) ->                     case lookup (state, f) of
+
+                                          Fun (a, exp) -> case evalList (config, args) of
+
+                                          [[state_1, world_1], value_1] -> 
+
+                                          case eval ([evalValue (enterFunction (state_1), a, value_1), world_1], exp) of
+
+                                          [[state_2, world_2], value_2] -> 
+                                          [[leaveFunction (state_1, getGlobal (state_2)), world_2], value_2]
+
+                                          esac
+                                          esac                
+                                          esac
+
+ 
+  esac
 }
 
+
+fun evalValue (state, ns, vals) {
+   foldl (fun (state, [n, value]) {
+
+    state.addName (n, Var (value)) 
+    
+    }, 
+    state, zip(ns, vals))
+}
+
+fun evalScope (state, ds) {
+  foldl (fun (state, def) {
+                                          case def of
+                                            
+                                           Fun (f, args, exp) -> state.addFunction (f, args, exp)
+                                          |Local (names) -> state.addNames (names)  
+                                          
+                                          esac
+                    }, 
+                    state, ds)
+}
 
 -- Evaluates a program with a given input and returns an output
 public fun evalExpr (input, expr) {
