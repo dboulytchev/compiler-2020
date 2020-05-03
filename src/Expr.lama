@@ -117,15 +117,14 @@ fun evalVal (st, ns, vs) {
 fun eval (c@[s, w], expr) {
   case expr of
     Const (x) -> [c, x]
-  | Var (x) -> checkVar (s, x); [c, case lookup (s, x) of
-                                      Var (nx) -> nx
-                                    esac]
-  | Ref (x) -> checkVar (s, x); [c, Ref (x)]
+  | Var (x) -> [c, case lookup (s, x) of
+                     Var (nx) -> nx
+                   esac]
+  | Ref (x) -> [c, Ref (x)]
   | Assn (l, r) -> case evalList (c, { l, r }) of
                      [[ns, nw], { Ref (nl), nr }] -> [[ns <- [nl, Var (nr)], nw], nr]
                    esac
-  | Read (x) -> checkVar (s, x);
-                case readWorld (w) of
+  | Read (x) -> case readWorld (w) of
                   [v, nw] -> [[s <- [x, Var (v)], nw], BOTTOM]
                 esac
   | Write (e) -> case eval (c, e) of
@@ -160,13 +159,13 @@ fun eval (c@[s, w], expr) {
   | Scope (d, e) -> case eval ([evalScope (enterScope (s), d), w], e) of
                       [[ns, nw], v] -> [[leaveScope (ns), nw], v]
                     esac
-  | Call (f, as) -> checkFun (s, f); case lookup (s, f) of
-                                       Fun (a, e) -> case evalList (c, as) of
-                                                       [[ns1, nw1], nv1] -> case eval ([evalVal (enterFunction (ns1), a, nv1), nw1], e) of
-                                                                              [[ns2, nw2], nv2] -> [[leaveFunction (ns1, getGlobal (ns2)), nw2], nv2]
-                                                                            esac
-                                                     esac                
-                                     esac
+  | Call (f, as) -> case lookup (s, f) of
+                      Fun (a, e) -> case evalList (c, as) of
+                                      [[ns1, nw1], nv1] -> case eval ([evalVal (enterFunction (ns1), a, nv1), nw1], e) of
+                                                             [[ns2, nw2], nv2] -> [[leaveFunction (ns1, getGlobal (ns2)), nw2], nv2]
+                                                           esac
+                                    esac
+                    esac
   esac
 }
 
