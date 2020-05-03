@@ -15,6 +15,7 @@ public fun showSMInsn (i) {
   case i of
     READ         -> "READ"
   | WRITE        -> "WRITE"
+<<<<<<< HEAD
   | BINOP (state)    -> sprintf ("BINOP %state", state)
   | LD    (x)    -> sprintf ("LD %state", x)
   | LDA   (x)    -> sprintf ("LDA %state", x)
@@ -26,6 +27,19 @@ public fun showSMInsn (i) {
   | CJMP  (c, l) -> sprintf ("CJMP %state, %state", c, l)
   | DUP          -> "DUP"
   | DROP         -> "DROP"
+=======
+  | BINOP (s)    -> sprintf ("BINOP %s", s)
+  | LD    (x)    -> sprintf ("LD %s", x)
+  | LDA   (x)    -> sprintf ("LDA %s", x)
+  | ST    (x)    -> sprintf ("ST %s", x)
+  | STI          -> "STI"
+  | CONST (n)    -> sprintf ("CONST %d", n)
+  | LABEL (s)    -> sprintf ("LABEL %s", s)
+  | JMP   (l)    -> sprintf ("JMP %s", l)
+  | CJMP  (c, l) -> sprintf ("CJMP %s, %s", c, l)
+  | DUP          -> "DUP"
+  | DROP         -> "DROP"  
+>>>>>>> 9759a43eaef96bf01ff145b7d01833aeab6824a2
   esac
 }
 
@@ -58,6 +72,7 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
+<<<<<<< HEAD
 fun eval (env, c @ [stack, state, world], insns) {
     case insns of
           CONST(c):other            ->  eval(env, [c:stack, state, world], other)
@@ -95,6 +110,10 @@ fun eval (env, c @ [stack, state, world], insns) {
                                        esac
         | _ -> c
     esac
+=======
+fun eval (env, c, insns) {
+  failure ("SM eval not implemented\n")
+>>>>>>> 9759a43eaef96bf01ff145b7d01833aeab6824a2
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -107,6 +126,7 @@ fun makeCompEnv (n) {
   [fun () {
      [sprintf ("L%d", n), makeCompEnv (n+1)]
   }]
+<<<<<<< HEAD
 }
 
 fun initCompEnv () {
@@ -132,6 +152,33 @@ fun genLabels (env, n) {
   listArray (inner (env, n))
 }
 
+=======
+}
+
+fun initCompEnv () {
+  makeCompEnv (0)
+}
+
+-- Accessor function: generates one label
+fun genLabel (env) {
+  env [0] ()
+}
+
+-- Utility function: generates n labels
+fun genLabels (env, n) {
+  fun inner (env, n) {
+    if n == 0
+    then singleton (env)
+    else case env.genLabel of
+           [lab, env] -> lab : inner (env, n-1)
+         esac
+    fi
+  }
+
+  listArray (inner (env, n))
+}
+
+>>>>>>> 9759a43eaef96bf01ff145b7d01833aeab6824a2
 -- Compiles an expression into a stack machine code.
 -- Takes an expression, returns a list of stack machine
 -- instructions.

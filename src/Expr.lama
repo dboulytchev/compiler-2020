@@ -86,6 +86,7 @@ fun addNames (state, names) {
 fun addFunction (state, name, args, body) {
   state.addName (name, Fun (args, body))
 }
+<<<<<<< HEAD
 
 fun addNamesValues (state, names, values) {
   foldl (
@@ -109,6 +110,8 @@ fun evalDefs(state, defs) {
     defs
   )
 }
+=======
+>>>>>>> 9759a43eaef96bf01ff145b7d01833aeab6824a2
                                         
 -- Evaluates a list of expressions, properly threading a configurations.
 -- Returns the final configuration and the list of values
@@ -124,6 +127,7 @@ fun evalList (c, exprs) {
   esac
 }
 
+<<<<<<< HEAD
 fun eval (c@[state, world], expr) {
   case expr of
       Const (x)     -> [c, x]
@@ -184,6 +188,18 @@ fun eval (c@[state, world], expr) {
                           esac
                         esac
     esac
+}
+
+
+-- Evaluates a program with a given input and returns an output
+public fun evalExpr (input, expr) {
+  case eval ([emptyState (), createWorld (input)], expr) of
+    [c, _] -> c.snd.getOutput
+  esac
+=======
+fun eval (c@[s, w], expr) {
+  failure ("evalExpr not implemented\n")
+>>>>>>> 9759a43eaef96bf01ff145b7d01833aeab6824a2
 }
 
 
