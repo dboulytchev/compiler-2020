@@ -200,7 +200,7 @@ local primary   = memo $ eta ( pos |> fun(loc) { decimal @ fun(x) { fun(a) { ass
                                       [Nona , map(binop, {"==", "!=", "<", ">", "<=", ">="})],
                                       [Left , map(binop, {"+", "-"})],
                                       [Left , map(binop, {"*", "/", "%"})]
-                                     },
+                                      },
                                      primary)(id)),
       exp        = memo $ eta syntax (basic | s1=basic s[";"] s2=exp {fun (a) {Seq (s1 (Void), s2 (a))}});
 
