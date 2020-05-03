@@ -101,8 +101,71 @@ fun evalList (c, exprs) {
   esac
 }
 
+fun evalDefs(s, defs) {
+  foldl (fun (s, def) {
+              case def of
+                Fun (f, args, e) -> addFunction(s, f, args, e)  
+              | Local (xs)       -> addNames(s, xs)
+              esac
+            }, s, defs
+        )
+}
+
+fun addNamesValues (state, names, vals) {
+  foldl (fun (s, [name, val]) {s.addName (name, Var (val))}, state, zip(names, vals))
+}
+
 fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+  case expr of
+    Var(var) -> checkVar(s, var); [c, case lookup(s, var) of Var (v) -> v esac]
+  | Const(val) -> [c, val]
+  | Binop(op, lhs, rhs) -> case evalList(c, {lhs, rhs}) of
+                          [c1, {vv, v}] -> [c1, evalOp(op, vv, v)]
+                        esac
+  | Ref(ref) -> checkVar(s, ref); [c, Ref (ref)]
+  | Skip -> [c, BOTTOM]
+  | Assn(lhs, rhs) -> case evalList(c, {lhs, rhs}) of
+                     [[s1, w1], {Ref (vv), v}] -> [[s1 <- [vv, Var (v)], w1], v]
+                   esac
+  | Read(x) -> checkVar(s, x);
+                case readWorld(w) of 
+                  [z, wd] -> [[s <- [x, Var (z)], wd], BOTTOM]
+                esac              
+  | Write(expr) -> case eval(c, expr) of
+                   [[s1, w1], v] -> [[s1, writeWorld(v, w1)], BOTTOM]
+                 esac
+  | Seq(a, b) -> case eval(c, a) of
+                      [c1, _] -> eval(c1, b)
+                    esac
+  | If(x, a, b) -> case eval(c, x) of
+                        [c1, 0] -> eval(c1, b)
+                      | [c1, _] -> eval(c1, a)
+                      esac
+  | While(x, a) -> case eval(c, x) of
+                       [c1, 0] -> [c1, BOTTOM]
+                     | [c1, _] -> case eval(c1, a) of [c2, _] -> eval(c2, expr) esac
+                     esac
+  | Repeat(a, x) -> case eval(c, a) of
+                        [c1, _] -> case eval (c1, x) of
+                                     [c2, 0] -> eval(c2, expr)
+                                   | [c2, _] -> [c2, BOTTOM]
+                                   esac
+                      esac
+
+  | Ignore(s) -> case eval(c, s) of [c1, _] -> [c1, BOTTOM] esac 
+  | Scope(defs, e) -> case eval([evalDefs(enterScope(s), defs), w], e) of
+                         [[s1, w1], vv] -> [[leaveScope(s1), w1], vv]
+                       esac
+  | Call(f, args) -> checkFun(s, f);
+                      case lookup(s, f) of
+                        Fun (as, e) ->
+                          case evalList(c, args) of
+                            [[s1, w1], vs] -> case eval ([addNamesValues(enterFunction(s1), as, vs), w1], e) of
+                                                [[s2, w2], vv] -> [[leaveFunction(s1, getGlobal(s2)), w2], vv]
+                                              esac
+                          esac                
+                      esac
+  esac
 }
 
 
