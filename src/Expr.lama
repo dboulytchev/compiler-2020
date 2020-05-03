@@ -101,10 +101,27 @@ fun evalList (c, exprs) {
   esac
 }
 
+fun addNamesValues (state, names, vals) {
+  foldl (fun (st, [name, val]) {addName(st, name, Var(val))}, state, zip(names, vals))
+}
+
+fun evalDefs(state, defs) {
+  foldl(fun(st, def) {
+    case def of
+        Local(names)          -> addNames(st, names)
+      | Fun(name, args, body) -> addFunction(st, name, args, body)
+    esac
+  }, state, defs)
+}
+
 fun eval (c@[st, w], expr) {
   case expr of
       Const (x)         -> [c, x]
-    | Var(x)            -> [c, st.get(x)]
+    | Var(x)            ->
+        st.checkVar(x);
+        case lookup(st, x) of
+          Var(val) -> [c, val]
+        esac
     | Binop(op, l, r)   -> 
         case evalList(c, {l, r}) of 
           [c, {lRes, rRes}] -> [c, evalOp(op, lRes, rRes)]
@@ -119,12 +136,13 @@ fun eval (c@[st, w], expr) {
         case evalList(c, {to, val}) of 
           [c2@[st, w], {toRes, valRes}] -> 
             case toRes of 
-              Ref(x) -> [[st <- [x, valRes], w], valRes]
+              Ref(x) -> --printf("%s := %s\n", x.string, valRes.string);
+              [[st <- [x, Var(valRes)], w], valRes]
             esac
         esac
     | Read(x)           -> 
         case readWorld(w) of 
-          [val, w] -> [[st <- [x, val], w], val]
+          [val, w] -> [[st <- [x, Var(val)], w], val]
         esac  
     | Write(expr)       -> 
         case eval(c, expr) of 
@@ -154,6 +172,20 @@ fun eval (c@[st, w], expr) {
     | Repeat(s, cond) -> 
         case eval(c, s) of 
           [c, _] -> eval(c, While(Binop("==",Const (0),cond), s))
+        esac
+    | Scope(defs, e) ->
+        case eval([evalDefs(enterScope(st), defs), w], e) of 
+          [[s2, w], res] -> [[leaveScope(s2), w], res]
+        esac
+    | Call (f, args) ->
+        checkFun(st, f);
+        case lookup(st, f) of
+          Fun (as, e) ->
+            case evalList(c, args) of
+              [[s1, w], expr] -> case eval ([addNamesValues(enterFunction(s1), as, expr), w], e) of
+                                  [[s2, w], expr] -> [[leaveFunction(s1, getGlobal(s2)), w], expr]
+                                 esac
+            esac                
         esac
     | _ -> failure("Unknown expression %s\n", expr.string)
   esac
