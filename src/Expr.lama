@@ -63,8 +63,48 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+fun eval (c@[state, world], expr) {
+  case expr of
+      Const(val)      -> [c, val]
+    | Var(var)        -> [c, state(var)]
+    | Ref(ref)        -> [c, Ref(ref)]
+    | Binop(op, lhs, rhs)    ->  case evalList(c, {lhs, rhs}) of
+                                      [c1, {lRes, rRes}] -> [c1, evalOp(op, lRes, rRes)]
+                                  esac
+    | Skip            -> [c, BOTTOM]
+    | Assn(var, exp)  -> case evalList(c, {var, exp}) of
+                            [[newState, new_w], {Ref (lVal), rVal}] -> [[newState <- [lVal, rVal], new_w], rVal]
+                        esac
+    | Read(x)         -> case readWorld(world) of
+                            [val, new_w] -> [[state <- [x, val], new_w], BOTTOM]
+                        esac
+    | Write(expr)     -> case eval(c, expr) of
+                            [[newState, new_w], val] -> [[newState, writeWorld(val, new_w)], BOTTOM]
+                         esac
+    | Seq(a, b)       -> case eval(c, a) of
+                            [c1, _] -> eval(c1, b)
+                         esac
+    | If(x, a, b)    ->  case eval(c, x) of
+                                              [c1, 0] -> eval(c1, b)
+                                            | [c1, _] -> eval(c1, a)
+                                        esac
+    | While(x, b)    ->  case eval(c, x) of
+                            [c1, 0] -> [c1, BOTTOM]
+                          | [c1, _] -> case eval(c1, b) of
+                                          [c2, _] -> eval(c2, expr)
+                                       esac
+                        esac
+    | Repeat(a, x) -> case eval(c, a) of
+                          [c1, _] -> case eval (c1, x) of
+                                       [c2, 0] -> eval(c2, expr)
+                                     | [c2, _] -> [c2, BOTTOM]
+                                     esac
+                      esac
+
+    | Ignore(state) -> case eval(c, state) of
+                            [c1, _] -> [c1, BOTTOM]
+                        esac
+    esac
 }
 
 
