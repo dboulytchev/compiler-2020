@@ -5,102 +5,78 @@ import Lexer;
 import List;
 import Fun;
 import Matcher;
+import Ref;
+import Collection;
+
+-- Signals an error; takes an error message and location info
+fun error (msg, loc) {
+  failure ("%s at %d:%d\n", msg, loc.fst, loc.snd)
+}
+
+-- An attribute-processing functions
+-- Attributes are:
+--   Val  --- a plain value (aka "rvalue")
+--   Ref  --- a reference to a mutable cell (aka "lvalue")
+--   Void --- no value (aka "void"/"unit")
+
+-- Checks if a plain value "val" can be used in the context described by
+-- the attribute "atr".
+fun assertValue (atr, val, loc) {
+  case atr of
+    Ref  -> error ("reference expected", loc)
+  | Void -> Ignore (val)
+  | _    -> val
+  esac
+}
+
+fun assertVoid (atr, val, loc) {
+  case atr of
+    Void -> val
+  | Val  -> error ("value expected", loc)
+  | _    -> error ("reference expected", loc)
+  esac
+}
 
 -- A parser of "something" in brackets; l, r are left and right
 -- brackets as parsers, p --- a parser of "something"
 fun inbr (l, p, r) {
-  l |> lift (p |> bypass (r))
+  syntax (-l p -r)
 }
 
-fun makeFoldr1(mut) {
-  fun (h:t) {
-    foldl(mut, h, t)
-  }
+fun binop (op) {
+  [syntax (pos -s[op]), fun (l, loc, r) {
+                          fun (a) {
+                            assertValue (a, Binop (op, l (Val), r (Val)), loc)
+                          }
+                        }
+  ]
 }
 
-fun brac (p) {
-  inbr (s ("("), p, s(")"))
-}
+local primary  = memo $ eta syntax (
+                                    -- decimal constant
+                                    loc=pos x=decimal                                 {fun (a) {assertValue (a, Const (stringInt (x)), loc)}}     |
 
-fun mkBinEntry (o) {
-  [s(o), fun(l, r) { Binop (o, l, r) }]
-}
-
-local ops = {
-  [Left, singleton(mkBinEntry("!!"))],
-  [Left, singleton(mkBinEntry("&&"))],
-  [Nona, map(mkBinEntry, {"==", "!=", "<=", "<", ">=", ">"})],
-  [Left, map(mkBinEntry, {"+", "-"})],
-  [Left, map(mkBinEntry, {"*", "/", "%"})]
-};
-
--- seq combinator that parses as A seq B and gives result of B
-infix |=> at |> (a, b) {seq(a, lift(b))}
-infixr >> after | (a, b) { seq(a, lift(b)) }
--- seq combinator that parses as A seq B and gives result of A
-infix |>> at |> (a, b) {seq(a, bypass(b))}
-
-local bp = bypass;
-
-fun dump(x) {
-  printf("--%s\n", x.string); x
-}
-
-fun curryIf(c, t) {
-  fun (f) { If(c, t, f) }
-}
-
-local parseIf = memo $ eta (
-  kIf |=> exp |> fun(c) { 
-    kThen |=> stmt |> fun(t) {
-    rep0(
-      kElif |=> exp |> fun(e) { 
-        kThen |=> stmt  |> fun(s) { 
-          empty @ lift([e, s])
-      }}
-    ) |> fun(elifs) {
-    opt(kElse |=> stmt) |> fun (else_) {
-    kFi @ lift(
-      If(c, t,
-        foldr(
-          fun (acc, [e, s]) { If(e, s, acc) }, 
-          case else_ of
-              Some(s) -> s
-            | None -> Skip
-          esac, elifs)
-      )
-    ) }}}}
-);
-
-local parseFor = memo $ eta(
-  kFor |=> stmt |> fun (stmt1) {
-    s(",") |=> exp |> fun (expr) {
-      s(",") |=> stmt |> fun (stmt2) {
-        kDo |=> stmt |> fun (stmt3) {
-          kOd @ lift (Seq (stmt1, While (expr, Seq (stmt3, stmt2))))
-        }
-      }
-    }
-});
-
--- Primary expression
-local primary = memo $ eta (decimal @ fun (x) {Const (stringInt (x))} |
-                    lident  @ fun (x) {Var (x)} |
-                    brac (exp));
-
-local exp = memo $ eta (expr (ops, primary)(id));
-
-local st = memo $ eta (kSkip @ lift(Skip) |
-                       kRead |=>  brac(lident) @ fun (x) { Read (x) } |
-                       kWrite |=> exp @ fun (x) { Write (x) } |
-                       lident |> fun (x) { s(":=") |=> exp @ fun (e) { Assn (x, e) } } |
-                       kWhile |=> exp |> fun (c) {inbr(kDo, stmt, kOd) @ fun (s) { While(c, s) } } |
-                       inbr(kRepeat, stmt, kUntil) |> fun (s) {exp @ fun (c) { Repeat (s, c) } } |
-                       parseIf |
-                       parseFor
-);
-
-local stmt = listBy(st, s(";")) @ makeFoldr1(fun(a, b) { Seq(a, b) });
+                                    -- identifier
+                                    x=lident                                          {fun (a) {
+                                                                                         case a of
+                                                                                           Ref  -> Ref (x)
+                                                                                         | Void -> Ignore (Var (x))
+                                                                                         | _    -> Var (x)
+                                                                                         esac
+                                                                                      }} |
+                                    $(failure ("the rest of primary parsing in not implemented\n"))),
+      basic    = memo $ eta (expr ({[Right, singleton ([s (":="),
+                                                        fun (l, loc, r) {
+                                                          fun (a) {assertValue (a, Assn (l (Ref), r (Val)), loc)}
+                                                        }])],
+                                    [Left , map (binop, singleton ("!!"))],
+                                    [Left , map (binop, singleton ("&&"))],
+                                    [Nona , map (binop, {"==", "!=", "<", ">", "<=", ">="})],
+                                    [Left , map (binop, {"+", "-"})],
+                                    [Left , map (binop, {"*", "/", "%"})]
+                                   },
+                                   primary)(id)),
+      exp      = memo $ eta syntax (basic | s1=basic s[";"] s2=exp {fun (a) {Seq (s1 (Void), s2 (a))}});
 
 -- Public top-level parser
-public parse = stmt;
+public parse = syntax (s=exp {s (Void)});
