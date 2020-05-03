@@ -101,10 +101,71 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+fun evalDefs(state, defs) {
+    foldl(fun(acc, def) {
+        case def of
+            Local(names) -> addNames(acc, names)
+          | Fun(fn, args, body) -> addFunction(acc, fn, args, body)  
+        esac
+    }, state, defs)
 }
 
+fun amendState(state, names, values) {
+    foldl(fun (acc, [name, value]) {
+        acc.addName(name, Var(value))
+    }, state, zip(names, values))
+}
+
+fun chain(cfg, expr1, expr2) {
+    case eval(cfg, expr1) of [cNew, _] -> eval(cNew, expr2) esac
+}
+
+fun eval (c@[s, w],expr) { case expr of
+    Const(value) -> [c, value]
+  | Var(name) -> checkVar(s, name); [c, case lookup(s, name) of Var(value) -> value esac]
+  | Ref(name) -> checkVar(s, name); [c, Ref(name)]
+  | Binop(op, left, right) -> case evalList(c, {left, right}) of
+      [cNext, {leftResult, rightResult}] -> [cNext, evalOp(op, leftResult, rightResult)]
+  esac
+  | Skip -> [c,BOTTOM]
+  | Assn(left, right) -> case evalList(c, {left, right}) of
+      [[sNext, wNext], {Ref(name), value}] -> [[sNext <- [name, Var(value)], wNext], value]
+  esac
+  | Read(name) -> checkVar(s, name); case readWorld(w) of 
+      [value, wNew] -> [[s <- [name, Var(value)], wNew], BOTTOM]
+  esac
+  | Write(value) -> case eval(c, value) of
+      [[sNew, wNew], result] -> [[sNew, writeWorld(result, wNew)], BOTTOM]
+  esac
+  | Seq(stmt1, stmt2) -> case eval(c, stmt1) of
+      [cNew, _] -> eval(cNew, stmt2)
+  esac
+  | If(cond, onTrue, onFalse) -> case eval(c, cond) of
+      [cNew, value] -> eval(cNew, if value == 0 then onFalse else onTrue fi)
+  esac
+  | While(cond, body) -> case eval(c, cond) of
+      [cNew, value] -> if value == 0 then [cNew,BOTTOM] else chain(cNew, body, expr) fi
+  esac
+  | Repeat(body, cond) -> case eval(c, body) of
+      [cBody, _] -> case eval (cBody, cond) of
+          [cCond, value] -> if value == 0 then eval(cCond, expr) else [cCond, BOTTOM] fi
+      esac
+  esac
+  | Ignore(stmt) -> case eval(c, stmt) of
+      [cNew, _] -> [cNew, BOTTOM]
+  esac
+  | Scope(defs, expr) -> case eval([evalDefs(enterScope(s), defs), w], expr) of
+      [[sNew, wNew], result] -> [[leaveScope(sNew), wNew], result]
+  esac
+  | Call(name, args) -> checkFun(s, name); case lookup(s, name) of
+      Fun(sig, body) -> case evalList(c, args) of
+          [[sArgs, wArgs], resultArgs] -> case eval([amendState(enterFunction(sArgs), sig, resultArgs), wArgs], body) of
+              [[sBody, wBody], resultBody] -> [[leaveFunction(sArgs, getGlobal(sBody)), wBody], resultBody]
+          esac
+      esac                
+    esac
+  esac
+}
 
 -- Evaluates a program with a given input and returns an output
 public fun evalExpr (input, expr) {
