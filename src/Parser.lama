@@ -52,6 +52,12 @@ fun binop (op) {
   ]
 }
 
+local elseIf = memo $ eta syntax (
+                                  kFi { fun (a) { Skip } }
+                                | kElse s=exp kFi  { fun (a) { s(a) } }
+                                | kElif c=exp kThen s1=exp s2=elseIf { fun (a) { If (c(Val), s1(a), s2(a)) }}
+);
+
 local primary  = memo $ eta syntax (
                                     -- decimal constant
                                     loc=pos x=decimal                                 {fun (a) {assertValue (a, Const (stringInt (x)), loc)}}     |
@@ -63,8 +69,24 @@ local primary  = memo $ eta syntax (
                                                                                          | Void -> Ignore (Var (x))
                                                                                          | _    -> Var (x)
                                                                                          esac
-                                                                                      }} |
-                                    $(failure ("the rest of primary parsing in not implemented\n"))),
+                                                                                      }}
+                                    -- skip
+                                    | loc=pos kSkip {fun (a) { assertVoid(a, Skip, loc) }}
+                                    -- read (var)
+                                    | loc=pos kRead var=inbr[s("("), lident, s(")")]   { fun (a) { assertVoid(a, Read(var), loc) }}
+                                    -- write (expr)
+                                    | loc=pos kWrite s["("] e=exp s[")"] { fun (a) { assertVoid (a, Write(e(Val)), loc) }}
+                                    -- while expr do expr od
+                                    | loc=pos kWhile c=exp body=inbr[s("do"), exp, s("od")] { fun (a) { assertVoid(a, While(c(Val), body(Void)), loc) }}
+                                    -- if e then s1 else s2
+                                    | loc=pos kIf c=exp kThen s1=exp s2=elseIf { fun (a) { If(c(Val), s1(a), s2(a)) }}
+                                    -- repeat e until e
+                                    | loc=pos kRepeat body=exp kUntil c=basic { fun (a) { assertVoid (a, Repeat(body(Void), c(Val)), loc) }}
+                                    -- for 
+                                    | loc=pos kFor pre=exp s[","] c=basic s[","] step=exp s["do"] body=exp s["od"] { fun (a) { Seq (pre(Void), While(c(Val), Seq(body(a), step(a)))) }}
+                                    -- (expr)
+                                    | inbr[s("("), exp, s(")")]
+      ),
       basic    = memo $ eta (expr ({[Right, singleton ([s (":="),
                                                         fun (l, loc, r) {
                                                           fun (a) {assertValue (a, Assn (l (Ref), r (Val)), loc)}
@@ -76,7 +98,7 @@ local primary  = memo $ eta syntax (
                                     [Left , map (binop, {"*", "/", "%"})]
                                    },
                                    primary)(id)),
-      exp      = memo $ eta syntax (basic | s1=basic s[";"] s2=exp {fun (a) {Seq (s1 (Void), s2 (a))}});
+      exp      = memo $ eta syntax (basic | s1=basic s[";"] s2=exp {fun (a) { Seq (s1 (Void), s2 (a))}});
 
 -- Public top-level parser
 public parse = syntax (s=exp {s (Void)});

@@ -65,18 +65,66 @@ fun evalList (c, exprs) {
 
 fun eval (c@[st, w], expr) {
   case expr of
-      Const(x)        -> x
-    | Var(x)          -> st.get(x)
-    | Binop(op, l, r) -> op.applyInfixOp(evalExpr(st, l), evalExpr(st, r))
+      Const (x)         -> [c, x]
+    | Var(x)            -> [c, st.get(x)]
+    | Binop(op, l, r)   -> 
+        case evalList(c, {l, r}) of 
+          [c, {lRes, rRes}] -> [c, evalOp(op, lRes, rRes)]
+        esac
+    | Ref(x)            -> [c, Ref(x)]
+    | Ignore(expr)      -> 
+        case eval(c, expr) of
+          [c, _]  -> [c, Bottom]
+        esac
+    | Skip              -> [c, Bottom]
+    | Assn(to, val)     -> 
+        case evalList(c, {to, val}) of 
+          [c2@[st, w], {toRes, valRes}] -> 
+            case toRes of 
+              Ref(x) -> [[st <- [x, valRes], w], valRes]
+            esac
+        esac
+    | Read(x)           -> 
+        case readWorld(w) of 
+          [val, w] -> [[st <- [x, val], w], val]
+        esac  
+    | Write(expr)       -> 
+        case eval(c, expr) of 
+          [[st, w], val] -> [[st, writeWorld(val, w)], Bottom]
+        esac
+    | Seq(s1, s2)       -> 
+        case evalList(c, {s1, s2}) of 
+          [c, {_, val}]  -> [c, val]
+        esac    
+    | If(cond, s1, s2)  -> 
+        case eval(c, cond) of
+          [c, val] -> if val
+                        then eval(c, s1)
+                        else eval(c, s2)
+                      fi
+        esac
+    | While(cond, s)    -> 
+        case eval(c, cond) of
+          [c, val] -> if val
+                        then
+                          case eval(c, s) of 
+                            [c, _] -> eval(c, While(cond, s))
+                          esac
+                        else [c, Bottom]
+                      fi
+        esac
+    | Repeat(s, cond) -> 
+        case eval(c, s) of 
+          [c, _] -> eval(c, While(Binop("==",Const (0),cond), s))
+        esac
     | _ -> failure("Unknown expression %s\n", expr.string)
-  esac;
-  failure ("evalExpr not implemented\n")
+  esac
 }
 
 
 -- Evaluates a program with a given input and returns an output
 public fun evalExpr (input, expr) {
-  case eval ([emptyState, createWorld (input)], expr) of
+  case eval ([emptyState(), createWorld (input)], expr) of
     [c, _] -> c.snd.getOutput
   esac
 }

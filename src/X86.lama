@@ -415,16 +415,37 @@ fun compile (env, code) {
             case env.addGlobal(x).allocate of
               [s, env] -> [env, code : move(env.loc(x), s)]
             esac
-        | ST(x) ->
-            case env.addGlobal(x).pop of
-              [s, env] -> [env, code : move(s, env.loc(x))]
+        | LDA(x) -> 
+            case env.addGlobal(x).allocate of
+              [s, env] -> [env, code :  if memOpnd(s)
+                                          then {Lea(env.loc(x), eax), Mov(eax, s)}
+                                          else singleton(Lea(env.loc(x), s))
+                                        fi]
             esac
-        | LABEL(l)    -> [env, code : singleton(Label(l))]
-        | JMP(l)      -> [env, code : singleton(Jmp(l))]
+        | ST(x) ->
+            case env.addGlobal(x) of
+              env -> [env, code : move(peek(env), env.loc(x))]
+            esac
+        | STI -> 
+            case env.pop2 of
+              [x, y, env] -> 
+                case env.allocate of 
+                  [res, env] -> [env, code : move(x, I(0, y)) : move (x, res)]
+                esac
+            esac
+        | LABEL(l)    -> [if env.isBarrier
+                            then env.retrieveStack(l)
+                            else env
+                          fi, code : singleton(Label(l))]
+        | JMP(l)      -> [setStack(env, l).setBarrier, code : singleton(Jmp(l))]
         | CJMP(op, l) ->
             case env.pop of
-              [s, env] -> [env, code : {Binop("^", eax, eax), Binop("cmp", L(0), s), CJmp(op, l)}]
+              [s, env] -> [setStack(env, l).setBarrier, code : {Binop("^", eax, eax), Binop("cmp", L(0), s), CJmp(op, l)}]
             esac 
+        | DROP        ->
+            case env.pop of
+              [_, env] -> [env, code]
+            esac
         | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)

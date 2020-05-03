@@ -70,25 +70,34 @@ fun eval (env, c @ [stack, state, w], insns) {
       h : t -> case h of
           CONST(n)       -> [n:stack, state, w]
         | BINOP(op)      -> case stack of
-                r:l:sttail -> [op.applyInfixOp(l, r):sttail, state, w]
+                r:l:sttail -> [op.evalOp(l, r):sttail, state, w]
               | _          -> failure("Not enough values on stack for BINOP %s in statement %s\n", op.string, insns.string)
             esac
         | LD(x)          -> [state.get(x):stack, state, w]
+        | LDA(x)         -> [Ref(x):stack, state, w]
         | ST(x)          -> case stack of
-                h:sttail -> [sttail, state <- [x, h], w]
-              | _        -> failure("Not enough values on stack for ST in statement %s\n", insns.string)
+                h:_        -> [stack, state <- [x, h], w]
+              | _          -> failure("Not enough values on stack for ST in statement %s\n", insns.string)
+            esac
+        | STI            -> case stack of
+                h:Ref(x):sttail -> [h:sttail, state <- [x, h], w]
+              | _               -> failure("Not enough values on stack for STI in statement %s\n", insns.string)
+            esac
+        | DROP           -> case stack of
+                _:sttail   -> [sttail, state, w]
+              | _          -> failure("No values on stack to DROP in statement %s\n", insns.string)
             esac
         | READ           -> case readWorld(w) of
                 [v, w]  -> [v:stack, state, w]
             esac
         | WRITE          -> case stack of
-                h:sttail -> [sttail, state, writeWorld(h, w)]
-              | _        -> failure("Not enough values on stack for WRITE in statement %s\n", insns.string)
+                h:sttail   -> [sttail, state, writeWorld(h, w)]
+              | _          -> failure("Not enough values on stack for WRITE in statement %s\n", insns.string)
             esac
         | JMP(l)         -> SJump(c, fromLabel(env, l))
         | CJMP("z", l)   -> case stack of
-                0:sttail -> SJump([sttail, state, w], fromLabel(env, l))
-              | _:sttail -> [sttail, state, w]
+                0:sttail   -> SJump([sttail, state, w], fromLabel(env, l))
+              | _:sttail   -> [sttail, state, w]
             esac
         | LABEL(_) -> c
         esac . evalProxy(t)
@@ -138,26 +147,16 @@ fun genLabels (env, n) {
 }
 
 -- Compiles an expression into a stack machine code.
--- Takes an expression, returns a list (of, possibly, lists)
--- of stack machine instructions
-fun compileExpr (expr) {
-  case expr of
-      Const(c)       -> CONST(c)
-    | Var(x)         -> LD(x)
-    | Binop(op, l, r)-> {compileExpr(l), compileExpr(r), BINOP(op)}
-  esac
-}
-
--- Compiles a statement into a stack machine code.
--- Takes a statement, returns nested lists with stack machine
+-- Takes an expression, returns nested lists with stack machine
 -- instructions.
 fun compileSMunflat (stmt) {
   fun compEasy(stmt) {
     case stmt of 
-        Assn(x, v)  -> {compileExpr(v), ST(x)}
-      | Read(x)     -> {READ, ST(x)}
-      | Write(v)    -> {compileExpr(v), WRITE}
+        Read(x)     -> {READ, ST(x), DROP}
       | Skip        -> {}
+      | Ref(x)      -> singleton(LDA(x))
+      | Var(x)      -> singleton(LD(x))
+      | Const(n)    -> singleton(CONST(n))
     esac
   }
   fun compRec(stmt, env) {
@@ -166,27 +165,45 @@ fun compileSMunflat (stmt) {
           [comp1, env] -> case compRec(s2, env) of
             [comp2, env] -> [{comp1, comp2}, env]
           esac esac
+      | Assn(x, v) -> case compRec(x, env) of
+          [comp1, env] -> case compRec(v, env) of
+            [comp2, env] -> [{comp1, comp2, STI}, env]
+          esac esac
+      | Binop(op, l, r) -> case compRec(l, env) of
+          [comp1, env] -> case compRec(r, env) of
+            [comp2, env] -> [{comp1, comp2, BINOP(op)}, env]
+          esac esac
+      | Write(e) -> case compRec(e, env) of
+          [comp1, env] -> [{comp1, WRITE}, env]
+          esac
+      | Ignore(e) -> case compRec(e, env) of
+          [comp1, env] -> [{comp1, DROP}, env]
+          esac
       | While(e, x) -> case env.genLabels(2) of
           [bgn, end, env] -> case compRec(x, env) of
-            [compx, env] ->
-              [{LABEL(bgn), compileExpr(e), CJMP("z", end), compx, JMP(bgn), LABEL(end)}, env]
-          esac esac
+            [compx, env] -> case compRec(e, env) of
+              [compCond, env] ->
+                [{LABEL(bgn), compCond, CJMP("z", end), compx, JMP(bgn), LABEL(end)}, env]
+          esac esac esac
       | Repeat(x, e) -> case env.genLabels(1) of
           [bgn, env] -> case compRec(x, env) of
-            [compx, env] ->
-              [{LABEL(bgn), compx, compileExpr(e), CJMP("z", bgn)}, env]
-          esac esac
+            [compx, env] -> case compRec(e, env) of
+              [compCond, env] ->
+                [{LABEL(bgn), compx, compCond, CJMP("z", bgn)}, env]
+          esac esac esac
       | If(e, x, Skip) -> case env.genLabels(1) of
           [end, env] -> case compRec(x, env) of
-            [compx, env] ->
-              [{compileExpr(e), CJMP("z", end), compx, LABEL(end)}, env]
-          esac esac
+            [compx, env] -> case compRec(e, env) of
+              [compCond, env] ->
+                [{compCond, CJMP("z", end), compx, LABEL(end)}, env]
+          esac esac esac
       | If(e, t, f) -> case env.genLabels(2) of
           [end, els, env] -> case compRec(t, env) of
             [compx, env] -> case compRec(f, env) of
-              [compf, env3] ->
-                [{compileExpr(e), CJMP("z", els), compx, JMP(end), LABEL(els), compf, LABEL(end)}, env3]
-          esac esac esac
+              [compf, env] -> case compRec(e, env) of
+                [compCond, env] ->
+                  [{compCond, CJMP("z", els), compx, JMP(end), LABEL(els), compf, LABEL(end)}, env]
+          esac esac esac esac
       | _ -> [compEasy(stmt), env]
     esac
   }
