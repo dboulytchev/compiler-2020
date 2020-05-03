@@ -71,11 +71,7 @@ fun list (item) {
 -- initializers into assignments
 fun expandScope (defs, expr) {
   fun expandDefs (defs, expr) {
-<<<<<<< HEAD
     foldr (fun ([defs, expr], def) {
-=======
-    foldr (fun ([defs, expr], def) {     
->>>>>>> 9759a43eaef96bf01ff145b7d01833aeab6824a2
              case def of
                 [ident, None]         -> [ident : defs, expr]
              |  [ident, Some (value)] -> [ident : defs, Seq (Ignore (Assn (Ref (ident), value)), expr)]
@@ -85,11 +81,7 @@ fun expandScope (defs, expr) {
            defs)
   }
 
-<<<<<<< HEAD
   case
-=======
-  case 
->>>>>>> 9759a43eaef96bf01ff145b7d01833aeab6824a2
     foldr (fun ([defs, expr], def) {
              case def of
                f@Fun (_, _, _) -> [f : defs, expr]
@@ -102,11 +94,7 @@ fun expandScope (defs, expr) {
            [{}, expr],
            defs) of
     [defs, expr] -> Scope (defs, expr)
-<<<<<<< HEAD
   esac
-=======
-  esac  
->>>>>>> 9759a43eaef96bf01ff145b7d01833aeab6824a2
 }
 
 -- Helper AST function: distributes a scope through an expression
@@ -117,7 +105,6 @@ fun distributeScope (expr, exprConstructor) {
   esac
 }
 
-<<<<<<< HEAD
 local primary = memo $ eta ( pos |> fun(loc) { decimal @ fun (x) { fun(a) { assertValue(a, Const (stringInt (x)), loc) } } } |
                              lident |> fun(x) { opt(inbr(s("("), list0 ( exp @ fun(e) { e(Val) } ), s(")"))) @ fun(args) {
                                         fun(a) { case args of
@@ -203,25 +190,6 @@ local primary = memo $ eta ( pos |> fun(loc) { decimal @ fun (x) { fun(a) { asse
                                     }
                                 } )
                               ),
-=======
-local primary    = memo $ eta syntax (
-                                      -- decimal constant
-                                      loc=pos x=decimal                                 {fun (a) {assertValue (a, Const (stringInt (x)), loc)}}     |
-
-                                      -- identifier
-                                      x=lident args=inbr[s("("), list0(syntax(e=exp {e(Val)})), s(")")]? {fun (a) {
-                                                                                                            case args of
-                                                                                                              None -> case a of
-                                                                                                                        Ref  -> Ref (x)
-                                                                                                                      | Void -> Ignore (Var (x))
-                                                                                                                      | _    -> Var (x)
-                                                                                                                      esac
-                                                                                                            | Some (args) -> assertValue (a, Call (x, args))
-                                                                                                            esac
-                                                                                                         }} |
-                                      $(failure ("the rest of primary parsing in not implemented\n"))),
-      scopeExpr  = memo $ eta syntax ($(failure ("scope expression parsing is not implemented"))),
->>>>>>> 9759a43eaef96bf01ff145b7d01833aeab6824a2
       basic      = memo $ eta (expr ({[Right, singleton ([s (":="),
                                                           fun (l, loc, r) {
                                                             fun (a) {assertValue (a, Assn (l (Ref), r (Val)), loc)}
