@@ -105,10 +105,16 @@ fun distributeScope (expr, exprConstructor) {
   esac
 }
 
-local primary    = memo $ eta syntax (
-                                      -- decimal constant
-                                      loc=pos x=decimal                                 {fun (a) {assertValue (a, Const (stringInt (x)), loc)}}     |
+local elsePart = memo $ eta syntax (
+                                  kFi { fun (a) { Skip }}
+                                | kElse e=exp kFi  { fun (a) { e (a) }}
+                                | kElif cond=exp kThen body=exp next=elsePart { fun (a) { If (cond (Val), body (a), next (a)) }}
+);
 
+
+local primary  = memo $ eta syntax (
+                                    -- decimal constant
+                                      loc=pos x=decimal  {fun (a) {assertValue (a, Const (stringInt (x)), loc)}}
                                       -- identifier
                                       x=lident args=inbr[s("("), list0(syntax(e=exp {e(Val)})), s(")")]? {fun (a) {
                                                                                                             case args of
@@ -119,8 +125,24 @@ local primary    = memo $ eta syntax (
                                                                                                                       esac
                                                                                                             | Some (args) -> assertValue (a, Call (x, args))
                                                                                                             esac
-                                                                                                         }} |
-                                      $(failure ("the rest of primary parsing in not implemented\n"))),
+                                                                                                         }}
+                                    -- skip
+                                    | loc=pos kSkip {fun (a) {assertVoid (a, Skip, loc) }}
+                                    -- read (var)
+                                    | loc=pos kRead var=inbr[s("("), lident, s(")")]   { fun (a) { assertVoid (a, Read (var), loc) }}
+                                    -- write (expr)
+                                    | loc=pos kWrite s["("]  e=exp s[")"] { fun (a) { assertVoid (a, Write (e (Val)), loc) }}
+                                    -- while expr do expr od
+                                    | loc=pos kWhile cond=exp body=inbr[s("do"), exp, s("od")] { fun (a) { assertVoid (a, While (cond (Val), body (Void)), loc) }}
+                                    -- if e then s1 else s2
+                                    | loc=pos kIf cond=exp kThen body=exp sNext=elsePart { fun (a) { If (cond (Val), body (a), sNext (a)) }}
+                                    -- repeat e until e
+                                    | loc=pos kRepeat body=exp kUntil cond=basic { fun (a) { assertVoid (a, Repeat ( body (Void), cond (Val)), loc) }}
+                                    -- for 
+                                    | loc=pos kFor s1=exp s[","] cond=basic s[","] s2=exp s["do"] s3=exp s["od"] { fun (a) { Seq (s1 (Void), While (cond (Val), Seq (s3 (a), s2 (a)))) }}
+                                    -- (expr)
+                                    | inbr[s("("), exp, s(")")]
+                                    ),
       scopeExpr  = memo $ eta syntax ($(failure ("scope expression parsing is not implemented"))),
       basic      = memo $ eta (expr ({[Right, singleton ([s (":="),
                                                           fun (l, loc, r) {
@@ -134,6 +156,7 @@ local primary    = memo $ eta syntax (
                                      },
                                      primary)(id)),
       exp        = memo $ eta syntax (basic | s1=basic s[";"] s2=exp {fun (a) {Seq (s1 (Void), s2 (a))}});
+
 
 -- Public top-level parser
 public parse = syntax (s=scopeExpr {s (Void)});

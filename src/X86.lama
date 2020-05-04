@@ -349,6 +349,67 @@ fun suffix (op) {
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
+  fun simpleBinop(x, y, res, op) {
+    {
+      Mov (y, eax),
+      Binop (op, x, eax),
+      Mov (eax, res)
+    }
+  }
+
+  fun divremBinop(x, y, res, op) {
+    {
+      Mov (L (0), edx),
+      Mov (y, eax),
+      Cltd,
+      IDiv (x),
+      case op of
+          "/" -> Mov (eax, res)
+        | "%" -> Mov (edx, res)
+      esac
+    }
+  }
+
+  fun logopsBinop(x, y, res, op) {
+    {
+      Mov (L (0), eax),
+      Mov (L (0), edx),
+      Binop ("cmp", x, eax),
+      Set (suffix("!="), "%al"),
+      Binop ("cmp", y, edx),
+      Set (suffix("!="), "%dl"),
+      Binop (op, edx, eax),
+      Mov (eax, res)
+    }
+  }
+
+  fun cjmpOp(x, op, l) {
+    {
+      Mov (L (0), eax)
+    , Binop ("cmp", x, eax)
+    , CJmp (op, l)
+    } 
+  }
+
+  fun comparBinop(x, y, res, op) {
+    {
+      Mov (y, eax),
+      Binop ("cmp", x, eax),
+      Mov (L (0), eax),
+      Set (suffix(op), "%al"),
+      Mov (eax, res)
+    }
+  }
+
+  fun zipWithFun(oplist, f) {
+    map (fun (op) {[op, f]}, oplist)
+  }
+
+  local binaryOps = zipWithFun({"+", "-", "*"}, simpleBinop)
+                +++ zipWithFun({"&&", "!!"}, logopsBinop)
+                +++ zipWithFun({"/", "%"}, divremBinop)
+                +++ zipWithFun({"<", "<=", ">", ">=", "==", "!="}, comparBinop);
+
   fun compile (env, code) {
     foldl (
       fun ([env, scode], i) {
@@ -362,25 +423,66 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | LD (x) -> 
+            case env.addGlobal (x).allocate of 
+              [s, env] -> [env, code : move(env.loc (x), s)]
+            esac
+        | LDA (x) -> 
+            case env.addGlobal (x).allocate of
+              [s, env] -> [env, if memOpnd (s) then code : { Lea (env.loc (x), eax), Mov (eax, s) } else code: singleton(Lea (env.loc (x), s)) fi ]
+            esac
+        | ST (x) -> 
+            case env.addGlobal (x) of
+              env -> [env, code : move(env.peek, env.loc (x))]
+            esac
+        | STI -> 
+            case env.pop2 of 
+              [x, y, env] -> 
+                  case env.allocate of 
+                    [res, env] -> [env, code : move (x, I (0, y)) : move (x, res)]
+                  esac
+            esac
+        | CONST (n) -> 
+            case env.allocate of 
+              [s, env] -> [env, code : singleton (Mov (L (n), s))]
+            esac
+        | BINOP (op) ->
+            case assoc (binaryOps, op) of
+              Some(f) ->
+                case env.pop2 of
+                  [x, y, env] ->
+                    case env.allocate of
+                      [res, env] ->
+                        case f (x, y, res, op) of asm -> [env, code : asm] esac
+                    esac
+                esac
+            esac
+        | LABEL (l) -> [if env.isBarrier then env.retrieveStack (l) else env fi, code : singleton (Label (l))] 
+        | JMP (l) -> [setBarrier (setStack (env, l)), code : singleton (Jmp(l))]
+        | CJMP (c, l) -> case env.pop of 
+                           [x, env] -> [setStack (env, l), code : cjmpOp(x, c, l)] 
+                         esac
+        | SKIP -> [env, code]
+        | DROP -> case env.pop of [x, env] -> [env, code] esac
+        | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
   }
 
-  compile (env, code) 
+  compile (env, code)
 }
 
 -- A top-level codegeneration function. Takes a driver's environment and a stack machine program,
 -- compiles the program into machine code, and compiles the machine code into an executable
 public fun compileX86 (args, code) {
   case compile (initEnv (), code) of
-    [env, code] ->
+    [env, code] -> 
        local asmFile = args.getBaseName ++ ".s",
              runtime = case getEnv ("LAMA_RUNTIME") of
                          #unboxed -> "../runtime/"
                        | path     -> path
                        esac ++ "/runtime.o";
-       
+
        fwrite (asmFile,
                map (insnString, 
                     deepFlatten ({

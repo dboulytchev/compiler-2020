@@ -31,10 +31,6 @@ public fun evalOp (op, l, r) {
   esac
 }
 
--- Evaluates an expression "expr" in a configuration "c".
--- A configuration is a pair of a state "s" and a world "w".
--- Returns a final configuration (if any)
---
 -- A expression is represented by a data structure of the following shape:
 --
 -- expr = Assn   (string, expr)       |
@@ -101,10 +97,61 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
-}
-
+fun eval (conf@[state, world], expr) {
+  case expr of 
+    Const (x) -> [conf, x]
+  | Var (x) -> [conf, state (x)]
+  | Ref (x) -> [conf, Ref (x)]
+  | Ignore (expr) -> 
+      case eval(conf, expr) of 
+        [conf, val]  -> [conf, Bottom]
+      esac
+  | Binop (op, l, r) -> 
+      case evalList (conf, {l, r}) of 
+        [conf, {lEvaled, rEvaled}] -> [conf, evalOp (op, lEvaled, rEvaled)]
+      esac
+  | Skip -> [conf, Bottom]
+  | Assn (leftExpr, rightExpr) -> 
+      case evalList (conf, {leftExpr, rightExpr}) of 
+        [newConf@[state, world], {valLeft, valRight}] -> 
+          case valLeft of 
+            Ref (varName) -> [[state <- [varName, valRight], world], valRight]
+          esac
+      esac
+  | Read (varName) -> 
+      case readWorld (world) of 
+        [val, newWorld] -> [[state <- [varName, val], newWorld], val]
+      esac
+  | Write (expr) -> 
+      case eval (conf, expr) of 
+        [[state, world], val] -> [[state, writeWorld (val, world)], Bottom]
+      esac
+  | Seq (s1, s2) -> 
+      case evalList (conf, {s1, s2}) of 
+        [conf, {_, retval}]  -> [conf, retval]
+      esac 
+  | If (condExpr, trueBodyExpr, falseBodyExpr) -> 
+      case eval (conf, condExpr) of
+        [conf, val] -> if val != 0
+                       then eval (conf, trueBodyExpr)
+                       else eval (conf, falseBodyExpr)
+                       fi
+      esac
+  | While (condExpr, bodyExpr) -> 
+      case eval (conf, condExpr) of
+        [conf, val] -> if val != 0
+                       then case eval (conf, bodyExpr) of 
+                              [conf, _] -> eval (conf, While (condExpr, bodyExpr))
+                            esac
+                       else [conf, Bottom]
+                       fi
+      esac
+  | Repeat (bodyExpr, condExpr) -> 
+      case eval (conf, bodyExpr) of 
+        [conf, val] -> eval (conf, While (Binop ("==", Const (0), condExpr), bodyExpr))
+      esac
+  esac 
+} 
 
 -- Evaluates a program with a given input and returns an output
 public fun evalExpr (input, expr) {
