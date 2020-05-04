@@ -97,10 +97,22 @@ fun evalList (c, exprs) {
   esac
 }
 
+
+fun addDefs (state, defList) {
+  foldl (
+      fun (state, df) {
+          case df of
+            Local (varList) -> state.addNames (varList) 
+          | Fun (name, args, body) -> state.addFunction (name, args, body)
+          esac
+      }, state, defList
+  )
+}
+
 fun eval (conf@[state, world], expr) {
   case expr of 
     Const (x) -> [conf, x]
-  | Var (x) -> [conf, state (x)]
+  | Var (x) -> [conf, state.lookup (x)]
   | Ref (x) -> [conf, Ref (x)]
   | Ignore (expr) -> 
       case eval(conf, expr) of 
@@ -150,11 +162,39 @@ fun eval (conf@[state, world], expr) {
       case eval (conf, bodyExpr) of 
         [conf, val] -> eval (conf, While (Binop ("==", Const (0), condExpr), bodyExpr))
       esac
+
+  | Scope (defList, expr) -> 
+      case state.enterScope of
+        state ->
+          case addDefs (state, defList) of 
+            state -> 
+              case eval ([state, world], expr) of 
+                [c@[state, world], val] -> 
+                  [[state.leaveScope, world], val]
+              esac
+          esac
+      esac
+  | Call (funcName, args) ->
+      case state.lookup (funcName) of 
+        Fun (canArgs, body) -> 
+          case evalList (conf, args) of 
+            [[state1, world], argVals] -> 
+              case eval(
+                  [foldl (fun (st, [argName, argVal]) { st.addName (argName, argVal) }, state1.enterFunction, zip(canArgs, argVals)), world]
+                , body
+              ) of
+                [c@[state2, world], val] -> 
+                  [[state1.leaveFunction (state2.getGlobal), world], val]
+              esac
+          esac
+        | x -> failure(x.string)
+      esac
   esac 
 } 
 
 -- Evaluates a program with a given input and returns an output
 public fun evalExpr (input, expr) {
+  -- failure (expr.string);
   case eval ([emptyState (), createWorld (input)], expr) of
     [c, _] -> c.snd.getOutput
   esac

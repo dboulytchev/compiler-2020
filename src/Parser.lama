@@ -81,6 +81,7 @@ fun expandScope (defs, expr) {
            defs)
   }
 
+
   case 
     foldr (fun ([defs, expr], def) {
              case def of
@@ -116,7 +117,7 @@ local primary  = memo $ eta syntax (
                                     -- decimal constant
                                       loc=pos x=decimal  {fun (a) {assertValue (a, Const (stringInt (x)), loc)}}
                                       -- identifier
-                                      x=lident args=inbr[s("("), list0(syntax(e=exp {e(Val)})), s(")")]? {fun (a) {
+                                    | x=lident args=inbr[s("("), list0(syntax(e=exp {e(Val)})), s(")")]? {fun (a) {
                                                                                                             case args of
                                                                                                               None -> case a of
                                                                                                                         Ref  -> Ref (x)
@@ -133,17 +134,29 @@ local primary  = memo $ eta syntax (
                                     -- write (expr)
                                     | loc=pos kWrite s["("]  e=exp s[")"] { fun (a) { assertVoid (a, Write (e (Val)), loc) }}
                                     -- while expr do expr od
-                                    | loc=pos kWhile cond=exp body=inbr[s("do"), exp, s("od")] { fun (a) { assertVoid (a, While (cond (Val), body (Void)), loc) }}
+                                    | loc=pos kWhile cond=exp body=inbr[s("do"), scopeExpr, s("od")] { fun (a) { assertVoid (a, While (cond (Val), body (Void)), loc) }}
                                     -- if e then s1 else s2
                                     | loc=pos kIf cond=exp kThen body=exp sNext=elsePart { fun (a) { If (cond (Val), body (a), sNext (a)) }}
                                     -- repeat e until e
-                                    | loc=pos kRepeat body=exp kUntil cond=basic { fun (a) { assertVoid (a, Repeat ( body (Void), cond (Val)), loc) }}
+                                    | loc=pos kRepeat body=scopeExpr kUntil cond=basic { fun (a) { assertVoid (a, distributeScope (body (Void), fun (body) { Repeat ( body, cond (Val)) }), loc)}}
                                     -- for 
-                                    | loc=pos kFor s1=exp s[","] cond=basic s[","] s2=exp s["do"] s3=exp s["od"] { fun (a) { Seq (s1 (Void), While (cond (Val), Seq (s3 (a), s2 (a)))) }}
+                                    | loc=pos kFor s1=scopeExpr s[","] cond=basic s[","] s2=exp s["do"] s3=scopeExpr s["od"] { fun (a) { distributeScope(s1 (Void), fun (s1) { Seq (s1, While (cond (Val), Seq (s3 (a), s2 (a)))) })}}
+                                    -- { scopeExpr }
+                                    | inbr[s("{"), scopeExpr, s("}")]
                                     -- (expr)
                                     | inbr[s("("), exp, s(")")]
                                     ),
-      scopeExpr  = memo $ eta syntax ($(failure ("scope expression parsing is not implemented"))),
+      definition = memo $ eta syntax (
+                                      loc=pos kLocal vars=list[syntax(lident (s["="] e=basic { e(Val) } )? )] s[";"] { Local (vars) }
+                                    | loc=pos kFun nm=lident args=inbr[s("("), list0(syntax(lident)), s(")")] body=inbr[s("{"), scopeExpr, s("}")] { Fun (nm, args, body (Weak))}
+                                    ),
+      scopeExpr  = memo $ eta syntax (
+                                      df=definition*  e=exp { fun (a) { case df of 
+                                                                         {} -> e (a) 
+                                                                        | _ -> expandScope (df, e (a))
+                                                                        esac
+                                                                      }}
+                                    ),
       basic      = memo $ eta (expr ({[Right, singleton ([s (":="),
                                                           fun (l, loc, r) {
                                                             fun (a) {assertValue (a, Assn (l (Ref), r (Val)), loc)}
