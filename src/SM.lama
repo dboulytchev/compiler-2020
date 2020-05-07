@@ -72,6 +72,13 @@ fun fromLabel (env, lab) {
   env [0] (lab)
 }
 
+fun isNotEmpty(lst) {
+  case lst of
+    {} -> false
+  | _  -> true
+  esac 
+}
+
 -- Stack machine interpreter. Takes an environment, a world and a program,
 -- returns a final output
 fun eval (env, w, insns) {
@@ -116,9 +123,71 @@ fun eval (env, w, insns) {
     inner (n, {}, list)
   }
 
+  fun createLocal(stack, nArgs, nLocals) {
+    case take(stack, nArgs) of
+      [remainder, args] ->
+        local state = makeState(nArgs, nLocals);
+        iter(
+          fun ([ind, arg]) { assign(state, Arg(ind), arg) }, 
+          zip(arrayList(initArray(nArgs, id)), args)
+        );
+        [remainder, state]
+    esac
+  }
+
   -- Core interpreter: takes a configuration and a program, returns a configuration
-  fun eval (c@[st, cst, s, w], insns) {
-    failure ("SM interpreter is not implemented\n")
+  fun eval (conf, insns) {
+    local stack = conf[0];
+    local calls = conf[1];
+    local state = conf[2];
+    local world = conf[3];
+
+    -- Unpleasant C-style because otherwise app runs out of memory :c
+    while isNotEmpty(insns) do
+      local nextInsns = tl(insns);
+      case [hd(insns), stack] of
+        [BEGIN(_, nArgs, nLocals), s] -> 
+          case createLocal(stack, nArgs, nLocals) of
+            [newStack, newState] -> 
+              stack := newStack;
+              state := newState
+          esac
+      | [BINOP(opr), x : y : s] -> stack := evalOp(opr, y, x) : s
+      | [CALL(fLab, _),      _] -> calls := [state, nextInsns] : calls;
+                                   nextInsns := fromLabel(env, fLab) 
+      | [CONST(n),           s] -> stack := n : s
+      | [CJMP(by, lab),  z : s] ->
+          if case by of "z" -> z == 0 | "nz" -> z != 0 esac
+          then nextInsns := fromLabel(env, lab)
+          fi;
+          stack := s
+      | [DROP    , _ : s] -> stack := s
+      | [END     ,     _] -> case calls of
+                               {} -> nextInsns := {}
+                             | [retState, retInsn] : cs -> 
+                                 calls := cs;
+                                 state := retState;
+                                 nextInsns := retInsn
+                             esac
+      | [GLOBAL(x),    _] -> assign(state, Glb(x), 0)
+      | [JMP(lab),     _] -> nextInsns := fromLabel(env, lab)
+      | [LABEL(x),     _] -> skip 
+      | [LD(x)   ,     s] -> stack := lookup(state, x) : s
+      | [LDA(x)  ,     s] -> stack := Ref(x) : s
+      | [READ    ,     s] -> case readWorld(world) of
+                               [n, w] -> stack := n : s;
+                                         world := w
+                             esac
+      | [ST(x)   , z : s] -> assign(state, x, z)
+      | [STI     , v : Ref(x) : s] -> stack := v : s;
+                                      assign(state, x, v)
+      | [WRITE   , z : s] -> stack := s; 
+                             world := writeWorld(z, world)
+      esac;
+      insns := nextInsns
+    od;
+
+    [stack, calls, state, world]
   }
 
   
@@ -172,8 +241,8 @@ fun makeCompEnv (nLabels, scopeDepth, state, nLocals, nArgs, functions) {
   }
 
   -- Adds a binding for a function
-  fun addFun (name, fLabel, nargs) {
-    makeCompEnv (nLabels, scopeDepth, addName (state, name, Fun (fLabel, nargs)), nLocals, nArgs, functions)
+  fun addFun (name, fLabel, nArgs) {
+    makeCompEnv (nLabels, scopeDepth, addName (state, name, Fun (fLabel, nArgs)), nLocals, nArgs, functions)
   }
   
   -- Enters a function
@@ -183,7 +252,7 @@ fun makeCompEnv (nLabels, scopeDepth, state, nLocals, nArgs, functions) {
 
   -- Get functions and empty functions list
   fun getFuns () {
-    [functions, makeCompEnv (nLabels, scopeDepth, state, nArgs, nLocals, {})]
+    [functions, makeCompEnv (nLabels, scopeDepth, state, nLocals, nArgs, {})]
   }
 
   -- Lookups a name of a variable
@@ -348,5 +417,180 @@ fun addVars (env, names) {
 --    (use env.addArg).
 
 public fun compileSM (expr) {
-  failure ("compileSM not implemented\n")
+  local env = ref (initCompEnv());
+
+  local globals = ref({});
+
+  -- flipped list constructor
+  infixl :> after : (tail, head) { head : tail }
+
+  infix +++> at :> (tail, head) { head +++ tail }
+
+  infix +> at :> (tail, head) {
+    compileSMTo(head, tail)
+  }
+
+  infix ++> at :> (acc, args) {
+    foldl(fun (acc, arg) { acc +> arg }, acc, args)
+  }
+
+  fun genLab() {
+    case genLabel(deref(env)) of
+      [lab, newEnv] -> env ::= newEnv; lab
+    esac
+  }
+
+  fun compileFunTo(Fun(fLab, args, body, state), acc) {
+    local oldEnv, cBody, res;
+    oldEnv := deref(env);
+    env ::= addArgs(beginFun(oldEnv, state), args);
+
+    cBody := compileSMTo(body, {});
+    res := 
+      [ acc
+        :>   LABEL(fLab)
+        :>   BEGIN(fLab, size(args), getLocals(deref(env)))
+        +++> cBody
+        :>   END
+      , case getFuns(deref(env)) of [funs, _] -> funs esac
+      ];
+
+    env ::= oldEnv;
+    res
+  }
+
+  fun compileSMTo(stmt, acc) {
+    case stmt of
+      Assn(l, r)      -> acc +> l +> r :> STI
+    | Binop(op, l, r) -> acc +> l +> r :> BINOP(op)
+
+    | Call(name, args) ->
+        case lookupFun(deref(env), name) of
+          Fun(fLab, nArgs) -> acc ++> args :> CALL(fLab, nArgs)
+        esac
+
+    | Const(n) -> acc :> CONST(n)
+
+    | If(e, s1, s2) ->
+        local elseLab = genLab();
+        local outLab  = genLab();
+        acc
+        +> e
+        :> CJMP("z", elseLab)
+        +> s1
+        :> JMP(outLab)        
+        :> LABEL(elseLab)     
+        +> s2
+        :> LABEL(outLab)
+
+    | Ignore(e) -> acc +> e :> DROP
+
+    | Scope(decls, expr) ->
+        local locals, scopeFuns, funLabels, res;
+
+        env ::= beginScope(deref(env));
+
+        locals := filter(
+          fun (x) { case x of Local(_) -> true | _ -> false esac }, decls
+        );
+        -- Forms global declarations if we are on the global level
+        globals ::= deref(globals) +++>
+          if isGlobal(deref(env))
+          then foldl(
+            fun (acc, Local(names)) { acc +++> map(fun (x) { GLOBAL(x) }, names) }, 
+            {},
+            locals)
+          else {}
+          fi;
+        scopeFuns := filter(
+          fun (x) { case x of Fun(_, _, _) -> true | _ -> false esac }, decls
+        );
+          
+        funLabels := map(
+          fun (f@Fun(name, args, body)) { 
+            case genFunLabel(deref(env), name) of
+              [fLab, newEnv] -> env ::= newEnv; [f, fLab]
+            esac
+          },
+          scopeFuns
+        );
+
+        -- Adds all vars to the environment
+        env ::= foldl(
+          fun (env, Local(names)) { addVars(env, names) }, deref(env), locals
+        );
+        -- Adds all funs to the environment
+        env ::= foldl(
+          fun (env, [Fun(name, args, _), fLab]) { 
+            addFun(env, name, fLab, size(args)) 
+          },
+          deref(env),
+          funLabels
+        );
+        -- Remembers all funs for future compiling
+        env ::= foldl(
+          fun (env, [Fun(_, args, body), fLab]) { 
+            rememberFun(env, fLab, args, body) 
+          },
+          deref(env),
+          funLabels
+        );
+        
+        res := acc +> expr;
+        env ::= endScope(deref(env));
+        res
+
+    | Seq(s1, s2) -> acc +> s1 +> s2
+    | Skip        -> acc
+    | Read(x)     -> acc :> READ :> ST(lookupVar(deref(env), x)) :> DROP
+    | Ref(x)      -> acc :> LDA(lookupVar(deref(env), x))
+
+    | Repeat(body, cond) -> 
+        local bodyLab = genLab();
+        acc
+        :> LABEL(bodyLab)
+        +> body
+        +> cond
+        :> CJMP("z", bodyLab)
+
+    | Var(x) -> acc :> LD(lookupVar(deref(env), x))
+
+    | While(cond, body) ->
+        local condLab = genLab();
+        local bodyLab = genLab();
+        acc
+        :> JMP(condLab)
+        :> LABEL(bodyLab)
+        +> body
+        :> LABEL(condLab)
+        +> cond
+        :> CJMP("nz", bodyLab)
+
+    | Write(e) -> acc +> e :> WRITE
+    esac
+  }
+
+  local acc, body, todoFuns;
+
+  -- must be done before `getLocals`
+  body := compileSMTo(expr, {});
+
+  acc :=
+         deref(globals)
+    :>   LABEL("main")
+    :>   BEGIN("main", 0, getLocals(deref(env)))
+    +++> body
+    :>   END;
+
+  todoFuns := case getFuns(deref(env)) of 
+                [funs, newEnv] -> env ::= newEnv; funs 
+              esac;
+  while isNotEmpty(todoFuns) do
+    case compileFunTo(hd(todoFuns), acc) of
+      [iAcc, iTodo] -> acc := iAcc; 
+                       todoFuns := tl(todoFuns) +++ iTodo
+    esac
+  od;
+
+  reverse(acc)
 }

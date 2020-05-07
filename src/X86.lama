@@ -1,5 +1,6 @@
 -- X86 codegeneration interface
 -- We use stack machine programs as intermediate representation
+import Array;
 import Fun;
 import SM;
 import Collection;
@@ -377,6 +378,14 @@ fun memOpnd (opnd) {
   esac
 }
 
+-- Checks if an operand resides in memory
+fun isRegOpnd (opnd) {
+  case opnd of
+    R (_) -> true
+  | _     -> false
+  esac
+}
+
 -- Generates a move between locations, using
 -- intermediate register if needed
 fun move (from, to) {
@@ -386,6 +395,14 @@ fun move (from, to) {
   fi
 }
 
+-- Generates a binary operation between locations, using
+-- intermediate register if needed
+fun bincmd (l, r, cons) {
+  if memOpnd (l) && memOpnd (r)
+  then {Mov (l, eax), cons(eax, r)}
+  else singleton (cons(l, r))
+  fi
+}
 
 -- Gets a suffix for Set instruction from
 -- source language comparison operator
@@ -400,46 +417,174 @@ fun suffix (op) {
   esac
 }
 
+fun setZero(item) {
+  case item of
+    R(_) -> Binop("^", item, item)
+  | S(_) -> Mov(L(0), item)
+  esac
+}
+
+fun isSimpleArith(opr) {
+  case opr of
+    "+" -> true
+  | "-" -> true
+  | "^" -> true
+  | _   -> false
+  esac
+}
+
+fun isLogical(opr) {
+  case opr of
+    "&&" -> true
+  | "!!" -> true
+  | _    -> false
+  esac
+}
+
+fun isComparison(opr) {
+  case opr of
+    "<"  -> true
+  | "<=" -> true
+  | ">"  -> true
+  | ">=" -> true
+  | "==" -> true
+  | "!=" -> true
+  | _    -> false
+  esac
+}
+
+(**
+ * @returns list of x86 instructions resulted from compilation
+ *          of `s opr d` expression
+ * @type    [String, MemLoc, MemLoc] -> {Instr}
+ *)
+fun compileBinop(opr, s, d) {
+  if   opr.isSimpleArith then 
+    bincmd(s, d, fun (l, r) { Binop(opr, l, r) })
+  elif opr.isLogical then
+    {setZero(eax), Binop("cmp", s, eax), Set(suffix("!="), "%al"), -- %al := s != 0
+     setZero(edx), Binop("cmp", d, edx), Set(suffix("!="), "%dl"), -- %dl := d != 0
+     Binop(opr, edx, eax), Mov(eax, d)}
+  elif opr.isComparison then
+     -- V only %edx is allowed here, %eax is already used in comparison
+     --                 V --- %eax used here
+     setZero(edx) : bincmd(s, d, fun (l, r) { Binop("cmp", l, r) }) 
+        +++ {Set(suffix(opr), "%dl"), Mov(edx, d)}
+  else
+    case opr of
+      "*" -> if   d.isRegOpnd 
+             then singleton(Binop("*", s, d)) 
+             else {Mov(d, eax), Binop("*", s, eax), Mov(eax, d)} 
+             fi 
+    | "/" -> {Mov(d, eax), Cltd, IDiv(s), Mov(eax, d)}
+    | "%" -> {Mov(d, eax), Cltd, IDiv(s), Mov(edx, d)}
+    | _ -> failure("Unknown operator: %s\n", opr)
+    esac
+  fi
+}
+
+-- Some guidelines for generating function calls:
+--
+-- 1. generate instructions to save live registers on the X86 stack (use
+--    env.liveRegisters (number of arguments);
+-- 2. generate instructions to move actual parameters from the symbolic
+--    stack to the hardware one;
+-- 3. generate the call itself;
+-- 4. discard the actual parameters from the stack;
+-- 5. restore saved live registers.
+--
+-- Some guidelines for generating functions:
+--
+-- 1. generate proper prologue for BEGIN instruction (use "prologue" helper); use
+--    env.enterFunction to create a proper environment;
+-- 2. generate epilogue for END instruction.
+
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
-  fun compile (env, code) {
-    foldl (
-      fun ([env, scode], i) {
-        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
-        case i of
-          READ ->
-            case env.allocate of
-              [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
-            esac             
-        | WRITE ->
-            case env.pop of
-              [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
-            esac
-        
-         -- Some guidelines for generating function calls:
-         --
-         -- 1. generate instructions to save live registers on the X86 stack (use
-         --    env.liveRegisters (number of arguments);
-         -- 2. generate instructions to move actual parameters from the symbolic
-         --    stack to the hardware one;
-         -- 3. generate the call itself;
-         -- 4. discard the actual parameters from the stack;
-         -- 5. restore saved live registers.
-         --
-         -- Some guidelines for generating functions:
-         --
-         -- 1. generate proper prologue for BEGIN instruction (use "prologue" helper); use
-         --    env.enterFunction to create a proper environment;
-         -- 2. generate epilogue for END instruction.
-               
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+  foldl (fun ([env, scode], i) {
+    local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+    case i of
+      BEGIN(fLab, _, nLocals) -> [enterFunction(env, fLab), code : prologue(nLocals)]
+    | BINOP(opr) ->
+        case pop2(env) of
+          [s, d, env] -> [push(env, d), code : compileBinop(opr, s, d)]
         esac
-      }, [env, {}], code)
-  }
+    | CALL(fLab, nArgs) ->
+        local liveRegs  = liveRegisters(env, nArgs);
+        local storeArgs = foldlArray(
+          fun ([env, insns], _) { 
+            case pop(env) of [a, env] -> [env, Push(a) : insns] esac
+          },
+          [env, {}], 
+          initArray(nArgs, id)
+        );
 
-  compile (env, code) 
+        case storeArgs of
+          [env, storeArgs] -> 
+            case allocate(env) of
+              [res, env] -> 
+                [ env
+                , code 
+                  : { map(fun (r) { Push (r) }, liveRegs)
+                    , reverse(storeArgs)
+                    , Call(fLab)
+                    , Binop("+", L(wordSize * size(storeArgs)), esp)
+                    , map(fun (r) { Pop (r) }, reverse(liveRegs))
+                    , Mov(eax, res)
+                    }
+                ]
+            esac
+        esac
+    | CJMP(c, l) -> 
+        case pop(env) of
+          [s, env] -> [setStack(env, l), code : {Binop("cmp", L(0), s), CJmp(c, l)}]
+        esac
+    | CONST(n) -> 
+        case allocate(env) of
+          [s, env] -> [env, code : singleton(Mov(L(n), s))]
+        esac
+    | DROP -> case pop(env) of [_, env] -> [env, code] esac
+    | END  -> case epilogue(env) of
+                [env, epCode] -> [env, code : epCode]
+              esac
+    | GLOBAL(x) -> [addGlobal(env, x), code]
+    | JMP(l)    -> [setBarrier(setStack(env, l)), code : singleton(Jmp(l))]
+    | LABEL(l)  -> [ if isBarrier(env) then retrieveStack(env, l) else env fi
+                   , code : singleton(Label(l))
+                   ]
+    | LD(x) ->
+        case allocate(env) of
+          [s, env] -> [env, code : move(loc(env, x), s)]
+        esac
+    | LDA(x) ->
+        case allocate(env) of
+          [s, env] -> [env, code : bincmd(loc(env, x), s, fun(l, r) { Lea(l, r) })]
+        esac
+    | READ ->
+        case allocate(env) of
+          [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
+        esac             
+    | ST(x) -> [env, code : move(peek(env), loc(env, x))]
+    | STI ->
+        case pop2(env) of
+          [v, x, env] -> 
+            [ push(env, x)
+            , code : 
+                if   x.isRegOpnd 
+                then move(v, I(0, x)) +++ move(v, x)
+                else move(x, edx) +++ move(v, I(0, edx)) +++ move(v, x)
+                fi
+            ]
+        esac
+    | WRITE ->
+        case pop(env) of
+          [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
+        esac
+    esac
+  }, [env, {}], code)
 }
+
 
 -- A top-level codegeneration function. Takes a driver's environment and a stack machine program,
 -- compiles the program into machine code, and compiles the machine code into an executable
