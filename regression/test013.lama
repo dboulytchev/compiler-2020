@@ -1,6 +1,4 @@
-local n;
-
-read (n);
+local n = read ();
 
 repeat
   

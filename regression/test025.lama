@@ -1,4 +1,2 @@
-local x;
-
-read (x);
+local x = read ();
 write (if x then 3 else 5 fi)
