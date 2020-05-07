@@ -153,7 +153,6 @@ local primary = memo $ eta ( pos |> fun(loc) { decimal @ fun (x) { fun(a) { asse
                             inbr (s ("("), exp, s (")")) |
                             inbr (s ("{"), scopeExpr, s ("}"))
                           ),
-
       stElif = memo $ eta (pos |> fun(loc) { kElif |> lift (exp |> fun (e) {
                                                 kThen |> lift (scopeExpr |> fun (s1) {
                                                     kElse |> lift (scopeExpr |> fun (s2) {
