@@ -241,8 +241,8 @@ fun makeCompEnv (nLabels, scopeDepth, state, nLocals, nArgs, functions) {
   }
 
   -- Adds a binding for a function
-  fun addFun (name, fLabel, nArgs) {
-    makeCompEnv (nLabels, scopeDepth, addName (state, name, Fun (fLabel, nArgs)), nLocals, nArgs, functions)
+  fun addFun (name, fLabel, nargs) {
+    makeCompEnv (nLabels, scopeDepth, addName (state, name, Fun (fLabel, nargs)), nLocals, nArgs, functions)
   }
   
   -- Enters a function
