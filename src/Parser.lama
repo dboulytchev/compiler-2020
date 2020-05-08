@@ -165,31 +165,6 @@ local primary = memo $ eta ( pos |> fun(loc) { decimal @ fun (x) { fun(a) { asse
                                                 }) }
                           ),             
       
-      scopeExpr  = memo $ eta ( rep0(definition) |> fun(defs) {
-                                  opt(exp) @ fun(e) {
-                                    fun(a) { fun(e) {
-                                     case defs of
-                                       {} -> e
-                                     | _ -> expandScope(defs, e) 
-                                     esac }
-                                     (case e of
-                                        Some (e) -> e(a)
-                                      | _ -> Skip
-                                      esac
-                                     )
-                                    }
-                                  }
-                                }
-                              ),
-      definition = memo $ eta ( kLocal |> lift ( list (
-                                  lident |> fun(x) { opt( s("=") |> lift (basic @ fun(e) {e(Val)}) ) @ fun(val) { [x, val] } }
-                                ) |> fun (defs) { s(";") @ lift (Local (defs)) } ) |
-                                kFun |> lift ( lident |> fun(f) {
-                                    inbr(s ("("), list0 ( lident ) , s(")")) |> fun(args) {
-                                        inbr(s("{"), scopeExpr , s("}")) @ fun(e) { Fun (f, args, e(Weak)) }
-                                    }
-                                } ) 
-                              ),
       basic      = memo $ eta (expr ({[Right, singleton ([s (":="),
                                                           fun (l, loc, r) {
                                                             fun (a) {assertValue (a, Assn (l (Ref), r (Val)), loc)}
