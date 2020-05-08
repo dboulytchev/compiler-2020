@@ -139,7 +139,7 @@ fun eval (env, w, insns) {
         | LD(x) -> eval([lookup(s, x):stack, cst, s, w], p)
         | LDA(x) -> eval([Ref(x):stack, cst, s, w], p)
         | ST(x) -> case stack of y:ys -> s.assign(x, y); eval([stack, cst, s, w], p) esac
-        | STI -> case stack of v:Ref(x):xs -> s.assign(x, v); [v:xs, cst, s, w] esac
+        | STI -> case stack of v:Ref(x):xs -> s.assign(x, v); eval([v:xs, cst, s, w], p) esac
         | LABEL(_) -> eval(c, p)
         | JMP(l)   -> eval(c, env.fromLabel(l))
         | CJMP(c, l) ->
@@ -161,13 +161,13 @@ fun eval (env, w, insns) {
           | {} -> c
           esac
         | CALL(label, _) -> eval([stack, [s, p] : cst, s, w], env.fromLabel(label))
+        | GLOBAL(x) -> s.assign(Glb(x), 0); eval(c, p)
         esac
-
     | {}  -> c
     esac
   }
   
-  [eval ([{}, {}, makeState (0, 0), w], insns), globalState]
+  eval ([{}, {}, makeState (0, 0), w], insns)[3].getOutput
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -367,6 +367,15 @@ fun addVars (env, names) {
   foldl (fun (env, name) {addVar (env, name)}, env, names)
 }
 
+-- [[fLabel, args, body]...]
+fun rememberFuns (env, fs) {
+  foldl(
+    fun(env, [fLabel, args, body]) { 
+      rememberFun(env, fLabel, args, body)
+    }, env, fs
+  )
+}
+
 -- Compiles an expression into a stack machine code.
 -- Takes an expression, returns a list of stack machine
 -- instructions.
@@ -392,5 +401,135 @@ fun addVars (env, names) {
 --    (use env.addArg).
 
 public fun compileSM (expr) {
-  failure ("compileSM not implemented\n")
+  fun compile (env, e) {
+    case e of
+      Const(x) -> [env, singleton(CONST(x))]
+    | Ignore(x) -> case compile(env, x) of [env, p] -> [env, {p, DROP}] esac
+    | Var(x) ->  case lookupVar(env, x) of loc -> [env, singleton(LD(loc))] esac
+    | Ref(x) ->  case lookupVar(env, x) of loc -> [env, singleton(LDA(loc))] esac
+    | Skip -> [env, {}]
+    | Assn(s1, s2) ->
+        case compile(env, s1) of [env, p1] ->
+          case compile(env, s2) of [env, p2] ->
+            [env, {p1, p2, STI}]
+          esac
+        esac
+    | Binop(op, s1, s2) ->
+        case compile(env, s1) of [env, p1] -> 
+          case compile(env, s2) of
+            [env, p2] -> [env, {p1, p2, BINOP(op)}]
+          esac
+        esac
+    | Read(x) -> [env, {READ, ST(lookupVar(env, x)), DROP}]
+    | Write(s) -> case compile(env, s) of [env, p] -> [env, {p, WRITE}] esac
+    | Seq(s1, s2) ->
+        case compile(env, s1) of [env1, p1] ->
+          case compile(env1, s2) of
+            [env2, p2] -> [env2, {p1, p2}]
+          esac
+        esac
+    | If(s, s1, s2) ->
+        case env.genLabels(2) of [l_false, l_end, env] ->
+          case compile(env, s1) of [env, p1] ->
+            case compile(env, s2) of [env, p2] ->
+              case compile(env, s) of [env, p] ->
+                [env, {p, CJMP("z", l_false), p1, JMP(l_end), LABEL(l_false), p2, LABEL(l_end)}]
+              esac
+            esac
+          esac
+        esac
+    | While(e, s) ->
+      case env.genLabels(2) of [l_body, l_condition, env] ->
+        case compile(env, s) of [env, body] ->
+          case compile(env, e) of [env, condition] ->
+            [env, {JMP(l_condition), LABEL(l_body), body, LABEL(l_condition), condition, CJMP("nz", l_body)}]
+          esac
+        esac
+      esac
+    | Repeat(s, e) ->
+        case env.genLabel of [l_body, env] ->
+          case compile(env, s) of [env, body] ->
+            case compile(env, e) of [env, condition] ->
+              [env, {LABEL(l_body), body, condition, CJMP("z", l_body)}]
+            esac
+          esac
+        esac
+    | Scope(defs, e) ->
+        case beginScope(env) of env ->
+          case foldl(
+            fun([env, fs, gl_vars], def) {
+              case def of
+                Local(vars) -> 
+                  [addVars(env, vars), fs, if isGlobal(env) then vars : gl_vars else gl_vars fi]
+              | Fun(name, args, body) -> -- printf("FUN: %s\n", name);
+                  case env.genFunLabel(name) of [label, env] ->
+                    [addFun(env, name, label, args.size), [label, args, body]:fs, gl_vars]
+                  esac 
+              esac
+            }, [env, {}, {}], defs) of
+            [env, fs, gl_vars] ->
+              case map(fun(name){GLOBAL(name)}, deepFlatten(gl_vars)) of gl_vars ->
+                case compile(rememberFuns(env, fs), e) of
+                  [env, code] -> [endScope(env), gl_vars : code]
+                esac
+              esac
+          esac
+        esac
+    | Call(f, {}) -> case lookupFun(env, f) of Fun(fLabel, n) -> [env, singleton(CALL(fLabel, n))] esac
+    | Call(f, args) ->
+        case foldl(
+            fun([env, code], arg) { 
+              case compile(env, arg) of [env, arg_code] -> [env, {code, arg_code}] esac
+            }, [env, {}], args) of
+          [env, args_code] ->
+            case lookupFun(env, f) of 
+              Fun(fLabel, n) -> [env, {args_code, CALL(fLabel, n)}]
+            esac
+        esac
+    esac
+  }
+
+  fun compileFuns(env) {
+    -- compileAllFuns -> code
+    fun compileAllFuns(env, code, fs) {
+      case fs of
+        {} -> case getFuns(env) of
+                [fs, env] ->
+                  case fs of
+                    {} -> code
+                  | _  -> compileAllFuns(env, code, fs)
+                  esac
+              esac
+      | Fun(fLabel, args, body, state) : fs ->
+          case addArgs(beginFun(env, state), args) of env ->
+            case compile(env, body) of [env, body_code] ->
+              compileAllFuns(
+                env,
+                code : {
+                  LABEL(fLabel),
+                  BEGIN(fLabel, size(args), getLocals(env)),
+                  body_code,
+                  END
+                },
+                fs
+              )
+            esac
+          esac
+      esac
+    }
+
+    compileAllFuns(env, {}, {})
+  } 
+
+  case compile(initCompEnv(), expr) of [env, code] ->
+    deepFlatten({
+        LABEL("main"),
+        BEGIN("main", 0, getLocals(env)),
+        code,
+        END,
+        compileFuns(env)
+      }
+    )
+  esac
+  -- deepFlatten(compile(initCompEnv(), expr)[1])
 }

@@ -75,6 +75,10 @@ fun addNames (state, names) {
   foldl (fun (s, name) {s.addName (name, Var (0))}, state, names)
 }
 
+fun addNamesWithValues (state, names, values) {
+  foldl (fun (s, [name, value]) {s.addName (name, Var (value))}, state, zip(names, values))
+}
+
 -- Helper function: adds a function in current scope
 fun addFunction (state, name, args, body) {
   state.addName (name, Fun (args, body))
@@ -94,8 +98,97 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+fun evalD (st, defs) {
+  case defs of
+    {} -> st
+  | def : defs ->
+      case def of
+        Local(names) -> evalD(st.addNames(names), defs)
+      | Fun(name, args, body) -> evalD(st.addFunction(name, args, body), defs)
+      esac
+  esac
+}
+
+fun eval (c@[st, w], expr) {
+  case expr of
+    Const(x) -> [c, x]
+  | Var(x) ->
+      -- st.checkVar(x);
+      case st.lookup(x) of
+        Var(x) -> [c, x]
+      esac
+  | Ref(x) ->   [c, Ref(x)]
+  | Skip ->     [c, Bottom]
+  | Ignore(x) -> 
+      case eval(c, x) of
+        [c_new, _] -> [c_new, Bottom]
+      esac
+  | Binop(op, l, r) ->
+      case evalList(c, {l, r}) of
+        [c_new, {l_val, r_val}] -> [c_new, evalOp(op, l_val, r_val)]
+      esac
+  | Read(x) ->
+      -- st.checkVar(x);
+      case readWorld(w) of 
+        [val, w] -> [[st <- [x, Var(val)], w], Bottom]
+      esac
+  | Write(e) ->
+      case eval(c, e) of
+        [[st, w], val] -> [[st, writeWorld(val, w)], Bottom]
+      esac
+  | Seq(s1, s2) -> 
+    case eval(c, s1) of
+      [c, _] -> eval(c, s2)
+    esac
+  | Assn(l, r) ->
+      case evalList(c, {l, r}) of
+        [[st, w], {Ref(l_val), r_val}] -> [[st <- [l_val, Var(r_val)], w], r_val]
+      esac
+
+  | Scope(defs, e) ->
+      case evalD(enterScope(st), defs) of st ->
+        case eval([st, w], e) of
+          [[st, w], res] -> [[leaveScope(st), w], res]
+        esac
+      esac
+
+  | If(exp, s1, s2) -> 
+      case eval(c, exp) of
+        [c_new, cond] -> eval(c_new, if cond then s1 else s2 fi)
+      esac
+
+  | While(e, s) ->
+      case eval(c, e) of
+        [c, cond] ->
+          if cond then
+            case eval(c, s) of [c, _] -> eval(c, expr) esac
+          else
+            [c, Void]
+          fi 
+      esac
+  | Repeat(s, e) -> 
+      case eval(c, s) of
+        [c, _] -> 
+          case eval(c, e) of
+            [c, cond] ->
+              if cond == 0
+                then eval(c, expr)
+                else [c, Void]
+              fi
+          esac
+      esac
+    | Call(f, args) -> 
+      -- checkFun(st, f);
+      case st.lookup(f) of
+        Fun (frml_args, e) ->
+          case evalList (c, args) of
+            [[s1, w], args_values] -> 
+              case eval ([s1.enterFunction.addNamesWithValues(frml_args, args_values), w], e) of
+                [[s2, w], res] -> [[s1.leaveFunction(s2.getGlobal), w], res]
+              esac
+          esac
+      esac
+  esac
 }
 
 
