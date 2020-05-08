@@ -49,8 +49,15 @@ public fun evalOp (op, l, r) {
 --        Ref    (string)             |
 --        Const  (int)                |
 --        Binop  (string, expr, expr) |
+--        Scope  (def list, expr)     |
 --        Call   (string, expr list)  |
 --        Ignore (expr)
+--
+-- A definition is either a local variable definition or a function
+-- definition:
+--
+-- def = Local (string list)                |
+--       Fun   (string, string list, expr)
 
 -- Helper function: checks that given name designates a regular variable in
 -- a given state
@@ -94,8 +101,64 @@ fun evalList (c, exprs) {
   esac
 }
 
+fun mapNamesToValues(state, names, values) {
+  foldl(fun(s, [name, val]) {
+    s.addName(name, Var(val))
+  }, state, zip(names, values))
+}
+
+fun evalDefs(state, defs) {
+  foldl(fun(s, def) {
+    case def of
+        Local(names) -> s.addNames(names)
+      | Fun(name, args, body) -> s.addFunction(name, args, body)
+    esac
+  }, state, defs)
+}
+
 fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+  case expr of
+      Assn(x, e) -> case evalList(c, {x, e}) of 
+        [[s2, w2], {Ref(xRes), val}] -> [[s2 <- [xRes, Var(val)], w2], val]
+      esac
+    | Seq(e1, e2) -> case eval(c, e1) of [c2, _] -> eval(c2, e2) esac
+    | Skip -> [c, Nothing]
+    | Read(x) -> checkVar(s, x); case readWorld(w) of 
+        [val, w2] -> [[s <- [x, Var(val)], w2], Nothing]
+      esac
+    | Write(e) -> case eval(c, e) of [[s2, w2], val] -> [[s2, writeWorld(val, w2)], Nothing] esac
+    | If(cond, eThen, eElse) -> case eval(c, cond) of 
+          [c2, 0] -> eval(c2, eElse)
+        | [c2, _] -> eval(c2, eThen)
+      esac
+    | While(cond, eDo) -> case eval(c, cond) of 
+          [c2, 0] -> [c2, Nothing]
+        | [c2, _] -> case eval(c2, eDo) of [c3, _] -> eval(c3, expr) esac
+      esac
+    | Repeat(eDo, cond) -> case eval(c, eDo) of
+        [c2, _] -> case eval(c2, cond) of
+            [c3, 0] -> eval(c3, expr)
+          | [c3, _] -> [c3, Nothing]
+        esac
+      esac
+    | Var(x) -> checkVar(s, x); [c, case lookup(s, x) of Var(v) -> v esac]
+    | Ref(x) -> checkVar(s, x); [c, expr]
+    | Const(val) -> [c, val]
+    | Binop(op, l, r) -> case evalList(c, {l, r}) of 
+        [c2, {lRes, rRes}] -> [c2, evalOp(op, lRes, rRes)]
+      esac
+    | Ignore(e) -> case eval(c, e) of [c2, _] -> [c2, Nothing] esac
+    | Scope(defs, e) -> case eval([evalDefs(enterScope(s), defs), w], e) of 
+        [[s2, w2], res] -> [[leaveScope(s2), w2], res]
+      esac
+    | Call(name, args) -> checkFun(s, name); case s.lookup(name) of
+        Fun(names, body) -> case evalList(c, args) of
+          [[s2, w2], values] -> case eval([mapNamesToValues(enterFunction(s2), names, values), w2], body) of
+            [[s3, w3], res] -> [[leaveFunction(s2, getGlobal(s3)), w3], res]
+          esac
+        esac
+      esac
+  esac
 }
 
 
