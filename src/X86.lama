@@ -407,6 +407,40 @@ fun compile (env, code) {
     foldl (
       fun ([env, scode], i) {
         local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+        fun simpleBinop (op) {
+            case env.pop2 of 
+              [x, y, env] -> [env.push(y), code : {Mov (y, eax), Binop (op, x, eax), Mov (eax, y)}]
+            esac
+        }      
+
+        fun compareBinop (op) {
+          case env.pop2 of 
+            [x, y, env] -> 
+              [env.push(y), code : {Mov (y, edx), Binop ("^", eax, eax), Binop ("cmp", x, edx),
+                                          Set (suffix(op), "%al"), Mov (eax, y)}]
+          esac
+        }  
+
+        fun callOp (f, n) {
+          local liveRegs = liveRegisters(env, n);
+          fun moveArgs (n, insns, env) {
+            case n of
+              0 -> [env, reverse(insns)]
+            | _ -> case env.pop of
+                     [x, env] -> moveArgs(n-1, Push(x) : insns, env)
+                   esac
+            esac
+          }
+
+          case moveArgs(n, {}, env) of
+            [env, insns] -> case env.allocate of
+                              [s, env] -> [env, code : {map (fun (x) {Push (x)}, liveRegs), insns,
+                                                        Call (f), Binop ("+", L (insns.size * wordSize), esp),
+                                                        map (fun (x) {Pop (x)}, reverse(liveRegs)), Mov (eax, s)
+                                                        }]
+                            esac
+          esac
+        }
         case i of
           READ ->
             case env.allocate of
@@ -433,7 +467,62 @@ fun compile (env, code) {
          --    env.enterFunction to create a proper environment;
          -- 2. generate epilogue for END instruction.
                
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | LD (x) ->
+            case env.allocate of
+              [s, env] -> [env, code : move(env.loc(x), s)]
+            esac
+        | ST (x) -> [env, code : move(env.peek, env.loc(x))]
+        | CONST (x) ->
+            case env.allocate of
+              [s, env] -> [env, code : singleton(Mov(L (x), s))]
+            esac
+        | BINOP ("+") -> simpleBinop("+")   
+        | BINOP ("-") -> simpleBinop("-")
+        | BINOP ("*") -> simpleBinop("*")
+        | BINOP ("/") -> 
+            case env.pop2 of 
+              [x, y, env] -> [env.push(y), code : {Mov (y, eax), Cltd, IDiv (x), Mov (eax, y)}]
+            esac
+        | BINOP ("%") -> 
+            case env.pop2 of 
+              [x, y, env] -> [env.push(y), code : {Mov (y, eax), Cltd, IDiv (x), Mov (edx, y)}]
+            esac
+        | BINOP ("<") -> compareBinop("<")
+        | BINOP ("<=") -> compareBinop("<=")
+        | BINOP ("==") -> compareBinop("==")
+        | BINOP ("!=") -> compareBinop("!=")
+        | BINOP (">") -> compareBinop(">")
+        | BINOP (">=") -> compareBinop(">=")
+        | BINOP ("&&") -> 
+            case env.pop2 of 
+              [x, y, env] -> [env.push(y), code : {Mov (x, eax), Binop ("&&", x, eax), Mov (L (0), eax), Set ("ne", "%al"),
+                                                   Mov (y, edx), Binop ("&&", y, edx), Mov (L (0), edx), Set ("ne", "%dl"),
+                                                   Binop ("&&", edx, eax), Set ("ne", "%al"), Mov(eax, y)}]
+            esac
+        | BINOP ("!!") -> 
+            case env.pop2 of 
+              [x, y, env] -> [env.push(y), code : {Mov (y, eax), Binop ("!!", x, eax), Mov (L (0), eax), Set ("ne", "%al"), Mov(eax, y)}]
+            esac
+        | LABEL (l) -> if isBarrier(env) then [retrieveStack(env, l), code : singleton(Label (l))]
+                                         else [env, code : singleton(Label (l))] fi
+        | JMP (l) -> [setBarrier(setStack(env, l)), code : singleton(Jmp (l))]
+        | CJMP (c, l) -> 
+            case env.pop of
+              [s, env] -> [setStack(env, l), code : {Binop ("cmp", L (0), s), CJmp(c, l)}]
+            esac
+        | LDA (x) -> 
+            case env.allocate of
+              [s, env] -> [env, code : {Lea (env.loc(x), eax), Mov (eax, s)}]
+            esac
+        | STI -> 
+            case env.pop2 of
+              [x, y, env] -> [env.push(y), code : {Mov (x, eax), Mov (y, edx), Mov (eax, I (0, edx)), Mov (eax, y)}]
+            esac
+        | DROP -> case env.pop of [_, env] -> [env, code] esac
+        | BEGIN (f, a, l) -> [enterFunction(env, f), code : prologue(l)]
+        | END -> case epilogue(env) of [env, c] -> [env, code : c] esac
+        | CALL (f, n) -> callOp(f, n)     
+        | GLOBAL (x) -> [env.addGlobal(x), code] 
         esac
       }, [env, {}], code)
   }
