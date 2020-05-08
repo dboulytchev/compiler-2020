@@ -79,7 +79,30 @@ fun addNames (state, names) {
 fun addFunction (state, name, args, body) {
   state.addName (name, Fun (args, body))
 }
-                                        
+
+fun addNamesValues (state, names, values) {
+  foldl (
+    fun (state, [name, value]) {
+        state.addName (name, Var (value))
+    },
+    state,
+    zip(names, values)
+  )
+}
+
+fun evalDefs(state, defs) {
+  foldl (
+    fun (state, def) {
+      case def of
+        Local (names) -> addNames(state, names)
+      | Fun (fName, args, expr) -> addFunction(state, fName, args, expr)
+      esac
+    },
+    state,
+    defs
+  )
+}
+
 -- Evaluates a list of expressions, properly threading a configurations.
 -- Returns the final configuration and the list of values
 fun evalList (c, exprs) {
@@ -94,8 +117,66 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+fun eval (c@[state, world], expr) {
+  case expr of
+      Const (x)     -> [c, x]
+    | Var (x)       -> checkVar(state, x);
+                        [c, case lookup(state, x) of
+                                Var (v) -> v
+                            esac
+                        ]
+    | Ref (x)       -> checkVar(state, x);
+                        [c, Ref (x)]
+    | Binop (operation, left, right)    ->  case evalList(c, {left, right}) of
+                                                [c1, {lRes, rRes}] -> [c1, evalOp(operation, lRes, rRes)]
+                                            esac
+    | Skip          -> [c, BOTTOM]
+    | Assn (left, right)                ->  case evalList(c, {left, right}) of
+                                                [[newState, newWorld], {Ref (lVal), rVal}] -> [[newState <- [lVal, Var(rVal)], newWorld], rVal]
+                                            esac
+    | Read (x)      -> checkVar(state, x);
+                       case readWorld(world) of
+                            [val, newWorld] -> [[state <- [x, Var(val)], newWorld], BOTTOM]
+                       esac
+    | Write (e)     -> case eval(c, e) of
+                            [[newState, newWorld], val] -> [[newState, writeWorld(val, newWorld)], BOTTOM]
+                       esac
+    | Seq (s1, s2)  -> case eval(c, s1) of
+                        [c1, _] -> eval(c1, s2)
+                       esac
+    | If (e, thenExpr, elseExpr)    ->  case eval(c, e) of
+                                              [c1, 0] -> eval(c1, elseExpr)
+                                            | [c1, _] -> eval(c1, thenExpr)
+                                        esac
+    | While (e, s1)                 ->  case eval(c, e) of
+                                             [c1, 0] -> [c1, BOTTOM]
+                                           | [c1, _] -> case eval(c1, s1) of
+                                                            [c2, _] -> eval(c2, expr)
+                                                        esac
+                                        esac
+    | Repeat (s1, e) -> case eval(c, s1) of
+                          [c1, _] -> case eval (c1, e) of
+                                       [c2, 0] -> eval(c2, expr)
+                                     | [c2, _] -> [c2, BOTTOM]
+                                     esac
+                        esac
+
+    | Ignore (state) -> case eval(c, state) of
+                            [c1, _] -> [c1, BOTTOM]
+                        esac
+    | Scope (defs, e) -> case eval([evalDefs(enterScope(state), defs), world], e) of
+                            [[s1, w1], vv] -> [[leaveScope(s1), w1], vv]
+                         esac
+    | Call (f, args) -> checkFun(state, f);
+                        case lookup(state, f) of
+                        Fun (as, e) ->
+                          case evalList(c, args) of
+                            [[s1, w1], vs] -> case eval ([addNamesValues(enterFunction(s1), as, vs), w1], e) of
+                                                [[s2, w2], vv] -> [[leaveFunction(s1, getGlobal(s2)), w2], vv]
+                                              esac
+                          esac
+                        esac
+    esac
 }
 
 
