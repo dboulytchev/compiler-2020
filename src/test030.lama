@@ -1,0 +1,12 @@
+local x;
+
+x := 3;
+
+write (x);
+
+{local x;
+ x := 100;
+ write (x)
+};
+
+write (x)
