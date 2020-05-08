@@ -116,14 +116,58 @@ fun eval (env, w, insns) {
     inner (n, {}, list)
   }
 
-  -- Core interpreter: takes a configuration and a program, returns a configuration
-  fun eval (c@[st, cst, s, w], insns) {
-    failure ("SM interpreter is not implemented\n")
+  -- return: new stack, local state
+  fun createLocal(stack, na, nl) {
+      case take(stack, na) of [stack, args] ->
+         local s = makeState(na, nl);
+         foldl(fun(i, arg) {assign(s, Arg(i), arg); i+1}, 0, args);
+         [stack, s]
+      esac
   }
 
+  -- Core interpreter: takes a configuration and a program, returns a configuration
+  fun eval (c@[stack, cst, s, w], insns) {
+    case insns of
+      inst:p -> -- printf("%s\n%s\n", stack.string, inst.string);
+        case inst of
+          CONST(c) -> eval([c:stack, cst, s, w], p)
+        | BINOP(op) -> case stack of y:x:zs -> eval([evalOp(op, x, y):zs, cst, s, w], p) esac
+        | READ -> case readWorld(w) of [val, w] -> eval([val:stack, cst, s, w], p) esac
+        | WRITE -> case stack of x:xs -> eval([xs, cst, s, writeWorld(x, w)], p) esac
+        | DROP -> case stack of x:xs -> eval([xs, cst, s, w], p) esac
+        -- x in {Loc, Arg, Glb}
+        | LD(x) -> eval([lookup(s, x):stack, cst, s, w], p)
+        | LDA(x) -> eval([Ref(x):stack, cst, s, w], p)
+        | ST(x) -> case stack of y:ys -> s.assign(x, y); eval([stack, cst, s, w], p) esac
+        | STI -> case stack of v:Ref(x):xs -> s.assign(x, v); [v:xs, cst, s, w] esac
+        | LABEL(_) -> eval(c, p)
+        | JMP(l)   -> eval(c, env.fromLabel(l))
+        | CJMP(c, l) ->
+          case stack of x:xs ->
+            case assoc({["z", 0], ["nz", 1]}, c) of Some(y) ->
+              if (x >= 1) == y
+                then eval([xs, cst, s, w], env.fromLabel(l))
+                else eval([xs, cst, s, w], p)
+              fi
+            esac
+          esac
+        | BEGIN(_, na, nl) ->
+            case createLocal(stack, na, nl) of [stack, s_local] ->
+              eval([stack, cst, s_local, w], p)
+            esac
+        | END -> 
+          case cst of 
+            [s, p] : rest -> eval([stack, rest, s, w], p)
+          | {} -> c
+          esac
+        | CALL(label, _) -> eval([stack, [s, p] : cst, s, w], env.fromLabel(label))
+        esac
+
+    | {}  -> c
+    esac
+  }
   
-  
-  eval ([{}, {}, makeState (0, 0), w], insns) [3].getOutput
+  [eval ([{}, {}, makeState (0, 0), w], insns), globalState]
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
