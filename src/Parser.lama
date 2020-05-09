@@ -155,14 +155,6 @@ local primary    = memo $ eta syntax (
                                                                                                   | Some (s) -> s (a)
                                                                                                   esac
                                                                                       }}),
-      declExpr   = memo $ eta syntax (
-                                       kLocal d=list[syntax (lident (s["="] e=basic { e (Val) })?)] s[";"] { Local (d) } |
-                                       kFun n=lident s["("] a=list0[lident] s[")"] s["{"] b=scopeExpr? s["}"] { Fun (n, a, case b of
-                                                                                                                            None -> Skip
-                                                                                                                           | Some (e) -> e (Weak)
-                                                                                                                           esac)
-                                                                                                              }),
-      scopeExpr  = memo $ eta syntax (d=declExpr* e=exp { fun (a) { expandScope (d, e (a)) } }),
       basic      = memo $ eta (expr ({[Right, singleton ([s (":="),
                                                           fun (l, loc, r) {
                                                             fun (a) {assertValue (a, Assn (l (Ref), r (Val)), loc)}
@@ -174,6 +166,23 @@ local primary    = memo $ eta syntax (
                                       [Left , map (binop, {"*", "/", "%"})]
                                      },
                                      primary)(id)),
+      scopeExpr  = memo $ eta syntax (ds=definition* e=exp? {fun (a) {fun (e) {
+                                                                        case ds of
+                                                                          {} -> e
+                                                                        | _  -> expandScope (ds, e) 
+                                                                        esac
+                                                                      } (case e of 
+                                                                           Some (e) -> e (a)
+                                                                         | _        -> Skip
+                                                                         esac)
+                                                                      }}),
+      definition = memo $ eta syntax (kLocal ds=list[syntax (lident (s["="] e=basic {e (Val)})?)] s[";"] {Local (ds)} |
+                                      kFun name=lident
+                                           args=inbr[s("("), list0 (lident), s(")")]
+                                           body=inbr[s("{"), scopeExpr, s("}")] {
+                                           Fun (name, args, body (Weak))
+                                      }
+                                     ),   
       exp        = memo $ eta syntax (basic | s1=basic s[";"] s2=exp {fun (a) {Seq (s1 (Void), s2 (a))}});
 
 -- Public top-level parser
