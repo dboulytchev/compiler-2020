@@ -49,8 +49,15 @@ public fun evalOp (op, l, r) {
 --        Ref    (string)             |
 --        Const  (int)                |
 --        Binop  (string, expr, expr) |
+--        Scope  (def list, expr)     |
 --        Call   (string, expr list)  |
 --        Ignore (expr)
+--
+-- A definition is either a local variable definition or a function
+-- definition:
+--
+-- def = Local (string list)                |
+--       Fun   (string, string list, expr)
 
 -- Helper function: checks that given name designates a regular variable in
 -- a given state
@@ -75,6 +82,10 @@ fun addNames (state, names) {
   foldl (fun (s, name) {s.addName (name, Var (0))}, state, names)
 }
 
+fun addNamestoValues (state, names, values) {
+  foldl (fun (st, [name, val]) {st.addName (name, Var (val))}, state, zip(names, values))
+}
+
 -- Helper function: adds a function in current scope
 fun addFunction (state, name, args, body) {
   state.addName (name, Fun (args, body))
@@ -94,8 +105,73 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+fun evalDef(state, def) {
+  foldl (fun (state, d) {
+              case d of
+                Local (val) -> addNames(state, val)
+              | Fun (f, args, expr) -> addFunction(state, f, args, expr)  
+              esac
+            }, 
+            state, def
+        )
+}
+
+
+
+fun eval (c@[state, world], expr) {
+  case expr of
+    Const  (val)             -> [c, val]
+  | Var    (val)             -> checkVar(state, val); 
+                                [c, case lookup(state, val) of Var (v) -> v esac]
+  | Ref    (val)             -> checkVar(state, val); 
+                                [c, Ref (val)]
+  | Binop  (op, left, right) -> case evalList(c, {left, right}) of
+                                [new_c, {left_val, right_val}] -> [new_c, evalOp(op, left_val, right_val)]
+                                esac
+  | Assn   (left, right)     -> case evalList(c, {left, right}) of
+                                [[new_state, new_world], {Ref (left_val), right_val}] -> [[new_state <- [left_val, Var(right_val)], new_world], right_val]
+                                esac
+  | Read   (val)             -> checkVar(state, val);
+                                case readWorld(world) of 
+                                [z, world_reminder] -> [[state <- [val, Var(z)], world_reminder], Void]
+                                esac             
+  | Write  (val)             -> case eval(c, val) of
+                                [[new_state, new_world], v] -> [[new_state, writeWorld(v, new_world)], Void]
+                                esac
+  | Seq    (s1, s2)          -> case eval(c, s1) of
+                                [c1, _] -> eval(c1, s2)
+                                esac
+  | If     (val, s1, s2)     -> case eval(c, val) of
+                                [c1, 0] -> eval(c1, s2)
+                              | [c1, _] -> eval(c1, s1)
+                                esac
+  | While  (val, s1)         -> case eval(c, val) of
+                                [c1, 0] -> [c1, Void]
+                              | [c1, _] -> case eval(c1, s1) of [c2, _] -> eval(c2, expr) esac
+                                esac
+  | Repeat (s1, val)         -> case eval(c, s1) of
+                                [c1, _] -> case eval (c1, val) of
+                                           [c2, 0] -> eval(c2, expr)
+                                         | [c2, _] -> [c2, Void]
+                                           esac
+                                esac
+  | Skip                     -> [c, Void]
+  | Ignore (val)             -> case eval(c, val) of 
+                                     [c1, _] -> [c1, Void] 
+                                esac 
+  | Scope  (def, expr)       -> case eval([evalDef(enterScope(state), def), world], expr) of
+                                     [[new_state, new_world], val] -> [[leaveScope(new_state), new_world], val]
+                                esac
+  | Call   (f, args)         -> checkFun(state, f);
+                                case lookup(state, f) of
+                                     Fun (st, expr) ->
+                                     case evalList(c, args) of
+                                          [[new_state_1, new_world_1], val1] -> case eval ([addNamestoValues(enterFunction(new_state_1), st, val1), new_world_1], expr) of
+                                                                                     [[new_state_2, new_world_2], val2] -> [[leaveFunction(new_state_1, getGlobal(new_state_2)), new_world_2], val2]
+                                                                                esac
+                                     esac                
+                                esac
+  esac
 }
 
 
