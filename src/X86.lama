@@ -500,13 +500,9 @@ fun compile (env, code) {
             case env.allocate of
               [s, env] -> [env, code : singleton(Mov(L (x), s))]
             esac
-
-
-        | BINOP ("+")  -> bin("+")
-        | BINOP ("-")  -> bin("-")
-        | BINOP ("*")  -> bin("*")
-
-
+        | BINOP ("+") -> bin("+")
+        | BINOP ("-") -> bin("-")
+        | BINOP ("*") -> bin("*")
         | BINOP ("/") ->
             case env.pop2 of
               [x, y, env] -> [env.push(y), code : {Mov (y, eax), Cltd, IDiv (x), Mov (eax, y)}]
@@ -521,8 +517,6 @@ fun compile (env, code) {
         | BINOP ("!=") -> logic("!=")
         | BINOP (">") -> logic(">")
         | BINOP (">=") -> logic(">=")
-
-        
         | BINOP ("&&") ->
             case env.pop2 of
               [x, y, env] -> [env.push(y), code : {Mov (x, eax), Binop ("&&", x, eax), Mov (L (0), eax), Set ("ne", "%al"),
@@ -533,47 +527,26 @@ fun compile (env, code) {
             case env.pop2 of
               [x, y, env] -> [env.push(y), code : {Mov (y, eax), Binop ("!!", x, eax), Mov (L (0), eax), Set ("ne", "%al"), Mov(eax, y)}]
             esac
-        | LABEL (l) -> [if env.isBarrier then env.retrieveStack (l) else env fi, code : singleton (Label (l))]
-
-
-        | JMP (l) -> [setBarrier (env.setStack (l)), code : singleton (Jmp (l))]
-
-
-        | CJMP (c, l) ->  case env.pop of [s, env] 
-                      -> [env.setStack (l), 
-                      code : { Binop ("cmp", L (0), s), CJmp (c, l) }]
-                      esac
+        | LABEL (l) -> if isBarrier(env) then [retrieveStack(env, l), code : singleton(Label (l))]
+                                         else [env, code : singleton(Label (l))] fi
+        | JMP (l) -> [setBarrier(setStack(env, l)), code : singleton(Jmp (l))]
+        | CJMP (c, l) ->
+            case env.pop of
+              [s, env] -> [setStack(env, l), code : {Binop ("cmp", L (0), s), CJmp(c, l)}]
+            esac
         | LDA (x) ->
             case env.allocate of
               [s, env] -> [env, code : {Lea (env.loc(x), eax), Mov (eax, s)}]
             esac
-
-
-        | STI -> case env.pop2 of [value1, value2, env] 
-              -> [env.push (value2), 
-              code : { Mov (value1, eax), Mov (value2, edx), Mov (eax, I (0, edx)), Mov (eax, value2) }]
-              esac
-
-        | DROP -> case env.pop of [_, env] 
-               -> [env, code]
-              esac
-
-
-        | BEGIN (func, arg, l) -> [enterFunction(env, func), code : prologue(l)]
-
-
-        | END -> case epilogue(env) of [env, config] -> 
-
-                 [env, code : config] 
-
-                 esac
-
-
+        | STI ->
+            case env.pop2 of
+              [x, y, env] -> [env.push(y), code : {Mov (x, eax), Mov (y, edx), Mov (eax, I (0, edx)), Mov (eax, y)}]
+            esac
+        | DROP -> case env.pop of [_, env] -> [env, code] esac
+        | BEGIN (f, a, l) -> [enterFunction(env, f), code : prologue(l)]
+        | END -> case epilogue(env) of [env, c] -> [env, code : c] esac
         | CALL (func, val) -> oper_call(func, val)
-
-
-        | GLOBAL (val) -> [env.addGlobal(val), code]
-
+        | GLOBAL (x) -> [env.addGlobal(x), code]
         | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
