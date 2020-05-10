@@ -441,6 +441,32 @@ fun compile (env, code) {
         | "<=" -> getCmpOp
         | "<" -> getCmpOp
       esac (x, y, res, op)
+    }    
+    fun callOp (f, n, env) {
+      fun moveArgs (n, pushInsns, env) {
+        case n of
+          0 ->  [env, reverse(pushInsns)]
+        | _ ->  case env.pop of
+                  [x, env] -> moveArgs(n-1, Push(x):pushInsns, env)
+                esac
+        esac
+      }
+      fun mkPush(x) {Push(x)}
+      fun mkPop(x) {Pop(x)}
+      local liveRegs = liveRegisters(env, n);
+
+      case moveArgs(n, {}, env) of
+        [env, pushInsns] ->
+          case env.allocate of
+            [s, env] -> [env, {
+              map(mkPush, liveRegs),
+              pushInsns,
+              Call (f),
+              Binop ("+", L(pushInsns.size * wordSize), esp),
+              map(mkPop, reverse(liveRegs)),
+              Mov(eax, s)}]
+          esac
+      esac
     }
     foldl (
       fun ([env, code2], i) {
@@ -483,20 +509,17 @@ fun compile (env, code) {
                 esac
             esac
         | LD(x) ->
-            case env.addGlobal(x).allocate of
+            case env.allocate of
               [s, env] -> [env, code : move(env.loc(x), s)]
             esac
         | LDA(x) -> 
-            case env.addGlobal(x).allocate of
+            case env.allocate of
               [s, env] -> [env, code :  if memOpnd(s)
                                           then {Lea(env.loc(x), eax), Mov(eax, s)}
                                           else singleton(Lea(env.loc(x), s))
                                         fi]
             esac
-        | ST(x) ->
-            case env.addGlobal(x) of
-              env -> [env, code : move(peek(env), env.loc(x))]
-            esac
+        | ST(x) -> [env, code : move(peek(env), env.loc(x))]
         | STI -> 
             case env.pop2 of
               [x, y, env] -> 
@@ -516,7 +539,17 @@ fun compile (env, code) {
         | DROP        ->
             case env.pop of
               [_, env] -> [env, code]
+            esac            
+        | BEGIN (f, a, l) -> [enterFunction(env, f), code : prologue(l)]
+        | END          ->
+            case epilogue(env) of
+              [env, c] -> [env, code : c]
             esac
+        | CALL (f, n) -> 
+            case callOp(f, n, env) of
+              [env, c] -> [env, code : c]
+            esac
+        | GLOBAL (x) -> [env.addGlobal(x), code]
         | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)

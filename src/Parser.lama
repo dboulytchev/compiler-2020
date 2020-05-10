@@ -149,23 +149,6 @@ local primary    = memo $ eta syntax (
                                           | None    -> assertVoid (a, Skip, loc)
                                         esac
                                         }}),
-      scopeExpr  = memo $ eta syntax (ds=definition* e=exp? {fun (a) {fun (e) {
-                                                                        case ds of
-                                                                          {} -> e
-                                                                        | _  -> expandScope (ds, e)
-                                                                        esac
-                                                                      } (case e of
-                                                                           Some (e) -> e (a)
-                                                                         | _        -> Skip
-                                                                         esac)
-                                                                      }}),
-      definition = memo $ eta syntax (kLocal ds=list[syntax (lident (s["="] e=basic {e (Val)})?)] s[";"] {Local (ds)} |
-                                      kFun name=lident
-                                           args=inbr[s("("), list0 (lident), s(")")]
-                                           body=inbr[s("{"), scopeExpr, s("}")] {
-                                           Fun (name, args, body (Weak))
-                                      }
-                                     ),
       basic      = memo $ eta (expr ({[Right, singleton ([s (":="),
                                                           fun (l, loc, r) {
                                                             fun (a) {assertValue (a, Assn (l (Ref), r (Val)), loc)}

@@ -117,62 +117,82 @@ fun eval (env, w, insns) {
   }
 
   -- Core interpreter: takes a configuration and a program, returns a configuration
-  fun eval (c@[st, cst, s, w], insns) {
+  fun eval2 (c@[st, cst, s, w], insns) {
     fun evalProxy (newState, insns) {
       case newState of 
           SJump(newC, newInsns) -> [env, newC, newInsns]
         | newC                  -> [env, newC, insns]
       esac
     }
-    fun evalInner ([env, c @ [stack, state, w], insns]) {
-    case insns of
-        h : t -> case h of
-            CONST(n)       -> [n:stack, state, w]
-          | BINOP(op)      -> case stack of
-                  r:l:sttail -> [op.evalOp(l, r):sttail, state, w]
-                | _          -> failure("Not enough values on stack for BINOP %s in statement %s\n", op.string, insns.string)
+    fun evalInner ([env, c @ [stack, cstack, state, w], insns]) {
+      case insns of
+          h : t ->   --printf("%s\n", h.string);
+            case h of
+              CONST(n)       -> [n:stack, cstack, state, w]
+            | BINOP(op)      -> case stack of
+                    r:l:sttail -> [op.evalOp(l, r):sttail, cstack, state, w]
+                  | _          -> failure("Not enough values on stack for BINOP %s in statement %s\n", op.string, insns.string)
+                esac
+            | LD(x)          -> [state.lookup(x):stack, cstack, state, w]
+            | LDA(x)         -> [Ref(x):stack, cstack, state, w]
+            | ST(x)          -> case stack of
+                    h:_        -> state.assign(x, h); c
+                  | _          -> failure("Not enough values on stack for ST in statement %s\n", insns.string)
+                esac
+            | STI            -> case stack of
+                    h:Ref(x):sttail -> state.assign(x, h); [h:sttail, cstack, state, w]
+                  | _               -> failure("Not enough values on stack for STI in statement %s\n", insns.string)
+                esac
+            | DROP           -> case stack of
+                    _:sttail   -> [sttail, cstack, state, w]
+                  | _          -> failure("No values on stack to DROP in statement %s\n", insns.string)
+                esac
+            | READ           -> case readWorld(w) of
+                    [v, w]  -> [v:stack, cstack, state, w]
+                esac
+            | WRITE          -> case stack of
+                    h:sttail   -> [sttail, cstack, state, writeWorld(h, w)]
+                  | _          -> failure("Not enough values on stack for WRITE in statement %s\n", insns.string)
+                esac
+            | JMP(l)         -> SJump(c, fromLabel(env, l))
+            | CJMP("z", l)   -> case stack of
+                    0:sttail   -> SJump([sttail, cstack, state, w], fromLabel(env, l))
+                  | _:sttail   -> [sttail, cstack, state, w]
+                esac
+            | CJMP("nz", l)  -> case stack of
+                    0:sttail   -> [sttail, cstack, state, w]
+                  | _:sttail   -> SJump([sttail, cstack, state, w], fromLabel(env, l))
+                esac
+            | LABEL(_)       -> c          
+            | END            -> case cstack of
+                    {}                     -> SJump(c, {})
+                  | [local_st, op]:csttail -> SJump([stack, csttail, local_st, w], op)
+                esac
+            | BEGIN(f, a, l) -> case take(stack, a) of
+                [t, args] -> case makeState(a, l) of
+                  local_st ->
+                    foldl(fun (i, arg) {
+                        assign (local_st, Arg(i), arg);
+                        i+1
+                      }, 0, args);
+                    [t, cstack, local_st, w]
+                esac
               esac
-          | LD(x)          -> [state.get(x):stack, state, w]
-          | LDA(x)         -> [Ref(x):stack, state, w]
-          | ST(x)          -> case stack of
-                  h:_        -> [stack, state <- [x, h], w]
-                | _          -> failure("Not enough values on stack for ST in statement %s\n", insns.string)
-              esac
-          | STI            -> case stack of
-                  h:Ref(x):sttail -> [h:sttail, state <- [x, h], w]
-                | _               -> failure("Not enough values on stack for STI in statement %s\n", insns.string)
-              esac
-          | DROP           -> case stack of
-                  _:sttail   -> [sttail, state, w]
-                | _          -> failure("No values on stack to DROP in statement %s\n", insns.string)
-              esac
-          | READ           -> case readWorld(w) of
-                  [v, w]  -> [v:stack, state, w]
-              esac
-          | WRITE          -> case stack of
-                  h:sttail   -> [sttail, state, writeWorld(h, w)]
-                | _          -> failure("Not enough values on stack for WRITE in statement %s\n", insns.string)
-              esac
-          | JMP(l)         -> SJump(c, fromLabel(env, l))
-          | CJMP("z", l)   -> case stack of
-                  0:sttail   -> SJump([sttail, state, w], fromLabel(env, l))
-                | _:sttail   -> [sttail, state, w]
-              esac
-          | LABEL(_) -> c
-          esac . evalProxy(t)
-      | _ -> c
-    esac
-  }
-  local sm = [env, c, insns];
-  while sm[2] != {} do
-    sm := evalInner(sm)
-  od;
-  case sm of [env, c, insns] -> c esac
-  }
-
+            | CALL(f, n)     -> SJump([stack, [state, t]:cstack, state, w], fromLabel(env, f))
+            | GLOBAL(x)      -> state.assign(Glb(x), 0); c
+            esac . evalProxy(t)
+        | _ -> c
+      esac
+    }
+    local sm = [env, c, insns];
+    --printf("%s\n", insns.string);
+    while sm[2] != {} do
+      sm := evalInner(sm)
+    od;
+    case sm of [env, c, insns] -> c esac
+  } 
   
-  
-  eval ([{}, {}, makeState (0, 0), w], insns) [3].getOutput
+  eval2 ([{}, {}, makeState (0, 0), w], insns) [3].getOutput
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -439,10 +459,6 @@ fun compileSMunflat (stmt) {
 -- Compiles a statement into a stack machine code.
 -- Takes an expression, returns a list of stack machine
 -- instructions.
-<<<<<<< HEAD
-public fun compileSM (stmt) {
-  stmt . compileSMunflat . deepFlatten
-=======
 
 
 -- Some guidelines for compiling functions and scopes.
@@ -464,7 +480,141 @@ public fun compileSM (stmt) {
 --    environment (use env.beginFun) and register arguments
 --    (use env.addArg).
 
-public fun compileSM (expr) {
-  failure ("compileSM not implemented\n")
->>>>>>> base/A08-scopes-functions-sm-x86
-}
+public fun compileSM (stmt) {
+    fun compileElse(s2, env) {
+      case s2 of
+          Skip -> [CONST(0), env]
+        | _    -> compile(s2, env)
+      esac
+    }
+    fun compileIfStmt(e, s1, s2, env) {
+        case genLabels(env, 2) of [ls2, lexit, env1] ->
+          case compile(s1, env1) of [cs1, env2] ->
+            case compileElse(s2, env2) of [cs2, env3] ->
+              case compile(e, env3) of [ce, env3] ->
+                [{ce, CJMP("z", ls2), cs1, JMP(lexit), LABEL(ls2), cs2, LABEL(lexit)}, env3]
+              esac
+            esac
+          esac
+        esac
+    }
+
+    fun compileWhile(e, s1, env) {
+        case genLabels(env, 2) of [le, ls, env1] ->
+          case compile(s1, env1) of [cs1, env2] ->
+            case compile(e, env2) of [ce, env2] ->
+              [{JMP(le), LABEL(ls), cs1, LABEL(le), ce, CJMP("nz", ls)}, env2]
+            esac
+          esac
+        esac
+    }
+
+    fun compileRepeat(s1, e, env) {
+        case genLabels(env, 1) of [ls, env1] ->
+          case compile(s1, env1) of [cs1, env2] ->
+            case compile(e, env2) of [ce, env2] ->
+              [{LABEL(ls), cs1, ce, CJMP("z", ls)}, env2]
+            esac
+          esac
+        esac
+    }
+
+    fun compileArgs (args, env) {
+      case args of
+        {} -> [{}, env]
+      | {a} -> compile(a, env)
+      | a : as -> case compile(a, env) of [ca, env] ->
+                    case compileArgs(as, env) of [cas, env] ->
+                      [{ca, cas}, env]
+                    esac
+                  esac
+      esac
+    }
+
+    fun compileCall(f, args, env) {
+        case compileArgs(args, env) of [cargs, env] ->
+            case lookupFun(env, f) of Fun (flabel, n) ->
+                [{cargs, CALL (flabel, n)}, env]
+            esac
+        esac
+    }
+
+    fun compileScope(defs, e, env) {
+        case foldl (fun ([env, functions, globals], def) {
+            case def of
+                 Local (xs) -> [addVars(env, xs), functions, if isGlobal(env) then
+                                                                {map (fun (x) {GLOBAL (x)}, xs), globals}
+                                                             else
+                                                                 globals
+                               fi ]
+                | Fun (f, args, body) -> case genFunLabel(env, f) of [flabel, env] ->
+                                            [addFun(env, f, flabel, args.size), [flabel, args, body] : functions, globals]
+                                         esac
+            esac
+            }, [beginScope(env), {}, {}], defs) of [env, functions, globals] ->
+            case compile(e, foldl(fun (env, [name, args, body]) {rememberFun(env, name, args, body)}, env, functions)) of
+                [ce, env] -> [{globals, ce}, endScope(env)]
+            esac
+        esac
+    }
+
+    fun compile (stmt, env) {
+          case stmt of
+            Const (x) -> [singleton(CONST (x)), env]
+          | Var (x) -> [singleton(LD (lookupVar(env, x))), env]
+          | Ref (x) -> [singleton(LDA (lookupVar(env, x))), env]
+          | Read (x) -> [{READ, ST (lookupVar(env, x)), DROP}, env]
+          | Write (e) -> case compile(e, env) of [ce, env1] ->
+                           [{ce, WRITE}, env1]
+                         esac
+          | Assn (Ref (x), e) -> case compile(e, env) of [cse, env] ->
+                                   [{cse, ST (lookupVar(env, x))}, env]
+                                 esac
+          | Assn (x, e) -> case compile(x, env) of [cs1, env1] ->
+                             case compile(e, env1) of [cs2, env2] ->
+                               [{cs1, cs2, STI}, env2]
+                             esac
+                           esac
+          | Seq (s1, s2) ->
+                case compile(s1, env) of [cs1, env1] ->
+                  case compile(s2, env1) of [cs2, env2] ->
+                    [{cs1, cs2}, env2]
+                  esac
+                esac
+          | Skip -> [{}, env]
+          | Ignore (state) -> case compile(state, env) of [cs1, env1] ->
+                            [{cs1, DROP}, env1]
+                          esac
+          | Binop (op, l, r) -> case compile(l, env) of [cs1, env1] ->
+                                  case compile(r, env1) of [cs2, env2] ->
+                                    [{cs1, cs2, BINOP(op)}, env2]
+                                  esac
+                                esac
+          | If (x, stmt1, stmt2)    ->  { compileIfStmt(x, stmt1, stmt2, env) }
+          | While (x, stmt)         ->  { compileWhile(x, stmt, env) }
+          | Repeat (stmt, x)        ->  { compileRepeat(stmt, x, env) }
+          | Call (f, args)          ->  { compileCall(f, args, env) }
+          | Scope (defs, e)         ->  { compileScope(defs, e, env) }
+        esac
+    }
+
+    fun compileFuns(code, env) {
+        fun compileF(code, env, funs) {
+          case funs of
+            {} -> case getFuns(env) of
+                    [{}, env] -> code
+                  | [funs, env] -> compileF(code, env, funs)
+                  esac
+          | Fun (fLabel, args, body, state) : fs ->
+                case compile(body, addArgs(beginFun(env, state), args)) of
+                  [cf, env] -> compileF({code, LABEL (fLabel), BEGIN (fLabel, args.size, getLocals(env)), cf, END}, env, fs)
+                esac
+          esac
+        }
+        compileF(code, env, {})
+    }
+
+    case compile(stmt, initCompEnv()) of
+        [code, env] -> deepFlatten(compileFuns({LABEL ("main"), BEGIN ("main", 0, getLocals(env)), code, END}, env))
+    esac
+} 
