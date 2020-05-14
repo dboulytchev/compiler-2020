@@ -120,7 +120,28 @@ local primary    = memo $ eta syntax (
                                                                                                             | Some (args) -> assertValue (a, Call (x, args))
                                                                                                             esac
                                                                                                          }} |
-                                      $(failure ("the rest of primary parsing in not implemented\n"))),
+                                                                            loc=pos   kRead s["("] x=lident s[")"]  {fun (a) {assertVoid (a, Read (x), loc)}} |
+                                      loc=pos   kWrite s["("] e=exp s[")"]  {fun (a) {assertVoid (a, Write (e(Val)), loc)}} |
+                                      loc=pos kSkip  {fun (a) {assertVoid (a, Skip, loc)}} |
+                                      loc=pos kWhile c=exp kDo body=scopeExpr kOd {fun (a) {assertVoid (a, While (c (Val), body (Void)), loc)}} |
+                                      loc=pos kFor i=scopeExpr s[","] c=exp s[","] step=exp kDo body=scopeExpr kOd {
+                                        fun (a) {distributeScope (i (Void), fun (i) {
+                                          assertVoid (a, Seq (i , While (c (Val), Seq ( body (Void), step (Void)))), loc)
+                                          })}
+                                      } |
+                                      loc=pos kRepeat body=scopeExpr kUntil c=primary {
+                                        fun (a) {distributeScope (body (Void), fun (e) {
+                                          assertVoid (a, Repeat (e, c (Val)), loc)
+                                        })}
+                                      } |
+                                      loc=pos kIf c=exp kThen s=scopeExpr subif=subIf {fun (a) {If (c (Val), s (a), subif (a))}} |
+                                      inbr[s("("), exp, s(")")] |
+                                      inbr[s("{"), scopeExpr, s("}")]),
+      subIf    = memo $ eta syntax ( 
+                                    kElif c=exp kThen s=scopeExpr sub=subIf {fun (a) {If (c (Val), s (a), sub (a))}} |
+                                    kElse s=scopeExpr kFi {fun (a) {s (a)}} |
+                                    kFi {fun (a) {assertVoid (a, Skip, loc)}}
+                                    ),
       basic      = memo $ eta (expr ({[Right, singleton ([s (":="),
                                                           fun (l, loc, r) {
                                                             fun (a) {assertValue (a, Assn (l (Ref), r (Val)), loc)}
