@@ -440,8 +440,8 @@ fun compile (env, code) {
     }
     fun pushArgs (env, xcode, n) {
       case n of
-          0 -> [env, xcode]
-        | n -> case env.pop of  [x, env] -> pushArgs (env, Push (x) : xcode, n - 1) esac
+          0 -> [env, reverse(xcode)]
+        | _ -> case env.pop of  [x, env] -> pushArgs (env, Push (x) : xcode, n - 1) esac
       esac
     }
     foldl (
