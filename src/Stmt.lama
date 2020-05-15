@@ -16,8 +16,21 @@ import World;
 --        Read   (string)           |
 --        Write  (expr)             |
 
-fun eval (c, stmt) {
-  failure ("Stmt eval not implemented\n")
+fun eval ([state, world], stmt) {
+  	case stmt of
+		Read (value) -> 
+			case
+        readWorld (world) of [x, newworld] ->	[state <- [value, x], newworld]
+			esac
+
+		| Seq (state1, state2) -> eval (eval ([state, world], state1), state2)
+
+    | Assn (value, expr) -> [state <- [value, evalExpr (state, expr)], world]
+
+    | Write (expr) -> [state, writeWorld (evalExpr (state, expr), world)]
+
+		| Skip -> [state, world]
+	esac
 }
 
 -- Evaluates a program with a given input and returns an output
