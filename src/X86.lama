@@ -346,6 +346,55 @@ fun suffix (op) {
   esac
 }
 
+fun binop (op, s1, s2) {
+  {Mov (s2, eax), Binop (op, s1, eax), Mov (eax, s2)}
+}
+
+fun divBinop (op, s1, s2) {
+  {Mov (s2, eax), Cltd, IDiv (s1), Mov (case op of
+                                          "/" -> eax
+                                        | "%" -> edx
+                                        esac, s2)}
+}
+
+fun compareBinop (op, s1, s2) {
+  {
+    Mov (s2, eax),
+    Binop ("^", edx, edx),
+    Binop ("cmp", s1, eax),
+    Set (suffix(op), "%dl"),
+    Mov (edx, s2)
+  }
+}
+
+fun logicalBinop (op, s1, s2) {
+  {
+    Binop ("^", eax, eax),
+    Binop ("^", edx, edx),
+    Binop ("cmp", s1, eax),
+    Set (suffix("!="), "%al"),
+    Binop ("cmp", s2, edx),
+    Set (suffix("!="), "%dl"),
+    Binop (op, eax, edx),
+    Mov (edx, s2)
+  }
+}
+
+fun makeBinopMap() {
+  local binopsMap = {
+    [{"+", "-", "*"},  binop],
+    [{"/", "%"},  divBinop],
+    [{">", ">=", "<", "<=", "==", "!="}, compareBinop],
+    [{"&&", "!!"}, logicalBinop]
+  };
+  fun flat([list, f]) {
+    map(fun (op) {[op, f]}, list)
+  }
+  map(flat, binopsMap).deepFlatten
+}
+
+local binopsMap = makeBinopMap();
+
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
@@ -362,7 +411,53 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | LD (var) -> case addGlobal(env, var).allocate of
+                        [s, env] -> [env, code : {move(env.loc(var), s)}]
+                      esac
+        | ST (var) -> case env.peek of
+                        s -> [addGlobal(env, var), code : move(s, env.loc(var))]
+                      esac
+        | CONST (const) -> case env.allocate of
+                             [s, env] -> [env, code : singleton(Mov (L (const), s))]
+                           esac
+        | BINOP (op) ->
+            case env.pop2 of
+              [s1, s2, env] ->
+                case env.push(s2) of
+                  env -> [env, code : case assoc(binopsMap, op) of
+                                        Some (f) -> f(op, s1, s2)
+                                      esac]
+                esac
+            esac
+        | LABEL (l) -> [if env.isBarrier then
+                           env.retrieveStack(l)
+                         else
+                           env
+                         fi,
+                         code : singleton(Label (l))]
+        | JMP (l) -> [env.setStack(l).setBarrier, code : singleton(Jmp (l))]
+        | CJMP (c, l) -> case env.pop of
+                          [s, env] -> [env.setStack(l), code : {Binop ("cmp", L (0), s), CJmp (c, l)}]
+                         esac
+        | DROP -> case env.pop of
+                    [_, env] -> [env, code]
+                  esac
+        | LDA (var) -> case addGlobal(env, var).allocate of
+                         [s, env] -> [env, code :
+                                           if memOpnd(s) then
+                                             {Lea (env.loc(var), eax), Mov (eax, s)}
+                                           else
+                                             singleton(Lea (env.loc(var), s))
+                                           fi]
+                       esac
+        | STI -> case env.pop2 of
+                   [var, s, env] -> [env.push(s), code :
+                                                  if memOpnd(var) then
+                                                    {Mov(var, eax), Mov(s, edx), Mov(eax, I(0, edx), Mov(eax, s))}
+                                                  else
+                                                    {Mov(s, edx), Mov(var, I(0, edx)), Mov(var, s)}
+                                                  fi]
+                 esac
         esac
       }, [env, {}], code)
   }
