@@ -84,7 +84,11 @@ fun addNames (state, names) {
 fun addFunction (state, name, args, body) {
   state.addName (name, Fun (args, body))
 }
-                                        
+
+fun addNamestoValues (state, names, values) {
+  foldl (fun (st, [name, val]) {st.addName (name, Val (val))}, state, zip(names, values))
+}
+
 -- Evaluates a list of expressions, properly threading a configurations.
 -- Returns the final configuration and the list of values
 fun evalList (c, exprs) {
@@ -99,9 +103,84 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+fun evalDef(state, def) {
+  foldl (fun (state, d) {
+              case d of
+                Local (val) -> addNames(state, val)
+              | Fun (f, args, expr) -> addFunction(state, f, args, expr)  
+              esac
+            }, 
+            state, def
+        )
 }
+
+fun eval (c@[state, world], expr) {
+  case expr of
+       Const   (val)             -> [c, val]
+     | Var     (val)             -> [c, case lookupVal(state, val) of Val (v) -> v esac]
+     | Ref     (val)             -> lookupVal(state, val); 
+                                    [c, Ref (val)]
+     | Binop   (op, left, right) -> case evalList(c, {left, right}) of
+                                         [new_c, {left_val, right_val}] -> [new_c, evalOp(op, left_val, right_val)]
+                                    esac
+     | Assn    (left, right)     -> case evalList(c, {left, right}) of
+                                         [[new_c, new_world], {Ref(left_val), right_val}] -> [[new_c <- [left_val, Val(right_val)], new_world], right_val]
+                                       | [new_c, {ElemRef(a, idx), val}]                  -> a[idx] := val; [new_c, val]
+                                    esac
+     | Seq     (s1, s2)          -> case eval(c, s1) of
+                                         [c1, _] -> eval(c1, s2)
+                                    esac
+     | If      (val, s1, s2)     -> case eval(c, val) of
+                                         [c1, 0] -> eval(c1, s2)
+                                       | [c1, _] -> eval(c1, s1)
+                                    esac
+     | While   (val, s1)         -> case eval(c, val) of
+                                         [c1, 0] -> [c1, Void]
+                                       | [c1, _] -> case eval(c1, s1) of [c2, _] -> eval(c2, expr) esac
+                                    esac
+     | Repeat  (s1, val)         -> case eval(c, s1) of
+                                         [c1, _] -> case eval (c1, val) of
+                                                         [c2, 0] -> eval(c2, expr)
+                                                       | [c2, _] -> [c2, Void]
+                                                    esac
+                                    esac
+     | Skip                      -> [c, Void]
+     | Ignore  (val)             -> case eval(c, val) of 
+                                         [c1, _] -> [c1, Void] 
+                                    esac 
+     | Scope   (def, expr)       -> case eval([evalDef(enterScope(state), def), world], expr) of
+                                         [[new_state, new_world], val] -> [[leaveScope(new_state), new_world], val]
+                                    esac
+     | Call    (f, args)         -> case lookupFun(state, f) of
+                                         Fun (as, expr) -> case evalList(c, args) of
+                                                                [[new_state1, new_world1], vals] -> case expr of
+                                                                                                         External -> case evalBuiltin(f, vals, new_world1) of
+                                                                                                                          [x, world_reminder] -> [[new_state1, world_reminder], x]
+                                                                                                                     esac
+                                                                                                       | _        -> case eval ([addNamestoValues(enterFunction(new_state1), as, vals), new_world1], expr) of
+                                                                                                                          [[new_state2, new_world2], vv] -> [[leaveFunction(new_state1, getGlobal(new_state2)), new_world2], vv]
+                                                                                                                     esac
+                                                                                                    esac
+                                                           esac                
+                                    esac
+     | String  (str)             -> [c, str]
+     | Array   (vals)            -> case evalList(c, vals) of
+                                         [new_c, x] -> [new_c, listArray(x)]
+                                    esac
+     | Elem    (expr, idx)       -> case evalList(c, {expr, idx}) of
+                                         [new_c, {a, new_idx}] -> [new_c, a[new_idx]]
+                                    esac
+     | ElemRef (expr, idx)       -> case evalList(c, {expr, idx}) of
+                                         [new_c, {a, new_idx}] -> [new_c, ElemRef(a, new_idx)]
+                                    esac
+     | Builtin (f, args)         -> case evalList(c, args) of
+                                    [[new_state, new_world], vals] -> case evalBuiltin(f, vals, new_world) of
+                                                                           [x, world_reminder] -> [[new_state, world_reminder], x]
+                                                                      esac
+                                    esac
+  esac
+}
+
 
 
 -- Evaluates a program with a given input and returns an output

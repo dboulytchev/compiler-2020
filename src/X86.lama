@@ -449,39 +449,151 @@ fun suffix (op) {
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
-  fun compile (env, code) {
-    foldl (
-      fun ([env, scode], i) {
-        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
-        case i of
-          READ ->
-            case env.allocate of
-              [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
-            esac             
-        | WRITE ->
-            case env.pop of
-              [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
-            esac
-        
-         -- Some guidelines for generating function calls:
-         --
-         -- 1. generate instructions to save live registers on the X86 stack (use
-         --    env.liveRegisters (number of arguments);
-         -- 2. generate instructions to move actual parameters from the symbolic
-         --    stack to the hardware one;
-         -- 3. generate the call itself;
-         -- 4. discard the actual parameters from the stack;
-         -- 5. restore saved live registers.
-         --
-         -- Some guidelines for generating functions:
-         --
-         -- 1. generate proper prologue for BEGIN instruction (use "prologue" helper); use
-         --    env.enterFunction to create a proper environment;
-         -- 2. generate epilogue for END instruction.
+    fun compile (env, code) {
+
+        fun simple_binop(first, second, s, op) {
+            {Mov(second, eax), Binop(op, first, eax), Mov(eax, s)}
+        }
+
+        fun div_binop(first, second, s) {
+            {Mov(second, eax), Cltd, IDiv (first), Mov(eax, s)}
+        }
+
+        fun mod_binop(first, second, s) {
+            {Mov(second, eax), Cltd, IDiv(first), Mov(edx, s)}
+        }
+
+        fun compare_binop(first, second, s, op) {
+            {Mov(second, eax), Binop("^", edx, edx), Binop("cmp", first, eax), Set(suffix(op), "%dl"), Mov(edx, s)}
+        }
+
+        fun logic_binop(first, second, s, op) {
+            {
+            Binop("^", eax, eax), Binop("^", edx, edx),
+            Binop("cmp", first, eax), Set(suffix("!="), "%al"),
+            Binop("cmp", second, edx), Set(suffix("!="), "%dl"),
+            Binop(op, eax, edx), Mov(edx, s)
+            }
+        }
+
+        foldl (fun ([env, scode], i) {
+               local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
                
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
-        esac
-      }, [env, {}], code)
+               fun move_args (n, insns, env) {
+                   case n of
+                        0 -> [env, reverse(insns)]
+                      | _ -> case env.pop of
+                                  [s, env] -> move_args(n-1, Push(s) : insns, env)
+                             esac
+                   esac
+               }
+               fun call_func (env, f, n) {
+                   local is_arr = case f of 
+                                        "Barray" -> Some (n) 
+                                      | _        -> {} 
+                                   esac;
+                   local live_reg = liveRegisters(env, n);
+          
+                   if f[0] == '_' then 
+                      f := "L" ++ substring (f, 1, f.length - 1) 
+                   fi;
+          
+                   case move_args(n, {}, env) of
+                        [env, insns] -> case env.allocate of
+                                             [s, env] -> [env, {map (fun (x) {Push (x)}, live_reg), insns,
+                                                         case is_arr of 
+                                                              Some (n) -> Push (L (n)) 
+                                                            | _        -> {} 
+                                                         esac,
+                                             Call (f), 
+                                             Binop ("+", L ((insns.size + if is_arr == 0 then 0 else 1 fi) * wordSize), esp),
+                                             map (fun (x) {Pop (x)}, reverse(live_reg)), Mov (eax, s)
+                                                               }
+                                                         ]
+                                        esac
+                   esac
+               }
+        
+               case i of
+                    READ                   -> case env.allocate of
+                                                   [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
+                                              esac             
+                  | WRITE                  -> case env.pop of
+                                                   [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
+                                              esac
+                  | CONST   (val)          -> case env.allocate of
+                                                   [s, env] -> [env, code : singleton(Mov(L (val), s))]
+                                              esac
+                  | LD      (val)          -> case env.allocate of
+                                                   [s, env] -> [env, code : move(env.loc(val), s)]
+                                              esac
+                  | ST      (val)          -> [env, code : move(env.peek, env.loc(val))]
+                  | BINOP   (op)           -> case env.pop2 of
+                                                   [first,second, env] -> case env.allocate of
+                                                                               [s, env] -> [env, code: case op of
+                                                                                           "+" -> simple_binop(first, second, s, op)
+                                                                                         | "-" -> simple_binop(first, second, s, op)
+                                                                                         | "*" -> simple_binop(first, second, s, op)
+                                                                                         | "/" -> div_binop(first, second, s)
+                                                                                         | "%" -> mod_binop(first, second, s)
+                                                                                         | "<"  -> compare_binop(first, second, s, op)
+                                                                                         | "<=" -> compare_binop(first, second, s, op)
+                                                                                         | ">"  -> compare_binop(first, second, s, op)
+                                                                                         | ">=" -> compare_binop(first, second, s, op)
+                                                                                         | "==" -> compare_binop(first, second, s, op)
+                                                                                         | "!=" -> compare_binop(first, second, s, op)
+                                                                                         | "&&" -> logic_binop(first, second, s, op)
+                                                                                         | "!!" -> logic_binop(first, second, s, op)
+                                                                                                       esac
+                                                                                           ]
+                                                                          esac
+                                              esac
+                  | LABEL   (val)          -> if isBarrier(env) 
+                                              then [retrieveStack(env, val), code : singleton(Label (val))]
+                                              else [env, code : singleton(Label (val))] 
+                                              fi
+                  | JMP     (val)          -> [setBarrier(setStack(env, val)), code : singleton(Jmp (val))]
+                  | CJMP    (c, val)       -> case env.pop of
+                                                   [s, env] -> [setStack(env, val), code : {Binop ("cmp", L (0), s), CJmp(c, val)}]
+                                              esac
+                  | LDA     (val)          -> case env.allocate of
+                                                   [s, env] -> [env, code : {Lea (env.loc(val), eax), Mov (eax, s)}]
+                                              esac
+                  | STI                    -> case env.pop2 of
+                                                   [first, second, env] -> [env.push(second), code : {Mov (first, eax), Mov (second, edx), Mov (eax, I (0, edx)), Mov (eax, second)}]
+                                              esac
+                  | DROP                   -> case env.pop of 
+                                                   [_, env] -> [env, code]
+                                              esac
+                  | BEGIN   (f, _, locals) -> [enterFunction(env, f, locals), code : prologue(f)]
+                  | CALL    (f, n)         -> case call_func(env, f, n) of 
+                                                   [env, c] -> [env, {code, c}] 
+                                              esac    
+                  | END                    -> case epilogue(env) of 
+                                                   [env, c] -> [env, code : c] 
+                                              esac
+                  | GLOBAL  (val)          -> [env.addGlobal(val), code] 
+                  | STRING  (str)          -> case env.addString(str) of 
+                                                   [env, strl] -> case env.allocate of 
+                                                                       [s, env] -> case call_func(env, "Bstring", 1) of 
+                                                                                        [env, c] -> [env, {code, move (M ("$"++strl), s), c}]
+                                                                                   esac
+                                                                  esac
+                                              esac     
+                  | ARRAY   (n)            -> case call_func(env, "Barray", n) of 
+                                                   [env, c] -> [env, {code, c}] 
+                                              esac
+                  | STA                    -> case call_func(env, "Bsta", 2) of 
+                                                   [env, c] -> [env, {code, c}] 
+                                              esac
+                  | ELEM                   -> case call_func(env, "Belem", 2) of 
+                                                   [env, c] -> [env, {code, c}] 
+                                              esac
+                  | BUILTIN (f, n)         -> case call_func(env, "B"++f, n) of 
+                                                   [env, c] -> [env, {code, c}] 
+                                              esac             
+               esac
+        }, [env, {}], code)
   }
 
   compile (env, code) 
