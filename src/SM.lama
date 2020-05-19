@@ -440,7 +440,7 @@ public fun compileSM (stmt) {
       | Assn (Ref (x), e) -> case compile(e, env) of [cse, env] ->
                                [{cse, ST (lookupVar(env, x))}, env]
                              esac
-      | Assn (ElemRef (a, i), e) -> case compile(a, nev) of [cse, env] ->
+      | Assn (ElemRef (a, i), e) -> case compile(a, env) of [cse, env] ->
                                       case compile(i, env) of [csi, env] ->
                                         case compile(e, env) of [cse, env] ->
                                           [{csa, csi, cse, STA}, env]
