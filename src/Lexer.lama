@@ -54,17 +54,17 @@ public fun s (t) {memo $ whiteSpace |> lift (token (t))}
 public kRead    = s (rRead),
        kWrite   = s (rWrite),
        kSkip    = s (rSkip),
-       kIf      = s ("if"),
-       kThen    = s ("then"),
-       kElse    = s ("else"),
-       kElif    = s ("elif"),
-       kFi      = s ("fi"),
-       kWhile   = s ("while"),
-       kDo      = s ("do"),
-       kOd      = s ("od"),
-       kRepeat  = s ("repeat"),
-       kUntil   = s ("until"),
-       kFor     = s ("for"),
+       kIf      = s (rIf),
+       kThen    = s (rThen),
+       kElse    = s (rElse),
+       kElif    = s (rElif),
+       kFi      = s (rFi),
+       kWhile   = s (rWhile),
+       kDo      = s (rDo),
+       kOd      = s (rOd),
+       kRepeat  = s (rRepeat),
+       kUntil   = s (rUntil),
+       kFor     = s (rFor),
        decimal  = s (rDecimal),
        end      = memo $ whiteSpace |> lift (eof),
        lident   = memo $       
@@ -79,3 +79,4 @@ public kRead    = s (rRead),
                                      esac)
                                 }
                               });
+
