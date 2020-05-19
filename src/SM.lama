@@ -162,7 +162,7 @@ fun eval (env, w, insns) {
                   esac
   | CALL (f, n) : ins -> case f[0] of
                            '_' -> case take(st, n) of
-                                    [stt, args] -> case evalBuiltin(substring(f, l, f.length-1), args, w) of 
+                                    [stt, args] -> case evalBuiltin(substring(f, 1, f.length-1), args, w) of 
                                                      [z, wd] -> eval([z:stt, cst, s, wd], ins) 
                                                    esac
                                   esac
