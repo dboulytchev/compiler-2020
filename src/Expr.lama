@@ -110,7 +110,7 @@ fun evalDefs (s, defs) {
 
 fun addNamesValues (state, names, vals) {
   foldl (fun (s, [name, val]) { 
-           s.addName (name, Var (val))
+           s.addName (name, Val (val))
          }, state, zip (names, vals))
 }
 
