@@ -468,7 +468,8 @@ fun compile (env, code) {
           esac
         }
 
-        fun callOp (f, n) {
+        fun callOp (env, f, n) {
+          local isArray = case f of "Barray" -> Some (n) | _ -> {} esac;
           local liveRegs = liveRegisters(env, n);
           fun moveArgs (n, insns, env) {
             case n of
@@ -479,12 +480,15 @@ fun compile (env, code) {
             esac
           }
 
+          if f[0] == '_' then f := "L" ++ substring (f, 1, f.length - 1) fi;
           case moveArgs(n, {}, env) of
             [env, insns] -> case env.allocate of
-                              [s, env] -> [env, code : {map (fun (x) {Push (x)}, liveRegs), insns,
-                                                        Call (f), Binop ("+", L (insns.size * wordSize), esp),
-                                                        map (fun (x) {Pop (x)}, reverse(liveRegs)), Mov (eax, s)
-                                                        }]
+                              [s, env] -> [env, {map (fun (x) {Push (x)}, liveRegs), insns,
+                                                 case isArray of Some (n) -> Push (L (n)) | _ -> {} esac,
+                                                 Call (f),
+                                                 Binop ("+", L ((insns.size + if isArray == 0 then 0 else 1 fi) * wordSize), esp),
+                                                 map (fun (x) {Pop (x)}, reverse(liveRegs)), Mov (eax, s)
+                                                }]
                             esac
           esac
         }
@@ -567,10 +571,21 @@ fun compile (env, code) {
               [x, y, env] -> [env.push(y), code : {Mov (x, eax), Mov (y, edx), Mov (eax, I (0, edx)), Mov (eax, y)}]
             esac
         | DROP -> case env.pop of [_, env] -> [env, code] esac
-        | BEGIN (f, a, l) -> [enterFunction(env, f), code : prologue(l)]
+        | BEGIN (f, a, l) -> [enterFunction(env, f, l), code : prologue(f)]
         | END -> case epilogue(env) of [env, c] -> [env, code : c] esac
-        | CALL (f, n) -> callOp(f, n)
+        | CALL (f, n) -> case callOp(env, f, n) of [env, c] -> [env, {code, c}] esac
         | GLOBAL (x) -> [env.addGlobal(x), code]
+        | STA -> case callOp(env, "Bsta", 2) of [env, c] -> [env, {code, c}] esac
+        | ELEM -> case callOp(env, "Belem", 2) of [env, c] -> [env, {code, c}] esac
+        | BUILTIN (f, n) -> case callOp(env, "B"++f, n) of [env, c] -> [env, {code, c}] esac
+        | STRING (str) -> case env.addString(str) of [env, strl] ->
+                            case env.allocate of [s, env] ->
+                              case callOp(env, "Bstring", 1) of [env, c] ->
+                                [env, {code, move (M ("$"++strl), s), c}]
+                              esac
+                            esac
+                          esac
+        | ARRAY (n) -> case callOp(env, "Barray", n) of [env, c] -> [env, {code, c}] esac
         | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)

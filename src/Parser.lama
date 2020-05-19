@@ -106,6 +106,10 @@ fun distributeScope (expr, exprConstructor) {
 }
 
 local primary = memo $ eta ( pos |> fun(loc) { decimal @ fun (x) { fun(a) { assertValue(a, Const (stringInt (x)), loc) } } } |
+                             pos |> fun(loc) { strlit @ fun (x) { fun(a) { assertValue(a, String (x), loc) } } } |
+                             pos |> fun(loc) { chrlit @ fun (x) { fun(a) { assertValue(a, Const (x), loc) } } } |
+                             pos |> fun(loc) { inbr(s("["), list0 ( exp @ fun(e) { e(Val) } ), s("]")) @
+                                                        fun (x) { fun(a) { assertValue(a, Array (x), loc) } } } |
                              lident |> fun(x) { opt(inbr(s("("), list0 ( exp @ fun(e) { e(Val) } ), s(")"))) @ fun(args) {
                                         fun(a) { case args of
                                                    None -> case a of
@@ -117,8 +121,6 @@ local primary = memo $ eta ( pos |> fun(loc) { decimal @ fun (x) { fun(a) { asse
                                                  esac
                                                } } } |
                              pos |> fun(loc) { kSkip @ lift( fun(a) { assertVoid(a, Skip, loc) } ) } |
-                             pos |> fun(loc) { kRead |> lift (inbr (s("("), lident, s(")")) @ fun(x) { fun(a) { assertVoid(a, Read (x), loc) } } ) } |
-                             pos |> fun(loc) { kWrite |> lift (inbr (s("("), exp, s(")")) @ fun (x) { fun (a) { assertVoid(a, Write (x(Val)),  loc) } } ) } |
                              pos |> fun(loc) { kWhile |> lift (exp |> fun (e) {
                                                 kDo |> lift (scopeExpr |> fun (s) {
                                                     kOd @ lift (fun(a) { assertVoid(a, While (e(Val), s(Void)), loc) })

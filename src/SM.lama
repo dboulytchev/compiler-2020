@@ -162,13 +162,33 @@ fun eval (env, w, insns) {
                                               {} -> c
                                             | [sl, q] : cstt -> eval([stack, cstt, sl, world], q)
                                            esac
-            | CALL(f, n):other          -> eval([stack, [state, other] : cst, state, world], fromLabel(env, f))
+            | CALL(f, n):other          -> case f[0] of
+                                             '_' -> case take(stack, n) of
+                                                      [stt, args] -> case evalBuiltin(substring(f, 1, f.length-1), args, world) of
+                                                                        [z, wd] -> eval([z:stt, cst, state, wd], other)
+                                                                     esac
+                                                    esac
+                                           | _ -> eval([stack, [state, other] : cst, state, world], fromLabel(env, f))
+                                           esac
             | BEGIN(_, a, l):other      -> case take(stack, a) of
                                           [stt, args] -> local sl = makeState(a, l);
                                                          foldl (fun (i, arg) {assign(sl, Arg (i), arg); i+1}, 0, args);
                                                          eval([stt, cst, sl, world], other)
                                            esac
             | GLOBAL(x):other           -> assign(state, Glb (x), 0); eval([stack, cst, state, world], other)
+            | STRING (str):other        -> eval([str:stack, cst, state, world], other)
+            | ARRAY (n):other           -> case take(stack, n) of [stt, args] -> eval([listArray(args) : stt, cst, state, world], other) esac
+            | STA:other                 -> case stack of
+                                            v : i : a : stt -> a[i] := v; eval([v:stt, cst, state, world], other)
+                                           esac
+            | ELEM:other                -> case stack of
+                                            i : a : stt -> eval([a[i]:stt, cst, state, world], other)
+                                           esac
+            | BUILTIN (f, n):other      -> case take(stack, n) of
+                                            [stt, args] -> case evalBuiltin(f, args, world) of
+                                                            [z, wd] -> eval([z:stt, cst, state, wd], other)
+                                                           esac
+                                           esac
             | _ -> c
         esac
   }
@@ -446,9 +466,13 @@ public fun compileSM (stmt) {
 
     fun compileCall(f, args, env) {
         case compileArgs(args, env) of [cargs, env] ->
-            case lookupFun(env, f) of Fun (flabel, n) ->
-                [{cargs, CALL (flabel, n)}, env]
-            esac
+          case f of
+            "read" -> [{cargs, CALL ("_read", 0)}, env]
+          | "write" -> [{cargs, CALL ("_write", 1)}, env]
+          | _ -> case lookupFun(env, f) of Fun (flabel, n) ->
+                   [{cargs, CALL (flabel, n)}, env]
+                 esac
+          esac
         esac
     }
 
@@ -476,10 +500,6 @@ public fun compileSM (stmt) {
             Const (x) -> [singleton(CONST (x)), env]
           | Var (x) -> [singleton(LD (lookupVar(env, x))), env]
           | Ref (x) -> [singleton(LDA (lookupVar(env, x))), env]
-          | Read (x) -> [{READ, ST (lookupVar(env, x)), DROP}, env]
-          | Write (e) -> case compile(e, env) of [ce, env1] ->
-                           [{ce, WRITE}, env1]
-                         esac
           | Assn (Ref (x), e) -> case compile(e, env) of [cse, env] ->
                                    [{cse, ST (lookupVar(env, x))}, env]
                                  esac
@@ -508,6 +528,17 @@ public fun compileSM (stmt) {
           | Repeat (stmt, x)        ->  { compileRepeat(stmt, x, env) }
           | Call (f, args)          ->  { compileCall(f, args, env) }
           | Scope (defs, e)         ->  { compileScope(defs, e, env) }
+          | Array (args) -> case compileArgs(args, env) of [cargs, env] ->
+                              [{cargs, ARRAY (args.size)}, env]
+                            esac
+          | Elem (e, i) -> case compile(e, env) of [ce, env1] ->
+                             case compile(i, env1) of [ci, env2] ->
+                               [{ce, ci, ELEM}, env2]
+                             esac
+                           esac
+          | Builtin (f, args) -> case compileArgs(args, env) of [cargs, env] ->
+                                   [{cargs, BUILTIN (f, args.size)}, env]
+                                 esac
         esac
     }
 
