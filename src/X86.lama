@@ -449,42 +449,189 @@ fun suffix (op) {
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
+  fun compileBinop (env, code, o) {
+    -- default operations for each 2-operator
+    fun preCompile (op) {
+      case env.pop2 of [l, r, env] ->
+        case env.push (r) of env ->
+          [l, r, env]
+        esac
+      esac
+    }
+
+    -- for +, -, *
+    fun compileArithmBinop (op) {
+      case preCompile (op) of [l, r, env] ->
+        [env, code : {Mov (r, eax), Binop (op, l, eax), Mov (eax, r)}]
+      esac
+    }
+
+    -- for /, %
+    fun compileDivBinop (op) {
+      case preCompile (op) of [l, r, env] ->
+        [env, code : {Mov (r, eax), Cltd, IDiv (l), Mov (case op of "/" -> eax | "%" -> edx esac, r)}]
+      esac
+    }
+
+    -- fot ==, !=, <, <=, >, >=
+    fun compileCmpBinop (op) {
+      case preCompile (op) of [l, r, env] ->
+        [env, code : {
+          Mov (r, edx), Binop ("^", eax, eax), Binop ("cmp", l, edx), Set (suffix (op), "%al"), Mov (eax, r)
+        }]
+      esac
+    }
+
+    -- for !!, &&
+    fun compileLogicBinop (op) {
+      case preCompile (op) of [l, r, env] ->
+        [env, code : {
+          Binop ("^", eax, eax), Binop ("cmp", r, eax), Set (suffix ("!="), "%al"),
+          Binop ("^", edx, edx), Binop ("cmp", l, edx), Set (suffix ("!="), "%dl"),
+          Binop (op, edx, eax), Mov (eax, r)
+        }]
+      esac
+    }
+
+    case o of 
+      "+"   -> compileArithmBinop (o)
+      | "-" -> compileArithmBinop (o)
+      | "*" -> compileArithmBinop (o)
+
+      | "/" -> compileDivBinop (o)
+      | "%" -> compileDivBinop (o)
+
+      | "==" -> compileCmpBinop (o)
+      | "!=" -> compileCmpBinop (o)
+      | "<"  -> compileCmpBinop (o)
+      | "<=" -> compileCmpBinop (o)
+      | ">"  -> compileCmpBinop (o)
+      | ">=" -> compileCmpBinop (o)
+
+      | "!!" -> compileLogicBinop (o)
+      | "&&" -> compileLogicBinop (o)
+    esac
+  }
+  
   fun compile (env, code) {
     foldl (
       fun ([env, scode], i) {
         local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+
+        fun call (f, n) {
+          fun move (n, ns, env) {
+            case n of
+              0 -> [env, reverse (ns)]
+            | _ ->
+                case env.pop of
+                  [x, nenv] -> move(n - 1, Push (x) : ns, nenv)
+                esac
+            esac
+          }
+
+          local l = liveRegisters (env, n);
+
+          case move (n, {}, env) of
+            [nenv1, ns] ->
+              case nenv1.allocate of [s, nenv2] -> 
+                [nenv2, code : {
+                  map (fun (x) {Push (x) }, l), ns, 
+                  Call (f), Binop ("+", L (ns.size * wordSize), esp), 
+                  map (fun (x) { Pop (x) }, reverse (l)), 
+                  Mov (eax, s) 
+                }]
+              esac
+          esac
+        }
+
         case i of
           READ ->
-            case env.allocate of
-              [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
+            case env.allocate of [s, env] -> 
+              [env, code : {Call ("Lread"), Mov (eax, s)}]
             esac             
-        | WRITE ->
-            case env.pop of
-              [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
+          | 
+          WRITE ->
+              case env.pop of [s, env] -> 
+                [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
+              esac
+          | 
+          CONST (x) ->
+              case env.allocate of [s, env] -> 
+                [env, code : singleton (Mov (L (x), s))]
+              esac
+          |
+          BINOP (o) -> 
+            compileBinop (env, code, o) 
+          | 
+          LD (x) ->
+              case env.allocate of [s, env] -> 
+                [env, code : move (env.loc (x), s)]
+              esac
+          | 
+          ST (x) -> 
+            [env, code : move (env.peek, env.loc (x))]
+          | 
+          LABEL (l) -> 
+            [if env.isBarrier then env.retrieveStack (l) else env fi, code : singleton (Label (l))]
+          | 
+          JMP (l) -> 
+            [setBarrier (env.setStack (l)), code : singleton (Jmp (l))]
+          | 
+          CJMP (c, l) -> 
+              case env.pop of [s, env] -> 
+                [env.setStack (l), code : {Binop ("cmp", L (0), s), CJmp (c, l)}]
+              esac
+          | 
+          LDA (x) -> 
+              case env.allocate of [s, env] -> 
+                [env, code : {Lea (env.loc (x), eax), Mov (eax, s)}]
+              esac
+          | 
+          STI -> 
+              case env.pop2 of [x, y, env] -> 
+                [env.push (y), code : {Mov (x, eax), Mov (y, edx), Mov (eax, I (0, edx)), Mov (eax, y)}]
+              esac
+          | 
+          DROP -> 
+            case env.pop of [_, env] -> 
+              [env, code] 
             esac
-        
-         -- Some guidelines for generating function calls:
-         --
-         -- 1. generate instructions to save live registers on the X86 stack (use
-         --    env.liveRegisters (number of arguments);
-         -- 2. generate instructions to move actual parameters from the symbolic
-         --    stack to the hardware one;
-         -- 3. generate the call itself;
-         -- 4. discard the actual parameters from the stack;
-         -- 5. restore saved live registers.
-         --
-         -- Some guidelines for generating functions:
-         --
-         -- 1. generate proper prologue for BEGIN instruction (use "prologue" helper); use
-         --    env.enterFunction to create a proper environment;
-         -- 2. generate epilogue for END instruction.
-               
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+          
+          -- Some guidelines for generating function calls:
+          --
+          -- 1. generate instructions to save live registers on the X86 stack (use
+          --    env.liveRegisters (number of arguments);
+          -- 2. generate instructions to move actual parameters from the symbolic
+          --    stack to the hardware one;
+          -- 3. generate the call itself;
+          -- 4. discard the actual parameters from the stack;
+          -- 5. restore saved live registers.
+          --
+          -- Some guidelines for generating functions:
+          --
+          -- 1. generate proper prologue for BEGIN instruction (use "prologue" helper); use
+          --    env.enterFunction to create a proper environment;
+          -- 2. generate epilogue for END instruction.
+
+          | 
+          BEGIN (f, a, l) -> 
+            [enterFunction (env, f), code : prologue (l)]
+          | 
+          END ->
+            case epilogue (env) of [env, c] -> 
+              [env, code : c]
+            esac
+          | 
+          CALL (f, n) -> 
+            call (f, n)
+          | 
+          GLOBAL (x) -> 
+            [env.addGlobal (x), code]
         esac
       }, [env, {}], code)
   }
 
-  compile (env, code) 
+  compile (env, code)
 }
 
 -- A top-level codegeneration function. Takes a driver's environment and a stack machine program,

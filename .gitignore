@@ -1,0 +1,11 @@
+/.project
+
+**.log
+**.s
+**.o
+test*
+generated*
+
+**.i
+**.sm
+lama-impl
