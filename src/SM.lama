@@ -455,7 +455,7 @@ public fun compileSM (stmt) {
     fun compileArgs (args, env) {
       case args of
         {} -> [{}, env]
-      | {a} -> compile(a, env)
+      | a : {} -> compile(a, env)
       | a : as -> case compile(a, env) of [ca, env] ->
                     case compileArgs(as, env) of [cas, env] ->
                       [{ca, cas}, env]
@@ -565,7 +565,7 @@ public fun compileSM (stmt) {
         compileF(code, env, {})
     }
 
-    case compile(stmt, initCompEnv()) of
+    case compile(stmt, initCompEnv().beginScope) of
         [code, env] -> deepFlatten(compileFuns({LABEL ("main"), BEGIN ("main", 0, getLocals(env)), code, END}, env))
     esac
 }
