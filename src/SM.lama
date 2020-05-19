@@ -503,6 +503,13 @@ public fun compileSM (stmt) {
           | Assn (Ref (x), e) -> case compile(e, env) of [cse, env] ->
                                    [{cse, ST (lookupVar(env, x))}, env]
                                  esac
+          | Assn (ElemRef (a, i), e) -> case compile(a, env) of [csa, env] ->
+                                         case compile(i, env) of [csi, env] ->
+                                          case compile(e, env) of [cse, env] ->
+                                            [{csa, csi, cse, STA}, env]
+                                          esac
+                                        esac
+                                      esac
           | Assn (x, e) -> case compile(x, env) of [cs1, env1] ->
                              case compile(e, env1) of [cs2, env2] ->
                                [{cs1, cs2, STI}, env2]
@@ -516,8 +523,8 @@ public fun compileSM (stmt) {
                 esac
           | Skip -> [{}, env]
           | Ignore (state) -> case compile(state, env) of [cs1, env1] ->
-                            [{cs1, DROP}, env1]
-                          esac
+                                [{cs1, DROP}, env1]
+                              esac
           | Binop (op, l, r) -> case compile(l, env) of [cs1, env1] ->
                                   case compile(r, env1) of [cs2, env2] ->
                                     [{cs1, cs2, BINOP(op)}, env2]
