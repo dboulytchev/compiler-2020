@@ -176,7 +176,7 @@ fun eval (env, w, insns) {
   | GLOBAL (x) : ins -> assign(s, Glb (x), 0); eval([st, cst, s, w], ins)
   | STRING (str) : ins -> eval([str:st, cst, s, w], ins)
   | ARRAY (n) : ins -> case take(st, n) of 
-                          [stt, args] -> eva;([listArray(args) : stt, cst, s, w], ins)
+                          [stt, args] -> eval([listArray(args) : stt, cst, s, w], ins)
                        esac
   | STA : ins -> case st of
                    v : i : a : stt -> a[i] := v; eval([v:stt, cst, s, w], ins)
