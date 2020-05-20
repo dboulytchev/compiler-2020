@@ -535,6 +535,7 @@ public fun compileSM (stmt) {
           | Repeat (stmt, x)        ->  { compileRepeat(stmt, x, env) }
           | Call (f, args)          ->  { compileCall(f, args, env) }
           | Scope (defs, e)         ->  { compileScope(defs, e, env) }
+          | String (str) -> [singleton(STRING (str)), env]
           | Array (args) -> case compileArgs(args, env) of [cargs, env] ->
                               [{cargs, ARRAY (args.size)}, env]
                             esac
