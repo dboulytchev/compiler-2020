@@ -518,29 +518,42 @@ fun compile (env, code) {
       fun ([env, scode], i) {
         local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
 
-        fun call (f, n) {
-          fun move (n, ns, env) {
+        fun call (env, f, n) {
+          fun move (n, ins, env) {
             case n of
-              0 -> [env, reverse (ns)]
-            | _ ->
-                case env.pop of
-                  [x, nenv] -> move(n - 1, Push (x) : ns, nenv)
+              0 -> [env, reverse (ins)]
+              | 
+              _ ->
+                case env.pop of [x, nenv] -> 
+                  move (n - 1, Push (x) : ins, nenv)
                 esac
             esac
           }
 
+          local isArray = case f of 
+            "Barray" -> Some (n) 
+            | 
+            _ -> {} 
+          esac;
           local l = liveRegisters (env, n);
 
-          case move (n, {}, env) of
-            [nenv1, ns] ->
-              case nenv1.allocate of [s, nenv2] -> 
-                [nenv2, code : {
-                  map (fun (x) {Push (x) }, l), ns, 
-                  Call (f), Binop ("+", L (ns.size * wordSize), esp), 
-                  map (fun (x) { Pop (x) }, reverse (l)), 
-                  Mov (eax, s) 
-                }]
-              esac
+          if f [0] == '_' 
+            then f := "L" ++ substring (f, 1, f.length - 1) 
+          fi;
+
+          case move (n, {}, env) of [nenv1, ins] ->
+            local exp = if isArray == 0 then 0 else 1 fi;
+            case nenv1.allocate of [s, nenv2] -> 
+              [nenv2, {
+                map (fun (x) {Push (x) }, l), ins, 
+                case isArray of 
+                  Some (n) -> Push (L (n)) 
+                  | _ -> {} 
+                esac,
+                Call (f), Binop ("+", L ((ins.size + exp) * wordSize), esp), 
+                map (fun (x) {Pop (x)}, reverse (l)), Mov (eax, s)}
+              ]
+            esac
           esac
         }
 
@@ -615,7 +628,7 @@ fun compile (env, code) {
 
           | 
           BEGIN (f, a, l) -> 
-            [enterFunction (env, f), code : prologue (l)]
+            [enterFunction (env, f, l), code : prologue (f)]
           | 
           END ->
             case epilogue (env) of [env, c] -> 
@@ -623,38 +636,40 @@ fun compile (env, code) {
             esac
           | 
           CALL (f, n) -> 
-            call (f, n)
+            case call (env, f, n) of [env, c] -> 
+              [env, {code, c}] 
+            esac
           | 
           GLOBAL (x) -> 
             [env.addGlobal (x), code]
 
           | 
           STA -> 
-            case callOp (env, "Bsta", 2) of [env, c] -> 
+            case call (env, "Bsta", 2) of [env, c] -> 
               [env, {code, c}]
             esac
           | 
           ELEM -> 
-            case callOp (env, "Belem", 2) of [env, c] -> 
+            case call (env, "Belem", 2) of [env, c] -> 
               [env, {code, c}] 
             esac
           | 
           BUILTIN (f, n) -> 
-            case callOp (env, "B" ++ f, n) of [env, c] -> 
+            case call (env, "B" ++ f, n) of [env, c] -> 
               [env, {code, c}] 
             esac
           | 
           STRING (str) -> 
             case env.addString(str) of [env, strl] -> 
               case env.allocate of [s, env] ->
-                case callOp(env, "Bstring", 1) of [env, c] -> 
+                case call (env, "Bstring", 1) of [env, c] -> 
                   [env, {code, move (M ("$" ++ strl), s), c}]
                 esac
               esac
             esac
           | 
           ARRAY (n) -> 
-            case callOp (env, "Barray", n) of [env, c] -> 
+            case call (env, "Barray", n) of [env, c] -> 
               [env, {code, c}] 
             esac
         esac
