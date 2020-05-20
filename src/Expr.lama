@@ -122,17 +122,17 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[state, world], expr) {
+fun eval (c@[s, w], expr) {
   case expr of
       Const (x)     -> [c, x]
-    | Var (x) -> [c, case lookupVal(state, x) of Val (v) -> v esac]
-    | Ref (x) -> lookupVal(state, x); [c, Ref (x)]
+    | Var (x) -> [c, case lookupVal(s, x) of Val (v) -> v esac]
+    | Ref (x) -> lookupVal(s, x); [c, Ref (x)]
     | Binop (operation, left, right)    ->  case evalList(c, {left, right}) of
                                                 [c1, {lRes, rRes}] -> [c1, evalOp(operation, lRes, rRes)]
                                             esac
     | Skip          -> [c, BOTTOM]
-    | Assn (left, right)                ->  case evalList(c, {left, right}) of
-                                                [[newState, newWorld], {Ref (lVal), rVal}] -> [[newState <- [lVal, Var(rVal)], newWorld], rVal]
+    | Assn (l, r) -> case evalList(c, {l, r}) of
+                     [[s1, w1], {Ref (vv), v}] -> [[s1 <- [vv, Val (v)], w1], v]
                                               | [c1, {ElemRef (a, i), v}] -> a[i]:=v; [c1, v]
                                             esac
     | Seq (s1, s2)  -> case eval(c, s1) of
@@ -154,14 +154,13 @@ fun eval (c@[state, world], expr) {
                                      | [c2, _] -> [c2, BOTTOM]
                                      esac
                         esac
-
-    | Ignore (state) -> case eval(c, state) of
-                            [c1, _] -> [c1, BOTTOM]
-                        esac
-    | Scope (defs, e) -> case eval([evalDefs(enterScope(state), defs), world], e) of
+    | Ignore (s) -> case eval(c, s) of
+                        [c1, _] -> [c1, BOTTOM]
+                    esac
+    | Scope (defs, e) -> case eval([evalDefs(enterScope(s), defs), w], e) of
                             [[s1, w1], vv] -> [[leaveScope(s1), w1], vv]
                          esac
-    | Call (f, args) -> case lookupFun(state, f) of
+    | Call (f, args) -> case lookupFun(s, f) of
                         Fun (as, e) ->
                           case evalList(c, args) of
                             [[s1, w1], vs] ->
