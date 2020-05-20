@@ -137,75 +137,112 @@ fun eval (env, w, insns) {
         esac
       |
       BINOP (op) : ins ->
-         case st of r : l : t -> 
+        case st of r : l : t -> 
           eval ([evalOp (op, l, r) : t, cst, s, w], ins)
-         esac
+        esac
+      |  
+      DROP : ins -> 
+        case st of v : t -> 
+          eval ([t, cst, s, w], ins)
+        esac
       | 
       LD (x) : ins -> 
         eval ([lookup (s, x) : st, cst, s, w], ins)
-      |
-      ST (x) : ins ->
-        case st of v : t -> 
-          assign (s, x, v); eval (c, ins)
+      | 
+      LDA (x) : ins -> 
+        eval ([Ref (x) : st, cst, s, w], ins)
+      | 
+      ST (x) : ins -> 
+        case st of z : t -> 
+          assign (s, x, z); 
+          eval ([st, cst, s, w], ins)
         esac
       | 
-      LABEL (lb) : ins -> 
+      STI : ins -> 
+        case st of v : Ref (x) : t -> 
+          assign (s, x, v); 
+          eval ([v : t, cst, s, w], ins)
+        esac
+      | 
+      LABEL (l) : ins -> 
         eval (c, ins)
       | 
-      JMP (lb) : ins -> 
-        eval (c, fromLabel (env, lb))
+      JMP (l) : ins ->
+         eval (c, fromLabel (env, l))
       | 
-      CJMP ("nz", lb) : ins ->
+      CJMP ("nz", l) : ins -> 
         case st of
-          0 : no -> eval ([no, cst, s, w], ins)
+          0 : t -> eval ([t, cst, s, w], ins)
           | 
-          _ : no -> eval ([no, cst, s, w], fromLabel (env, lb))
+          _ : t -> eval ([t, cst, s, w], fromLabel(env, l))
         esac
-      |
-      CJMP ("z", lb) : ins ->
+      | 
+      CJMP ("z", l) : ins -> 
         case st of
-          0 : no -> eval ([no, cst, s, w], fromLabel (env, lb))
-          | 
-          _ : no -> eval ([no, cst, s, w], ins)
+          0 : t -> eval ([t, cst, s, w], fromLabel(env, l))
+          |
+          _ : t -> eval ([t, cst, s, w], ins)
         esac
       | 
-      LDA (x) : ins -> eval ([Ref (x) : st, cst, s, w], ins)
-      | 
-      STI : ins ->
-        case st of v : Ref (x) : t -> 
-          assign (s, x, v); eval ([v : t, cst, s, w], ins)
-        esac
-      | 
-      DROP : ins ->
-        case st of v : no -> 
-          eval ([no, cst, s, w], ins)
-        esac
-      | 
-      GLOBAL (x) : ins -> 
-        assign (s, Glb (x), 0); eval (c, ins)
-      | 
-      CALL (f, n) : ins -> 
-        eval ([st, [s, ins] : cst, s, w], fromLabel (env, f))
-      | 
-      BEGIN (_, a, lb) : ins ->
-        case take (st, a) of [nst, as] -> 
-          local ns = makeState (a, lb);
-          foldl (fun (x, na) { 
-            assign (ns, Arg (x), na); x + 1 
-          }, 0, as);
-          eval ([nst, cst, ns, w], ins) 
-        esac
-      | 
-      END : ins ->
+      END : ins -> 
         case cst of
           {} -> c
           | 
-          [ns, q] : ncst -> eval ([st, ncst, ns, w], q)
+          [sl, q] : ct -> eval ([st, ct, sl, w], q)
+        esac
+      | 
+      CALL (f, n) : ins -> 
+          case f[0] of
+            '_' -> 
+              case take(st, n) of [t, args] -> 
+                case evalBuiltin (substring (f, 1, f.length-1), args, w) of [z, wd] -> 
+                  eval ([z:t, cst, s, wd], ins) 
+                esac
+              esac
+            | 
+            _ -> eval ([st, [s, ins] : cst, s, w], fromLabel (env, f))
+          esac
+      | BEGIN (_, a, l) : ins -> 
+        case take (st, a) of [t, args] -> 
+          local sl = makeState (a, l);
+          foldl (fun (i, arg) {assign (sl, Arg (i), arg); i + 1}, 0, args);
+          eval ([t, cst, sl, w], ins) 
+        esac
+      | 
+      GLOBAL (x) : ins -> 
+        assign (s, Glb (x), 0); eval ([st, cst, s, w], ins)
+      | 
+      STRING (str) : ins -> 
+        eval ([str : st, cst, s, w], ins)
+      | 
+      ARRAY (n) : ins -> 
+        case take (st, n) of [t, args] -> 
+          eval ([listArray (args) : t, cst, s, w], ins) 
+        esac
+      | 
+      STA : ins -> 
+        case st of v : i : a : t -> 
+          a [i] := v; 
+          eval ([v : t, cst, s, w], ins)
+        esac
+      | 
+      ELEM : ins -> 
+        case st of i : a : t -> 
+          eval ([a [i] : t, cst, s, w], ins)
+        esac
+      | 
+      BUILTIN (f, n) : ins -> 
+        case take (st, n) of [t, args] -> 
+          case evalBuiltin (f, args, w) of [v, wd] -> 
+            eval ([v : t, cst, s, wd], ins) 
+          esac
         esac
       | 
       _ -> c
-    esac
+    esac 
   }
+
+  
   
   eval ([{}, {}, makeState (0, 0), w], insns) [3].getOutput
 }
@@ -431,42 +468,44 @@ fun addVars (env, names) {
 --    environment (use env.beginFun) and register arguments
 --    (use env.addArg).
 
-public fun compileSM (expr) {
-  fun compileAs (as, env) {
-    case as of 
-      {} -> [{}, env]
+public fun compileSM (stmt) {
+  fun compileA (args, env) {
+    case args of 
+      {} -> 
+        [{}, env]
       | 
-      {a} -> compile (a, env)
+      a : {} -> 
+        compile(a, env)
       | 
-      a : ins ->
-        case compile (a, env) of [na, ne1] ->
-          case compileAs (ins, ne1) of [nas, ne2] -> 
-            [{na, nas}, ne2]
+      a : as -> 
+        case compile (a, env) of [ca, env] ->
+          case compileA (as, env) of [cas, env] ->
+            [{ca, cas}, env]
           esac
         esac
     esac
   }
 
-  fun compileFs (c, env) {
-    fun compileF (c, env, fs) {
-      case fs of
-        {} ->
+  fun compileF (code, env) {
+    fun compileF_ (code, env, funs) {
+      case funs of
+        {} -> 
           case getFuns (env) of
-            [{}, ne] -> c
+            [{}, env] -> code
             | 
-            [fs, ne] -> compileF (c, ne, fs)
+            [funs, env] -> compileF_ (code, env, funs)
           esac
         | 
-        Fun (l, as, b, st) : o -> 
-          case compile (b, addArgs (beginFun (env, st), as)) of [nf, ne] -> 
-            compileF ({c, LABEL (l), BEGIN (l, as.size, getLocals (ne)), nf, END}, ne, o)
+        Fun (fLabel, args, body, state) : fs -> 
+          case compile (body, addArgs (beginFun (env, state), args)) of [cf, env] -> 
+            compileF_ ({code, LABEL (fLabel), BEGIN (fLabel, args.size, getLocals (env)), cf, END}, env, fs)
           esac
       esac
     }
-
-    compileF (c, env, {})
+    
+    compileF_ (code, env, {})
   }
-
+  
   fun compile (stmt, env) {
       case stmt of
         Const (c) -> 
@@ -478,10 +517,10 @@ public fun compileSM (expr) {
         Ref (x) -> 
           [singleton (LDA (lookupVar (env, x))), env]
         | 
-        Assn (x, e) ->
-          case compile (x, env) of [ns1, ne1] ->
-            case compile (e, ne1) of [ns2, ne2] -> 
-              [{ns1, ns2, STI}, ne2]
+        Binop (op, l, r) -> 
+          case compile (l, env) of [cs1, env1] ->
+            case compile (r, env1) of [cs2, env2] ->
+              [{cs1, cs2, BINOP(op)}, env2]
             esac
           esac
         | 
@@ -490,99 +529,128 @@ public fun compileSM (expr) {
             [{ns, ST (lookupVar (env, x))}, ne]
           esac
         | 
-        Read (x) -> 
-          [{READ, ST (lookupVar (env, x)), DROP}, env]
-        | 
-        Write (e) ->
-          case compile (e, env) of [ns, ne] -> 
-            [{ns, WRITE}, ne]
+        Assn (ElemRef (a, i), e) -> 
+          case compile (a, env) of [csa, env] ->
+            case compile (i, env) of [csi, env] ->
+              case compile (e, env) of [cse, env] ->
+                [{csa, csi, cse, STA}, env]
+              esac
+            esac
           esac
         | 
-        Binop (op, l, r) ->
-          case compile (l, env) of [ns1, ne1] ->
-            case compile (r, ne1) of [ns2, ne2] -> 
-              [{ns1, ns2, BINOP (op)}, ne2]
+        Assn (x, e) -> 
+          case compile (x, env) of [cs1, env1] ->
+            case compile (e, env1) of [cs2, env2] ->
+              [{cs1, cs2, STI}, env2]
+            esac
+          esac
+        | 
+        Seq (s1, s2) -> 
+          case compile (s1, env) of [cs1, env1] -> 
+            case compile (s2, env1) of [cs2, env2] -> 
+              [{cs1, cs2}, env2]
             esac
           esac
         | 
         Skip -> 
           [{}, env]
         | 
-        Ignore (s) ->
-          case compile (s, env) of [ns, ne] -> 
-            [{ns, DROP}, ne]
+        Ignore (s) -> 
+          case compile (s, env) of [cs1, env1] -> 
+            [{cs1, DROP}, env1]
           esac
         | 
-        Seq (s1, s2) ->
-          case compile (s1, env) of [ns1, ne1] ->
-            case compile (s2, ne1) of [ns2, ne2] -> 
-              [{ns1, ns2}, ne2]
-            esac
-          esac
-        | 
-        If (e, s1, s2) ->
-          case genLabels (env, 2) of [ls, l, ne1] ->
-            case compile (s1, ne1) of [ns1, ne2] ->
-              case compile (s2, ne2) of [ns2, ne3] ->
-                case compile (e, ne3) of [ne, ne3] -> 
-                  [{ne, CJMP ("z", ls), ns1, JMP (l), LABEL (ls), ns2, LABEL (l)}, ne3]
-                esac
+        While (e, s1) -> 
+          case genLabels (env, 2) of [le, ls, env1] ->
+            case compile (s1, env1) of [cs1, env2] ->
+              case compile (e, env2) of [ce, env2] ->
+                [{JMP(le), LABEL(ls), cs1, LABEL(le), ce, CJMP("nz", ls)}, env2]
               esac
-            esac
+            esac 
           esac
         | 
-        While (e, s1) ->
-          case genLabels (env, 2) of [ls, l, ne1] ->
-            case compile (s1, ne1) of [ns1, ne2] ->
-              case compile (e, ne2) of [ne, ne2] -> 
-                [{JMP (ls), LABEL (l), ns1, LABEL (ls), ne, CJMP ("nz", l)}, ne2]
+        If (e, s1, s2) -> 
+          case genLabels (env, 2) of [ls2, lexit, env1] ->
+            case compile (s1, env1) of [cs1, env2] ->
+              case compile (s2, env2) of [cs2, env3] ->
+                case compile (e, env3) of [ce, env3] ->
+                  [{ce, CJMP ("z", ls2), cs1, JMP (lexit), LABEL (ls2), cs2, LABEL (lexit)}, env3]
+                esac
               esac
             esac 
           esac
         | 
         Repeat (s1, e) ->
-          case genLabels (env, 1) of [l, ne1] ->
-            case compile (s1, ne1) of [ns, ne2] ->
-              case compile (e, ne2) of [ne, ne2] -> 
-                [{LABEL (l), ns, ne, CJMP ("z", l)}, ne2]
+          case genLabels (env, 1) of [ls, env1] ->
+            case compile (s1, env1) of [cs1, env2] ->
+              case compile (e, env2) of [ce, env2] ->
+                [{LABEL (ls), cs1, ce, CJMP("z", ls)}, env2]
               esac
             esac 
           esac
         | 
-        Call (f, as) ->
-          case compileAs (as, env) of [nas, ne] ->
-            case lookupFun (ne, f) of Fun (l, n) -> 
-              [{nas, CALL (l, n)}, ne]
+        Call (f, args) ->
+          case compileA (args, env) of [cargs, env] ->
+            case f of 
+              "read" -> [{cargs, CALL ("_read", 0)}, env]
+              | 
+              "write" -> [{cargs, CALL ("_write", 1)}, env]
+              | 
+              _ -> 
+                case lookupFun (env, f) of Fun (flabel, n) ->
+                  [{cargs, CALL (flabel, n)}, env]
+                esac
             esac
           esac
         | 
-        Scope (ds, e) -> 
-          case foldl (fun ([env, fs, gs], d) {
-              case d of
-                Local (xs) -> 
-                  [addVars (env, xs), fs,
-                    if isGlobal (env) then { map (fun (x) { GLOBAL (x) }, xs), gs }
-                    else gs
-                    fi
-                  ]
-                | 
-                Fun (f, as, b) ->
-                  case genFunLabel (env, f) of [l, ne] -> 
-                    [addFun (ne, f, l, as.size), [l, as, b] : fs, gs]
-                  esac
-              esac
-            }, 
-            [beginScope (env), {}, {}], ds) of [env, fs, gs] ->
-              case compile (e, foldl (fun (env, [n, as, b]) { 
-                  rememberFun (env, n, as, b) 
-                }, env, fs)) of [ne, nenv] -> 
-                  [{gs, ne}, endScope (nenv)]
-              esac
+        Scope (defs, e) -> 
+          case foldl (fun ([env, functions, globals], def) {
+            case def of
+              Local (xs) -> 
+                [
+                  addVars (env, xs), functions, 
+                  if isGlobal (env) 
+                    then {map (fun (x) {GLOBAL (x)}, xs), globals} 
+                    else globals 
+                  fi 
+                ]
+              | 
+              Fun (f, args, body) -> case genFunLabel (env, f) of [flabel, env] ->
+                  [addFun (env, f, flabel, args.size), [flabel, args, body] : functions, globals]
+                esac
+            esac
+          }, [beginScope (env), {}, {}], defs) of [env, functions, globals] ->
+            case compile (e, foldl (fun (env, [name, args, body]) {
+              rememberFun (env, name, args, body)
+            }, env, functions)) of 
+              [ce, env] -> [{globals, ce}, endScope (env)]
+            esac
           esac
+        | 
+        String (str) -> 
+          [singleton (STRING (str)), env]
+        | 
+        Array (args) -> 
+          case compileA (args, env) of [cargs, env] ->
+            [{cargs, ARRAY (args.size)}, env]
+          esac
+        | 
+        Elem (e, i) -> 
+          case compile (e, env) of [ce, env1] ->
+            case compile (i, env1) of [ci, env2] ->
+              [{ce, ci, ELEM}, env2]
+            esac
+          esac
+        | 
+        Builtin (f, args) -> 
+          case compileA (args, env) of [cargs, env] ->
+            [{cargs, BUILTIN (f, args.size)}, env]
+          esac
+      
       esac
   }
-
-  case compile (expr, initCompEnv ()) of
-    [nc, ne] -> deepFlatten (compileFs ({ LABEL ("main"), BEGIN ("main", 0, getLocals (ne)), nc, END }, ne))
+  
+  case compile(stmt, initCompEnv().beginScope) of
+    [code, env] -> deepFlatten(compileF ({LABEL ("main"), BEGIN ("main", 0, getLocals(env)), code, END}, env))
   esac
 }

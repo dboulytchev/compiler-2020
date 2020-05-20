@@ -137,26 +137,52 @@ local primary = memo $ eta (
   } 
   |
   pos |> fun (loc) { 
+    strlit @ fun (x) { 
+      fun (atr) { 
+        assertValue (atr, String (x), loc) 
+      } 
+    } 
+  } 
+  |
+  pos |> fun (loc) { 
+    chrlit @ fun (x) { 
+      fun (atr) { 
+        assertValue (atr, Const (x), loc) 
+      } 
+    } 
+  }
+  |
+  pos |> fun (loc) { 
     kSkip @ lift (fun (atr) { 
       assertVoid (atr, Skip, loc) 
     }) 
   }
   |
   pos |> fun (loc) { 
-    kRead |> lift (inbr (s ("("), lident, s (")")) @ fun (x) {
+    inbr (s ("["), list0 (exp @ fun (e) { 
+        e (Val) 
+    }), s ("]")) @ fun (x) { 
       fun (atr) { 
-        assertVoid (atr, Read (x), loc) 
+        assertValue (atr, Array (x), loc) 
       } 
-    }) 
+    } 
   }
-  |
-  pos |> fun (loc) { 
-    kWrite |> lift (inbr (s ("("), exp, s (")")) @ fun (x) { 
-      fun (atr) { 
-        assertVoid (atr, Write (x (Val)), loc) 
-      } 
-    }) 
-  }
+--  |
+--  pos |> fun (loc) { 
+--    kRead |> lift (inbr (s ("("), lident, s (")")) @ fun (x) {
+--      fun (atr) { 
+--        assertVoid (atr, Read (x), loc) 
+--     } 
+--    }) 
+--  }
+--  |
+--  pos |> fun (loc) { 
+--    kWrite |> lift (inbr (s ("("), exp, s (")")) @ fun (x) { 
+--      fun (atr) { 
+--        assertVoid (atr, Write (x (Val)), loc) 
+--      } 
+--    }) 
+--  }
   |
   pos |> fun(loc) { 
     kWhile |> lift (exp |> fun (e) {
@@ -290,6 +316,30 @@ local elif_ = memo $ eta (
   }
 );
 
+local postfix = memo $ eta syntax (
+  loc = pos e = primary ps = (
+    i = inbr [s ("["), exp, s ("]")] {Index (i (Val))} 
+    |
+    -s["."] kLength {Length}
+  )* {fun (atr) {foldl (fun (e, p) {                                                                            
+    case p of                                                                                   
+      Length -> 
+        fun (a) {
+          assertValue (a, Builtin ("length", singleton (e (Val))), loc)
+        }
+      | 
+      Index (i) ->
+        fun (a) {
+          case a of
+            Ref -> ElemRef (e (Val), i)
+            | 
+            _   -> assertValue (a, Elem (e (Val), i), loc)
+          esac
+        }
+    esac                                                                            
+  }, e, ps) (atr) }}
+);
+
 local assnNop = memo $ eta (
   expr ({
     [ Right, singleton ([
@@ -304,7 +354,7 @@ local assnNop = memo $ eta (
     [ Left, map (binop, { "+", "-" }) ],
     [ Left, map (binop, { "*", "/", "%" }) ]
   },
-  primary
+  postfix
 ) (id));
 
 local exp = memo $ eta syntax (

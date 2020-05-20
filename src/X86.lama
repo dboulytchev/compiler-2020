@@ -627,6 +627,36 @@ fun compile (env, code) {
           | 
           GLOBAL (x) -> 
             [env.addGlobal (x), code]
+
+          | 
+          STA -> 
+            case callOp (env, "Bsta", 2) of [env, c] -> 
+              [env, {code, c}]
+            esac
+          | 
+          ELEM -> 
+            case callOp (env, "Belem", 2) of [env, c] -> 
+              [env, {code, c}] 
+            esac
+          | 
+          BUILTIN (f, n) -> 
+            case callOp (env, "B" ++ f, n) of [env, c] -> 
+              [env, {code, c}] 
+            esac
+          | 
+          STRING (str) -> 
+            case env.addString(str) of [env, strl] -> 
+              case env.allocate of [s, env] ->
+                case callOp(env, "Bstring", 1) of [env, c] -> 
+                  [env, {code, move (M ("$" ++ strl), s), c}]
+                esac
+              esac
+            esac
+          | 
+          ARRAY (n) -> 
+            case callOp (env, "Barray", n) of [env, c] -> 
+              [env, {code, c}] 
+            esac
         esac
       }, [env, {}], code)
   }
