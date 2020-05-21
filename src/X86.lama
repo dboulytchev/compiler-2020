@@ -400,6 +400,56 @@ fun suffix (op) {
   esac
 }
 
+fun binop (op, s1, s2) {
+  {Mov (s2, eax), Binop (op, s1, eax), Mov (eax, s2)}
+}
+
+fun divBinop (op, s1, s2) {
+  {Mov (s2, eax), Cltd, IDiv (s1), Mov (case op of
+                                          "/" -> eax
+                                        | "%" -> edx
+                                        esac, s2)}
+}
+
+fun compareBinop (op, s1, s2) {
+  {
+    Mov (s2, eax),
+    Binop ("^", edx, edx),
+    Binop ("cmp", s1, eax),
+    Set (suffix(op), "%dl"),
+    Mov (edx, s2)
+  }
+}
+
+fun logicalBinop (op, s1, s2) {
+  {
+    Binop ("^", eax, eax),
+    Binop ("^", edx, edx),
+    Binop ("cmp", s1, eax),
+    Set (suffix("!="), "%al"),
+    Binop ("cmp", s2, edx),
+    Set (suffix("!="), "%dl"),
+    Binop (op, eax, edx),
+    Mov (edx, s2)
+  }
+}
+
+fun makeBinopMap() {
+  local binopsMap = {
+    [{"+", "-", "*"},  binop],
+    [{"/", "%"},  divBinop],
+    [{">", ">=", "<", "<=", "==", "!="}, compareBinop],
+    [{"&&", "!!"}, logicalBinop]
+  };
+  fun flat([list, f]) {
+    map(fun (op) {[op, f]}, list)
+  }
+  map(flat, binopsMap).deepFlatten
+}
+
+local binopsMap = makeBinopMap();
+
+
 -- Compiles stack machine code into a list of x86 instructions. Takes an environment
 -- and stack machine code, returns an updated environment and x86 code.
 fun compile (env, code) {
@@ -416,7 +466,53 @@ fun compile (env, code) {
             case env.pop of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        
+        | LD (var) -> case env.allocate of
+                        [s, env] -> [env, code : {move(loc(env, var), s)}]
+                      esac
+        | ST (var) -> case env.peek of
+                        s -> [env, code : move(s, loc(env, var))]
+                      esac
+        | CONST (const) -> case env.allocate of
+                             [s, env] -> [env, code : singleton(Mov (L (const), s))]
+                           esac
+        | BINOP (op) ->
+            case env.pop2 of
+              [s1, s2, env] ->
+                case push(env, s2) of
+                  env -> [env, code : case assoc(binopsMap, op) of
+                                        Some (f) -> f(op, s1, s2)
+                                      esac]
+                esac
+            esac
+        | LABEL (l) -> [if env.isBarrier then
+                           retrieveStack(env, l)
+                         else
+                           env
+                         fi,
+                         code : singleton(Label (l))]
+        | JMP (l) -> [setStack(env, l).setBarrier, code : singleton(Jmp (l))]
+        | CJMP (c, l) -> case env.pop of
+                          [s, env] -> [setStack(env, l), code : {Binop ("cmp", L (0), s), CJmp (c, l)}]
+                         esac
+        | DROP -> case env.pop of
+                    [_, env] -> [env, code]
+                  esac
+        | LDA (var) -> case env.allocate of
+                         [s, env] -> [env, code :
+                                           if memOpnd(s) then
+                                             {Lea (loc(env, var), eax), Mov (eax, s)}
+                                           else
+                                             singleton(Lea (loc(env, var), s))
+                                           fi]
+                       esac
+        | STI -> case env.pop2 of
+                   [var, s, env] -> [push(env, s), code :
+                                                   if memOpnd(var) then
+                                                     {Mov (var, eax), Mov (s, edx), Mov (eax, I (0, edx), Mov (eax, s))}
+                                                   else
+                                                     {Mov (s, edx), Mov (var, I (0, edx)), Mov (var, s)}
+                                                   fi]
+                 esac
          -- Some guidelines for generating function calls:
          --
          -- 1. generate instructions to save live registers on the X86 stack (use
@@ -433,9 +529,39 @@ fun compile (env, code) {
          --    env.enterFunction to create a proper environment;
          -- 2. generate epilogue for END instruction.
                
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | CALL (f, n) -> compileCall(env, f, n, code)
+        | BEGIN (f, _, l) -> [enterFunction(env, f), {code : prologue(l)}]
+        | GLOBAL (var) -> [addGlobal(env, var), code]
+        | END -> case epilogue(env) of
+                   [env, res] -> [env, {code : res}]
+                 esac
         esac
       }, [env, {}], code)
+  }
+
+  fun compileCall(env, f, n, code) {
+    fun moveArgs(env, code, n) {
+      if n == 0 then
+        [env, code]
+      else
+        case env.pop of
+          [s, env] -> moveArgs(env, Push (s) : code, n - 1)
+        esac
+      fi
+    }
+
+    case liveRegisters(env, n) of
+      regs -> case moveArgs(env, {}, n) of
+                [env, args] -> case env.allocate of
+                                 [s, env] -> [env, code : {map(fun(reg) {Push (reg)}, regs),
+                                                           reverse(args),
+                                                           Call (f),
+                                                           Binop ("+", L (wordSize * args.size), esp),
+                                                           map(fun(reg) {Pop (reg)}, reverse(regs)),
+                                                           Mov (eax, s)}]
+                               esac
+              esac
+    esac
   }
 
   compile (env, code) 
