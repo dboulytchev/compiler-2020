@@ -4,6 +4,7 @@ import Fun;
 import SM;
 import Collection;
 import List;
+import Array;
 import Util;
 import Manifest;
 
@@ -406,16 +407,71 @@ fun compile (env, code) {
   fun compile (env, code) {
     foldl (
       fun ([env, scode], i) {
-        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+        local sscode = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+        local code = sscode;
         case i of
           READ ->
-            case env.allocate of
+            case allocate (env) of
               [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
             esac             
         | WRITE ->
-            case env.pop of
+            case pop (env) of
               [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
+	| ST (v) -> 
+              [env, code : move (peek (env), loc (env, v))]
+        | STI ->
+            case pop2 (env) of
+              [v, a, env] -> 
+                case allocate (env) of 
+                  [b, env] -> [env, code : move (a, eax) : move (v, edx) : move (edx, I (0, eax)) : move (edx, b)]
+                esac
+            esac
+        | LD (v) -> 
+            case allocate (env) of 
+              [s, env] -> [env, code : move (loc (env, v), s)]
+            esac
+        | LDA (v) ->
+            case allocate (env) of 
+              [s, env] -> [env, code : Lea (loc (env, v), eax) : move (eax, s)]
+            esac
+        | CONST (v) ->
+            case allocate (env) of
+              [s, env] -> [env, code : {move (L (v), s)}]
+            esac
+        | BINOP (op) ->
+            case pop2 (env) of
+              [x, y, env] ->
+                fun contains (l, op) {
+                  case l of
+                    {}       -> false
+                  | o : last -> if compare (o, op) == 0 then true else last.contains (op) fi
+                  esac
+                }
+                case allocate (env) of
+                  [s, env] -> [env, code :
+                    if contains ({"/", "%"}, op) 
+                    then 
+                      move (y, eax) : move (ebx, s) : Cltd : move (x, ebx) : IDiv (ebx) : move (s, ebx) : move (if compare (op, "/") == 0 then eax else edx fi, s)
+                    else
+                      if {"*", "+", "-"}.contains (op) 
+                        then move (y, eax) : Binop (op, x, eax) : move (eax, s)
+                        else 
+                          if {"&&", "!!"}.contains (op)
+                            then move (x, eax) : Binop ("cmp", L (0), eax) : Set (suffix ("!="), "%al") : move (y, edx) : Binop ("cmp", L (0), edx) : Set (suffix ("!="), "%dl") : Binop (op, edx, eax) : Binop ("&&", L (1), eax) : move (eax, s)
+                            else move (y, eax) : Binop ("cmp", x, eax) : Set (suffix (op), "%al") : Binop ("&&", L (1), eax) : move (eax, s) 
+                          fi
+                      fi
+                    fi]
+                esac
+            esac
+        | LABEL (l)         -> [if isBarrier (env) then retrieveStack (env, l) else env fi, code : (Label (l) : {})]
+        | JMP   (l)         -> [setBarrier (setStack (env, l)), code : (Jmp   (l) : {})]
+        | CJMP  (cond, l)   -> case pop (env) of
+                                 [x, env] -> [setStack (env, l), code : {move (x, eax), Binop ("!!", eax, eax), CJmp (cond, l)}]
+                               esac
+        | DROP              -> [pop (env) [1], code]
+        | GLOBAL (x)        -> [addGlobal (env, x), code]
         
          -- Some guidelines for generating function calls:
          --
@@ -433,7 +489,29 @@ fun compile (env, code) {
          --    env.enterFunction to create a proper environment;
          -- 2. generate epilogue for END instruction.
                
-        | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
+        | CALL (f, na)      -> case liveRegisters (env, na) of
+                                 regs ->
+                                   case foldlArray (fun ([env, l], _) { 
+                                                      case pop (env) of 
+                                                        [arg, env] -> [env, Push (arg) : l] 
+                                                      esac 
+                                                    }, [env, {}], initArray (na, fun (_) {0})) of
+                                     [env, args] -> 
+                                       case allocate (env) of
+                                         [x, env] -> 
+                                           [env, code : {map (fun (reg) { Push (reg) }, regs), 
+                                                         args, 
+                                                         Call (f), 
+                                                         Binop ("+", L (size (args) * wordSize), esp), 
+                                                         reverse (map (fun (reg) { Pop (reg) }, regs)),
+                                                         move (eax, x)}]
+                                       esac
+                                   esac
+                               esac
+        | BEGIN (f, na, nl) -> [enterFunction (env, f), code : prologue (nl)]
+        | END               -> case epilogue (env) of
+                                 [env, last] -> [env, code : last]
+                               esac
         esac
       }, [env, {}], code)
   }

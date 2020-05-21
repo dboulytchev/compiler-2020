@@ -94,8 +94,57 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+public fun eval (c@[state, world], expr) {
+  case expr of
+    Var (a)          -> [c, checkVar (state, a); case lookup (state, a) of Var (a) -> a esac]
+  | Const (a)        -> [c, a]
+  | Binop (op, a, b) -> case evalList (c, {a, b}) of
+                          [c, a : b : {}] -> [c, evalOp (op, a, b)]
+                        esac
+  | Assn (a, b)      -> case evalList (c, {a, b}) of
+                          [[state, world], Ref (a) : b : {}] -> [[state <- [a, Var (b)], world], b]
+                        esac
+  | Ref (a)          -> [c, Ref (a)]
+  | Seq (a, b)       -> case eval (c, a) of
+                          [c, _] -> eval (c, b)
+                        esac
+  | Skip             -> [c, Void]
+  | Read (Ref (a))   -> case readWorld (world) of 
+                          [n, world] -> [[state <- [a, Var (n)], world], Void]
+                        esac
+  | Write (e)        -> case eval (c, e) of
+                          [[state, world], v] -> [[state, writeWorld (v, world)], Void]
+                        esac
+  | If (e, s1, s2)   -> case eval (c, e) of
+                          [c, n] -> if n != 0 then eval (c, s1) else eval (c, s2) fi
+                        esac
+  | While (e, s)     -> case eval (c, e) of
+                          [c, n] -> if n != 0 then [eval (eval (c, s) [0], expr) [0], Void] else [c, Void] fi
+                        esac
+  | Repeat (s, e)    -> case eval (c, s) of
+                          [c, _] -> eval (c, While (Binop ("==", e, Const (0)), s))
+                        esac
+  | Ignore (e)       -> case eval (c, e) of
+                          [c, _] -> [c, Void]
+                        esac
+  | Scope (ds, e)    -> case eval ([foldl (fun (state, x) { 
+                                             case x of 
+                                               Fun (name, args, body) -> addFunction (state, name, args, body) 
+                                             | Local (names)          -> addNames (state, names)
+                                             esac
+                                           }, enterScope (state), ds), world], e) of
+                          [[state, world], res] -> [[leaveScope (state), world], res]
+                        esac
+  | Call (f, es)     -> case checkFun (state, f); lookup (state, f) of
+                          Fun (args, body) -> 
+                            case evalList (c, es) of    
+                              [[state, world], es] -> 
+                                case eval ([foldl (fun (state, [name, value]) { state <- [name, Var (value)] }, addNames (enterFunction (state), args), zip (args, es)), world], body) of
+                                  [[newState, world], res] -> [[leaveFunction (state, getGlobal (newState)), world], res]
+                                esac
+                            esac
+                        esac
+  esac
 }
 
 
