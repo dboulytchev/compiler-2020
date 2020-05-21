@@ -58,8 +58,30 @@ fun fromLabel (env, lab) {
 
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
-fun eval (env, c, insns) {
-  failure ("SM eval not implemented\n")
+fun eval (env, config @ [stack, state, world], insns) {
+  case insns of
+      CONST (n)      : insns -> eval(env, [n : stack, state, world], insns)	
+    | READ           : insns -> case readWorld(world) of 
+                                  [n, world] -> eval (env, [n : stack, state, world], insns)
+                                esac
+    | WRITE          : insns -> eval(env, [tl(stack), state, writeWorld(hd(stack), world)], insns)
+    | ST (x)         : insns -> eval(env, [stack, state <- [x, hd(stack)], world], insns)
+    | LD (x)         : insns -> eval(env, [state(x) : stack, state, world], insns)	
+    | BINOP (op)     : insns -> case stack of
+                                  r : l : stack -> eval(env, [evalOp(op, l, r) : stack, state, world], insns)
+                                esac
+    | LABEL (_)      : insns -> eval(env, config, insns)
+    | JMP (l)        : insns -> eval(env, config, fromLabel(env, l))
+    | CJMP ("z", l)  : insns -> eval(env, [tl(stack), state, world], if hd(stack) then insns else fromLabel(env, l) fi)
+    | CJMP ("nz", l) : insns -> eval(env, [tl(stack), state, world], if hd(stack) then fromLabel(env, l) else insns fi)
+    
+    | LDA (x)        : insns -> eval(env, [Ref (x) : stack, state, world], insns)
+    | DROP           : insns -> eval(env, [tl(stack), state, world], insns)
+    | STI            : insns -> case stack of 
+                                  v : Ref (x) : stack ->   eval(env, [v : stack, state <- [x, v], world], insns)
+                                esac
+    | {} -> config
+  esac
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -101,5 +123,74 @@ fun genLabels (env, n) {
 -- Takes an expression, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  fun compileSM (env, stmt) {
+    case stmt of
+      Skip -> [{}, env]
+    | Read (x) -> [{READ, ST (x), DROP}, env]
+    | Write (e) -> case compileSM(env, e) of [eIns, env] -> 
+                     [{eIns, WRITE}, env]
+                   esac
+    | Assn (x, e) -> case compileSM(env, x) of [xIns, env] -> 
+                       case compileSM(env, e) of [eIns, env] -> 
+                         [{xIns, eIns, STI}, env]
+                       esac
+                     esac
+    | Seq (s1, s2) -> case compileSM(env, s1) of [s1Ins, env] -> 
+                        case compileSM(env, s2) of [s2Ins, env] -> 
+                          [{s1Ins, s2Ins}, env]
+                        esac
+                      esac
+    | While (e, s) -> case genLabels(env, 2) of [lBody, lCheck, env] ->
+                        case compileSM(env, e) of [eIns, env] ->
+                          case compileSM(env, s) of [sIns, env] ->
+                            [{
+                              JMP (lCheck), 
+                              LABEL (lBody), 
+                              sIns, 
+                              LABEL (lCheck), 
+                              eIns, 
+                              CJMP ("nz", lBody)
+                            }, env]
+                          esac
+                        esac
+                      esac
+    | If (e, s1, s2) -> case genLabels(env, 2) of [lElse, lFi, env] ->
+                          case compileSM(env, e) of [eIns, env] ->
+                            case compileSM(env, s1) of [s1Ins, env] ->
+                              case compileSM(env, s2) of [s2Ins, env] ->
+                                [{
+                                  eIns, 
+                                  CJMP ("z", lElse), 
+                                  s1Ins, 
+                                  JMP (lFi), 
+                                  LABEL (lElse), 
+                                  s2Ins, 
+                                  LABEL (lFi)
+                                }, env]
+                              esac 
+                            esac
+                          esac
+                        esac
+    | Repeat (s, e) -> case genLabels(env, 1) of [lBody, env] ->
+                         case compileSM(env, s) of [sIns, env] ->
+                           case compileSM(env, e) of [eIns, env] ->
+                             [{LABEL (lBody), sIns, eIns, CJMP ("z", lBody)}, env]
+                           esac
+                         esac
+                       esac
+    | Binop (op, l, r) -> case compileSM(env, l) of [lIns, env] ->
+                            case compileSM(env, r) of [rIns, env] ->
+                              [{lIns, rIns, BINOP (op)}, env]
+                            esac
+                          esac
+    | Var (x)   -> [singleton (LD (x)), env]
+    | Const (n) -> [singleton (CONST (n)), env]
+    | Ref (x) -> [singleton (LDA (x)), env]
+    | Ignore (e) -> case compileSM(env, e) of [eIns, env] -> 
+                      [{eIns, DROP}, env]
+                    esac
+    esac
+  }
+
+  deepFlatten(fst(compileSM(initCompEnv(), stmt)))
 }

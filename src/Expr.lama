@@ -63,8 +63,44 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+fun eval (config @ [state, world], expr) {
+  case expr of
+    Assn (l, r)      -> case evalList(config, {l, r}) of 
+                          [[state, world], { Ref (x), v }] -> [[state <- [x, v], world], v]
+                        esac
+  | Seq (s1, s2)     -> case eval(config, s1) of 
+                          [config, _] -> eval(config, s2)
+                        esac
+  | Skip             -> [config, Bottom]
+  | Read (x)         -> case readWorld(world) of
+                          [value, world] -> [[state <- [x, value], world], Bottom]
+                        esac
+  | Write (e)        -> case eval(config, e) of 
+                          [[state, world], v] -> [[state, writeWorld(v, world)], Bottom]
+                        esac
+  | If (e, s1, s2)   -> case eval(config, e) of
+                          [config, n] -> eval(config, if n then s1 else s2 fi)
+                        esac
+  | While (e, s)     -> case eval(config, e) of
+                          [config, 0] -> [config, Bottom]
+                        | [config, _] -> eval(config, Seq (s, expr))
+                        esac
+  | Repeat (s, e)    -> case eval(config, s) of 
+                          [config, _] -> case eval(config, e) of
+                                           [config, 0] -> eval(config, expr)
+                                         | [config, _] -> [config, Bottom]
+                                         esac
+                        esac
+  | Var (x)          -> [config, state(x)]
+  | Ref (x)          -> [config, Ref (x)]
+  | Const (n)        -> [config, n]
+  | Binop (op, l, r) -> case evalList(config, {l, r}) of 
+                          [config, { l, r }] -> [config, evalOp(op, l, r)]
+                        esac
+  | Ignore (e)      -> case eval(config, e) of 
+                          [config, _] -> [config, Bottom]
+                        esac
+  esac
 }
 
 
