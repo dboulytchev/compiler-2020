@@ -1,11 +1,11 @@
 local x;
 
-read (x);
+x := read ();
 
 write (x);
 
 {local x;
- read (x);
+ x := read ();
  write (x)
 };
 

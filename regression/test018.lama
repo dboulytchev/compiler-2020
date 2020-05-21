@@ -1,6 +1,4 @@
-local n, c, p;
-
-read (n);
+local n = read (), c, p;
 
 c := 1;
 p := 2;

@@ -9,11 +9,13 @@ all: Parser.o Lexer.o X86.o SM.o Manifest.o
 
 Parser.o: Lexer.o
 
+Builtins.o: World.o
+
 State.o: Lexer.o Parser.o
 
-Expr.o: State.o 
+Expr.o: State.o Builtins.o
 
-SM.o: State.o World.o Util.o Expr.o Parser.o Lexer.o
+SM.o: State.o World.o Util.o Expr.o Parser.o Lexer.o Builtins.o
 
 X86.o: SM.o Manifest.o
 

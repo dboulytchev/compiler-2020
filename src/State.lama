@@ -64,7 +64,7 @@ fun makeState (scopes) {
   fun enterFunction () {
     fun enterScopes (scopes) {
       case scopes of        
-        {s}        -> scopes
+        {_, _}     -> scopes
       | _ : scopes -> enterScopes (scopes)
       esac
     }
@@ -76,7 +76,7 @@ fun makeState (scopes) {
   fun leaveFunction (global) {
     fun replaceGlobal (scopes) {
       case scopes of
-        {s} -> singleton (global)
+        {_, _}     -> global
       | s : scopes -> s : replaceGlobal (scopes)
       esac    
     }
@@ -88,7 +88,7 @@ fun makeState (scopes) {
   fun getGlobal () {
     fun findGlobal (scopes) {
       case scopes of
-        {s}        -> s
+        {_, _}     -> scopes
       | _ : scopes -> findGlobal (scopes)
       esac
     }
