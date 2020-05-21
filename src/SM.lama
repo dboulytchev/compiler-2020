@@ -8,6 +8,7 @@ import World;
 import State;
 import Expr;
 import Util;
+import Ref;
 
 -- Stack code printer. Takes a list of SM instructions, return its
 -- string representation.
@@ -59,7 +60,41 @@ fun fromLabel (env, lab) {
 -- Stack machine interpreter. Takes an environment, an SM-configuration and a program,
 -- returns a final configuration
 fun eval (env, c, insns) {
-  failure ("SM eval not implemented\n")
+  local context = ref (c), instructions = ref (insns), cont = ref (1);
+  
+  while deref (cont) do
+    local ret = case deref (instructions) of
+      i : is ->
+        case deref (context) of
+          was@[stack, state, world] -> 
+            case i of
+              LD    (x)        -> [[state (x) : stack, state, world], is]
+            | LDA   (x)        -> [[x : stack, state, world], is]
+            | ST    (x)        -> [[tl (stack), state <- [x, hd (stack)], world], is]
+            | STI              -> case stack of a : b : last -> [[a : last, state <- [b, a], world], is] esac
+            | READ             -> local ret = readWorld (world);
+                                  [[ret[0] : stack, state, ret[1]], is]
+            | WRITE            -> [[tl (stack), state, writeWorld (hd (stack), world)], is]
+            | CONST (x)        -> [[x : stack, state, world], is]
+            | BINOP (op)       -> [[case stack of a : b : last -> evalOp (op, b, a) : last esac, state, world], is]
+            | LABEL (_)        -> [was, is]
+            | JMP   (l)        -> [was, fromLabel (env, l)]
+            | DROP             -> [[tl (stack), state, world], is]
+            | CJMP  (cond, l)  -> case stack of 
+                                    a : last -> 
+                                      [[last, state, world], 
+                                       if a == 0 && compare (cond, "z") == 0 !! a && compare (cond, "nz") == 0
+                                       then fromLabel (env, l) else is fi]
+                                  esac
+            esac
+        esac
+    | {} -> cont ::= 0; [deref (context), deref (instructions)]
+    esac;
+    context ::= ret [0];
+    instructions ::= ret [1]
+  od;
+
+  deref (context)
 }
 
 -- Runs a stack machine for a given input and a given program, returns an output
@@ -101,5 +136,68 @@ fun genLabels (env, n) {
 -- Takes an expression, returns a list of stack machine
 -- instructions.
 public fun compileSM (stmt) {
-  failure ("compileSM not implemented\n")
+  fun compileSMinternal (env, stmt) {
+    case stmt of
+      Var   (a)        -> [env, LD    (a) : {}]
+    | Const (a)        -> [env, CONST (a) : {}]
+    | Binop (op, a, b) -> case compileSMinternal (env, a) of
+                            [env, a] ->
+                              case compileSMinternal (env, b) of
+                                [env, b] -> [env, {a, b, BINOP (op)}]
+                              esac
+                          esac
+    | Assn  (a, e)     -> case compileSMinternal (env, a) of
+                            [env, a] -> 
+                              case compileSMinternal (env, e) of 
+                                [env, e] -> [env, {a, e, STI}]
+                              esac
+                          esac
+    | Ref   (a)        -> [env, LDA (a) : {}]
+    | Seq   (a, b)     -> case compileSMinternal (env, a) of 
+                            [env, res1] -> 
+                              case compileSMinternal (env, b) of
+                                [env, res2] -> [env, {res1, res2}]
+                              esac
+                          esac
+    | Ignore (s)       -> case compileSMinternal (env, s) of 
+                            [env, res] -> [env, {res, DROP}]
+                          esac
+    | Skip             -> [env, {}]
+    | Read  (Ref (a))  -> [env, {READ, ST (a)}]
+    | Write (e)        -> case compileSMinternal (env, e) of 
+                            [env, res] -> [env, {res, WRITE}]
+                          esac
+    | If (e, s1, s2)   -> case genLabels (env, 2) of
+                            [l1, l2, env] -> 
+                              case compileSMinternal (env, e) of 
+                                [env, res0] ->
+                                  case compileSMinternal (env, s1) of
+                                    [env, res1] -> 
+                                      case compileSMinternal (env, s2) of
+                                        [env, res2] -> [env, {res0, CJMP ("z", l1), res1, JMP (l2), LABEL (l1), res2, LABEL (l2)}]
+                                      esac
+                                  esac
+                              esac
+                          esac
+    | While (e, s)     -> case genLabels (env, 2) of
+                            [l1, l2, env] ->
+                              case compileSMinternal (env, e) of
+                                [env, res0] ->
+                                  case compileSMinternal (env, s) of
+                                    [env, res] -> [env, {JMP (l1), LABEL (l2), res, LABEL (l1), res0, CJMP ("nz", l2)}]
+                                  esac
+                              esac
+                          esac
+    | Repeat (s, e)    -> case genLabel (env) of
+                            [l, env] ->
+                              case compileSMinternal (env, e) of 
+                                [env, res0] ->
+                                  case compileSMinternal (env, s) of
+                                    [env, res] -> [env, {LABEL (l), res, res0, CJMP ("z", l)}]
+                                  esac
+                              esac
+                          esac
+    esac
+  }
+  deepFlatten (compileSMinternal (initCompEnv (), stmt) [1])
 }
