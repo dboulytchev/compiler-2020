@@ -4,13 +4,20 @@ FILES=$(wildcard *.lama)
 ALL=$(sort $(FILES:.lama=.o))
 LAMAC=lamac
 
-all: $(ALL)
+all: Parser.o Lexer.o X86.o SM.o Manifest.o
+	$(LAMAC) -I . -o lama-impl Driver.lama
 
-Expr.o: State.o
+Parser.o: Lexer.o
 
-Stmt.o: State.o Expr.o World.o
+Builtins.o: World.o
 
-SM.o: State.o World.o Util.o
+State.o: Lexer.o Parser.o
+
+Expr.o: State.o Builtins.o
+
+SM.o: State.o World.o Util.o Expr.o Parser.o Lexer.o Builtins.o
+
+X86.o: SM.o Manifest.o
 
 %.o: %.lama
 	$(LAMAC) -I . -c $<

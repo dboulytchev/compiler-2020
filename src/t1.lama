@@ -1,0 +1,11 @@
+fun f (e) {
+  local e;
+
+   = case e of   
+              Some (e) -> write (0)
+            esac;
+               
+  skip
+}
+
+f (Some (1)) 
