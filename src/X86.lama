@@ -511,7 +511,6 @@ fun compile (env, code) {
             case peek(env) of
               s -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
             esac
-        
         | LD (var) -> case allocate(env) of
                         [s, env] -> [env, code : {move(loc(env, var), s)}]
                       esac
@@ -559,7 +558,6 @@ fun compile (env, code) {
                                                      {Mov (s, edx), Mov (var, I (0, edx)), Mov (var, s)}
                                                    fi]
                  esac
-
          -- Some guidelines for generating function calls:
          --
          -- 1. generate instructions to save live registers on the X86 stack (use
@@ -576,21 +574,23 @@ fun compile (env, code) {
          --    env.enterFunction to create a proper environment;
          -- 2. generate epilogue for END instruction.
         | CALL (f, n) -> compileCall(env, f, n, code)
-        | BEGIN (f, _, l) -> [enterFunction(env, f), {code : prologue(l)}]
+        | BEGIN (f, _, l) -> [enterFunction(env, f, l), {code : prologue(f)}]
         | GLOBAL (var) -> [addGlobal(env, var), code]
         | END -> case epilogue(env) of
                    [env, res] -> [env, {code : res}]
                  esac
         | STRING (str) -> case addString(env, str) of
                             [env, strl] -> case allocate(env) of
-                                             [s, env] -> compileCall(env, "Bstring", 1, code)
+                                             [s, env] -> compileCall(env,
+                                                                     "Bstring",
+                                                                     1,
+                                                                     {code : move (M ("$" ++ strl), s)})
                                            esac
                           esac
         | ARRAY (n) -> compileCall(env, "Barray", n, code)
         | STA -> compileCall(env, "Bsta", 2, code)
         | ELEM -> compileCall(env, "Belem", 2, code)
         | BUILTIN (f, n) -> compileCall(env, "B" ++ f, n, code)
-               
         esac
       }, [env, {}], code)
   }
@@ -607,7 +607,7 @@ fun compile (env, code) {
     }
 
     local arr = case f of "Barray" -> Push (L (n)) | _ -> {} esac;
-    local id = if arr == 0 then 0 else 1 fi
+    local id = if arr == 0 then 0 else 1 fi;
     case liveRegisters(env, n) of
       regs -> case moveArgs(env, {}, n) of
                 [env, args] -> case allocate(env) of
