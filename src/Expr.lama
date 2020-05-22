@@ -99,10 +99,107 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+fun evalDefs(s, defs) {
+  foldl (fun (s, def) {
+              case def of
+                Local (xs) -> addNames(s, xs)
+              | Fun (f, args, e) -> addFunction(s, f, args, e)  
+              esac
+            }, s, defs
+        )
 }
 
+fun addNamesValues (state, names, vals) {
+  foldl (fun (s, [name, val]) {
+           s.addName (name, Val (val))
+         }, state, zip(names, vals))
+}
+
+fun chain(cfg, expr1, expr2) {
+    case eval(cfg, expr1) of [cNew, _] -> eval(cNew, expr2) esac
+}
+
+fun eval (c@[s, w],expr) { case expr of
+    Const(value) -> [c, value]
+  | Var(name) -> [c, case lookupVal(s, name) of Val(value) -> value esac]
+  | Ref(name) -> lookupVal(s, name); [c, Ref(name)]
+  | Binop(op, left, right) -> case evalList(c, {left, right}) of
+      [cNext, {leftResult, rightResult}] -> [cNext, evalOp(op, leftResult, rightResult)]
+  esac
+  | Skip -> [c,BOTTOM]
+  | Assn(left, right) -> case evalList(c, {left, right}) of
+      [[sNext, wNext], {Ref(name), value}] -> [[sNext <- [name, Val(value)], wNext], value]
+    | [c1, {ElemRef (a, i), value}] -> a[i] := value; [c1, value]
+  esac
+  | Seq(stmt1, stmt2) -> case eval(c, stmt1) of
+      [cNew, _] -> eval(cNew, stmt2)
+  esac
+  | If(cond, onTrue, onFalse) -> case eval(c, cond) of
+      [cNew, value] -> eval(cNew, if value == 0 then onFalse else onTrue fi)
+  esac
+  | While(cond, body) -> case eval(c, cond) of
+      [cNew, value] -> if value == 0 then [cNew,BOTTOM] else chain(cNew, body, expr) fi
+  esac
+  | Repeat(body, cond) -> case eval(c, body) of
+      [cBody, _] -> case eval (cBody, cond) of
+          [cCond, value] -> if value == 0 then eval(cCond, expr) else [cCond, BOTTOM] fi
+      esac
+  esac
+
+  | Ignore(stmt) -> case eval(c, stmt) of
+      [cNew, _] -> [cNew, BOTTOM]
+  esac
+  | Scope(defs, expr) -> case eval([evalDefs(enterScope(s), defs), w], expr) of
+      [[sNew, wNew], result] -> [[leaveScope(sNew), wNew], result]
+  esac
+(*
+  | Call(name, args) -> case lookupFun(s, name) of
+      Fun(sig, body) -> case evalList(c, args) of
+          [[sArgs, wArgs], resultArgs] -> case eval([amendState(enterFunction(sArgs), sig, resultArgs), wArgs], body) of
+              [[sBody, wBody], resultBody] -> [[leaveFunction(sArgs, getGlobal(sBody)), wBody], resultBody]
+          esac
+      esac
+    esac
+  esac
+*)
+
+(*  | Ignore (s) -> case eval(c, s) of [c1, _] -> [c1, BOTTOM] esac 
+  | Scope (defs, e) -> case eval([evalDefs(enterScope(s), defs), w], e) of
+                         [[s1, w1], vv] -> [[leaveScope(s1), w1], vv]
+                       esac
+*)
+  | Call (f, args) -> case lookupFun(s, f) of
+                        Fun (as, e) -> case evalList(c, args) of
+                                         [[s1, w1], vs] -> case e of
+                                                             External -> case evalBuiltin(f, vs, w1) of
+                                                                           [z, wd] -> [[s1, wd], z]
+                                                                         esac
+                                                           | _        -> case eval ([addNamesValues(enterFunction(s1), as, vs), w1], e) of
+                                                                           [[s2, w2], vv] -> [[leaveFunction(s1, getGlobal(s2)), w2], vv]
+                                                                         esac
+                                                           esac
+                                       esac                
+                      esac
+
+  | String(value) -> [c, value]
+
+  | Array(elems) -> case evalList(c, elems) of
+    [cNew, values] -> [cNew, listArray(values)]
+  esac
+
+  | Elem(e, i) -> case evalList(c, {e, i}) of
+                     [c1, {l, v}] -> [c1, l[v]]
+                   esac
+  | ElemRef (e, i) -> case evalList(c, {e, i}) of
+                        [c1, {l, v}] -> [c1, ElemRef (l, v)]
+                      esac
+  | Builtin (f, args) -> case evalList(c, args) of
+                           [[s1, w1], vs] -> case evalBuiltin(f, vs, w1) of
+                                               [z, wd] -> [[s1, wd], z]
+                                             esac
+                         esac
+  esac
+}
 
 -- Evaluates a program with a given input and returns an output
 public fun evalExpr (input, expr) {
