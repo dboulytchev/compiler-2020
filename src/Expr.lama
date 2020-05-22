@@ -42,6 +42,8 @@ public fun evalOp (op, l, r) {
 -- expr = Assn    (string, expr)       |
 --        Seq     (expr, expr)         |
 --        Skip                         |
+--        Read    (string)             |
+--        Write   (expr)               |
 --        if      (expr, expr, expr)   |
 --        While   (expr, expr)         |
 --        Repeat  (expr, expr)         |
@@ -49,6 +51,7 @@ public fun evalOp (op, l, r) {
 --        Ref     (string)             |
 --        Const   (int)                |
 --        Binop   (string, expr, expr) |
+--        Scope   (def list, expr)     |
 --        Call    (string, expr list)  |
 --        Ignore  (expr)               |
 --        String  (string)             |
@@ -56,6 +59,12 @@ public fun evalOp (op, l, r) {
 --        Elem    (expr, expr)         |
 --        ElemRef (expr, expr)         |
 --        Builtin (string, expr list)
+--
+-- A definition is either a local variable definition or a function
+-- definition:
+--
+-- def = Local (string list)                |
+--       Fun   (string, string list, expr)
 
 -- Helper function: checks that given name designates a regular variable in
 -- a given state
@@ -80,6 +89,14 @@ fun addNames (state, names) {
   foldl (fun (s, name) {s.addName (name, Val (0))}, state, names)
 }
 
+fun addBindings (state, names, values) {
+  foldl(
+    fun (s, [name, v]) { s.addName (name, Val (v)) },
+    state,
+    zip(names, values)
+  )
+}
+
 -- Helper function: adds a function in current scope
 fun addFunction (state, name, args, body) {
   state.addName (name, Fun (args, body))
@@ -99,14 +116,132 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+fun evalDecls (state, decls) {
+  foldl(
+    fun (state, decl) {
+      case decl of
+        Local(names)          -> state.addNames(names)
+      | Fun(name, args, body) -> state.addFunction(name, args, body) 
+      esac
+    },
+    state,
+    decls
+  )
+}
+
+fun eval (c@[state, world], expr) {
+  case expr of
+    Array(exprs) ->
+      case evalList(c, exprs) of
+        [c, elems] -> [c, listArray(elems)]
+      esac
+
+  | Assn(l, r) ->
+      case evalList(c, {l, r}) of
+        [c@[state, world], {target, v}] -> 
+          case target of
+            Ref(x)            -> [[state <- [x, Val(v)], world], v]
+          | ElemRef(arr, ind) -> arr[ind] := v; [c, v]
+          esac
+      esac
+
+  | Binop(op, l, r) ->  
+      case evalList(c, {l, r}) of
+        [c@[state, world], {n1, n2}] -> [c, evalOp(op, n1, n2)]
+      esac
+
+  | Builtin(funName, exprs) ->  
+      case evalList(c, exprs) of
+        [[s, w], args] -> 
+          case evalBuiltin(funName, args, w) of
+            [res, w] -> [[s, w], res] 
+          esac
+      esac
+
+  | Call(name, args) ->
+      case state.lookupFun(name) of 
+        Fun(argNames, body    ) ->
+          case evalList(c, args) of
+            [[beforeEnter, world], values] ->
+              local afterEnter =
+                addBindings(enterFunction(beforeEnter), argNames, values);
+              case eval([afterEnter, world], body) of
+                [[afterBody, world], res] -> 
+                  [[leaveFunction(beforeEnter, afterBody.getGlobal), world], res]
+              esac
+          esac
+      esac
+
+  | Const(n) -> [c, n]
+
+  | Elem(arr, ind) ->
+      case evalList(c, {arr, ind}) of
+        [c, {arr, ind}] -> [c, arr[ind]]
+      esac
+
+  | ElemRef(arr, ind) ->
+      case evalList(c, {arr, ind}) of
+        [c, {arr, ind}] -> [c, ElemRef(arr, ind)]
+      esac
+
+  | If(e, s1, s2) ->
+      case eval(c, e) of
+        [c, n] ->
+          if   n != 0
+          then eval(c, s1)
+          else eval(c, s2)
+          fi
+      esac
+
+  | Ignore(e) -> [eval(c, e).fst, 0]
+
+  | Scope(decls, expr) ->
+      case eval([evalDecls(enterScope(state), decls), world], expr) of
+        [[afterEval, world], res] -> [[afterEval.leaveScope, world], res]
+      esac
+
+  | Seq(s1, s2) -> 
+      case evalList(c, {s1, s2}) of
+        [c, {_, r}] -> [c, r]
+      esac
+
+  | Skip -> [c, 0]
+
+  | String(str) -> [c, str]
+
+  | Ref(x) -> [c, Ref(x)]
+
+  | Repeat(body, cond) -> 
+      eval(eval(c, body).fst, While(Binop("==", cond, Const(0)), body))
+
+  | Var(x) -> 
+      case lookupVal(state, x) of
+        Val(v) -> [c, v]
+      esac
+
+  | cycle@While(cond, body) ->
+      case eval(c, cond) of
+        [c, n] ->
+          if   n != 0
+          then eval(eval(c, body).fst, cycle)
+          else [c, 0]
+          fi
+      esac
+  esac
 }
 
 
 -- Evaluates a program with a given input and returns an output
 public fun evalExpr (input, expr) {
-  case eval ([emptyState ().enterScope.addName ("read", Fun ({}, External)).addName ("write", Fun (singleton ("a"), External)) , createWorld (input)], expr) of
+  case eval (
+    [ emptyState()
+      .enterScope
+      .addName ("read" , Fun ({}, External))
+      .addName ("write", Fun (singleton ("a"), External))
+    , createWorld (input)
+    ], 
+    expr) 
+  of
     [c, _] -> c.snd.getOutput
   esac
 }
