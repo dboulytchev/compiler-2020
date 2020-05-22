@@ -488,7 +488,7 @@ fun compile (env, code) {
         | "<" -> getCmpOp
       esac (x, y, res, op)
     }    
-    fun callOp (f, n, env) {
+    fun callOp (f, n, env, moreArgs) {
       fun moveArgs (n, pushInsns, env) {
         case n of
           0 ->  [env, reverse(pushInsns)]
@@ -500,6 +500,8 @@ fun compile (env, code) {
       fun mkPush(x) {Push(x)}
       fun mkPop(x) {Pop(x)}
       local liveRegs = liveRegisters(env, n);
+      local movedArgs = {};
+      if moreArgs then movedArgs := map(mkPush, moreArgs) fi;
 
       case moveArgs(n, {}, env) of
         [env, pushInsns] ->
@@ -507,8 +509,9 @@ fun compile (env, code) {
             [s, env] -> [env, {
               map(mkPush, liveRegs),
               pushInsns,
+              movedArgs,
               Call (f),
-              Binop ("+", L(pushInsns.size * wordSize), esp),
+              Binop ("+", L((size(pushInsns) + size(movedArgs)) * wordSize), esp),
               map(mkPop, reverse(liveRegs)),
               Mov(eax, s)}]
           esac
@@ -517,16 +520,7 @@ fun compile (env, code) {
     foldl (
       fun ([env, code2], i) {
         local code = code2 : {Meta ("# " ++ showSMInsn (i) ++ "\n"), Commnt(i.string)};
-        case i of
-          READ ->
-            case env.allocate of
-              [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
-            esac             
-        | WRITE ->
-            case env.pop of
-              [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
-            esac
-        
+        case i of        
          -- Some guidelines for generating function calls:
          --
          -- 1. generate instructions to save live registers on the X86 stack (use
@@ -543,7 +537,7 @@ fun compile (env, code) {
          --    env.enterFunction to create a proper environment;
          -- 2. generate epilogue for END instruction.
                
-        | CONST(n) ->
+          CONST(n) ->
             case env.allocate of
               [s, env] -> [env, code : singleton(Mov(L(n), s))]
             esac
@@ -584,9 +578,9 @@ fun compile (env, code) {
             esac 
         | DROP        ->
             case env.pop of
-              [_, env] -> [env, code]
+              [_, env] -> [env, code] 
             esac            
-        | BEGIN (f, a, l) -> [enterFunction(env, f), code : prologue(l)]
+        | BEGIN (f, a, l) -> [enterFunction(env, f, l), code : prologue(f)]
         | END          ->
             case epilogue(env) of
               [env, c] -> [env, code : c]
@@ -595,7 +589,36 @@ fun compile (env, code) {
             case callOp(f, n, env) of
               [env, c] -> [env, code : c]
             esac
-        | GLOBAL (x) -> [env.addGlobal(x), code]
+        | GLOBAL (x) -> [addGlobal(env, x), code]
+        | BUILTIN (f, n) ->
+            local fname = case f of
+                "read"  -> "Lread"
+              | "write" -> "Lwrite"
+              | _       -> "B"++f
+            esac;
+            case callOp(fname, n, env) of
+              [env, c] -> [env, code : c]
+            esac
+        | STRING (str) ->
+            case addString(env, str) of [env, strl] -> 
+              case allocate(env) of [s, env] ->
+                case callOp("Bstring", 1, env) of [env, c] -> 
+                  [env, {code, move(M ("$"++strl), s), c}]
+                esac
+              esac
+            esac
+        | ARRAY (n) ->
+            case callOp("Barray", n, env, singleton(L(n))) of
+              [env, c] -> [env, {code,c}]
+            esac
+        | STA ->
+            case callOp("Bsta", 2, env) of
+              [env, c] -> [env, {code, c}]
+            esac
+        | ELEM ->
+            case callOp("Belem", 2, env) of
+              [env, c] -> [env, {code, c}]
+            esac
         | _ -> failure ("Codegeneration for the instruction %s is not yet implemented\n", i.string)
         esac
       }, [env, {}], code)
@@ -603,7 +626,7 @@ fun compile (env, code) {
 
   compile (env, code) 
 }
-
+  
 -- A top-level codegeneration function. Takes a driver's environment and a stack machine program,
 -- compiles the program into machine code, and compiles the machine code into an executable
 public fun compileX86 (args, code) {

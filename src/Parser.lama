@@ -144,8 +144,8 @@ local primary    = memo $ eta syntax (
                                     -- repeat e until e
                                     | loc=pos kRepeat body=scopeExpr kUntil c=basic { fun (a) { distributeScope(body(Void), fun(bd){assertVoid (a, Repeat(bd, c(Val)), loc)}) }}
                                     -- for
-                                    | loc=pos kFor pre=scopeExpr s[","] c=basic s[","] step=exp kDo body=scopeExpr kOd { fun (a) {
-                                        distributeScope(pre(Void), fun(prex){Seq(prex, While(c(Val), Seq(body(a), step(a))))})
+                                    | loc=pos kFor pre=scopeExpr s[","] c=exp s[","] step=exp kDo body=scopeExpr kOd { fun (a) {
+                                        assertVoid(a, distributeScope(pre(Void), fun(prex){ Seq(prex, While(c(Val), Seq(body(Void), step(Void))))}))
                                       }}
                                     | s["("] expr=exp s[")"] { fun (a) { expr(a) } }
                                     | s["{"] expr=scopeExpr? s["}"]  {fun (a) {

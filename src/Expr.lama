@@ -116,7 +116,6 @@ fun eval (c@[st, w], expr) {
   case expr of
       Const (x)         -> [c, x]
     | Var(x)            ->
-        st.checkVar(x);
         case lookup(st, x) of
           Var(val) -> [c, val]
         esac
@@ -134,17 +133,9 @@ fun eval (c@[st, w], expr) {
         case evalList(c, {to, val}) of 
           [c2@[st, w], {toRes, valRes}] -> 
             case toRes of 
-              Ref(x) -> --printf("%s := %s\n", x.string, valRes.string);
-              [[st <- [x, Var(valRes)], w], valRes]
+                Ref(x)        -> [[st <- [x, Var(valRes)], w], valRes]
+              | ElemRef(a, i) -> a[i]:=valRes; [c2, valRes]
             esac
-        esac
-    | Read(x)           -> 
-        case readWorld(w) of 
-          [val, w] -> [[st <- [x, Var(val)], w], val]
-        esac  
-    | Write(expr)       -> 
-        case eval(c, expr) of 
-          [[st, w], val] -> [[st, writeWorld(val, w)], Bottom]
         esac
     | Seq(s1, s2)       -> 
         case evalList(c, {s1, s2}) of 
@@ -176,16 +167,40 @@ fun eval (c@[st, w], expr) {
           [[s2, w], res] -> [[leaveScope(s2), w], res]
         esac
     | Call (f, args) ->
-        checkFun(st, f);
         case lookup(st, f) of
-          Fun (as, e) ->
+          Fun (as, e)  ->
             case evalList(c, args) of
-              [[s1, w], expr] -> case eval ([addNamesValues(enterFunction(s1), as, expr), w], e) of
-                                  [[s2, w], expr] -> [[leaveFunction(s1, getGlobal(s2)), w], expr]
-                                 esac
+              [[s1, w], expr] -> case e of
+                  External -> case evalBuiltin(f, expr, w) of
+                                [expr, w] -> [[s1, w], expr]
+                              esac
+                | _        -> case eval ([addNamesValues(enterFunction(s1), as, expr), w], e) of
+                                [[s2, w], expr] -> [[leaveFunction(s1, getGlobal(s2)), w], expr]
+                              esac
+              esac
             esac                
         esac
-    | _ -> failure("Unknown expression %s\n", expr.string)
+    | Builtin (f, args) ->
+        case evalList(c, args) of
+          [[s1, w], expr] ->
+            case evalBuiltin(f, expr, w) of
+              [expr, w] -> [[s1, w], expr]
+            esac
+        esac   
+    | String(str)    -> [c, str]
+    | Array (args)   ->
+        case evalList(c, args) of
+          [c, vals] -> [c, listArray(vals)]
+        esac
+    | Elem (e, i)    ->
+        case evalList(c, {e, i}) of
+          [c, {l, v}] -> [c, l[v]]
+        esac
+    | ElemRef (e, i) ->
+        case evalList(c, {e, i}) of
+          [c, {l, v}] -> [c, ElemRef(l, v)]
+        esac
+    | _ -> failure("Eval loop: unknown expression %s\n", expr.string)
   esac
 }
 
