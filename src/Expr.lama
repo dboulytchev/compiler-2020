@@ -99,8 +99,178 @@ fun evalList (c, exprs) {
   esac
 }
 
-fun eval (c@[s, w], expr) {
-  failure ("evalExpr not implemented\n")
+fun evalScope (s, ds) {
+  foldl (fun (s, d) {
+                      case d of
+                        Local (xs) -> s.addNames (xs)
+                      | Fun (f, a, e) -> s.addFunction (f, a, e)  
+                      esac
+                    }, s, ds)
+}
+
+fun evalVal (st, ns, vs) {
+  foldl (fun (s, [n, v]) { s.addName (n, Val (v)) }, st, zip (ns, vs))
+}
+
+fun eval (config@[state, world], expr) {
+
+  case expr of
+
+    Const (value) ->                      [config, value]
+
+  | Var (value) ->                        [config, 
+  
+                                          case lookup (state, value) of
+
+                                          Val (nv) -> nv
+
+                                          esac]
+
+  | Ref (value) ->                       [config, Ref (value)]
+
+  | Binop (oper, left, right) ->
+                                          case evalList (config, { left, right }) of
+
+                                          [n_c, { n_left, n_right }] ->
+
+                                          [n_c, evalOp (oper, n_left, n_right)]
+
+                                          esac
+
+
+  | Assn (left, right) ->                 case evalList (config, { left, right }) of
+
+                                          [[n_state, n_world], { Ref (n_left), n_right }] ->
+
+                                          [[n_state <- [n_left, Val (n_right)], n_world], n_right]
+
+                                          | [n_c, { ElemRef (a, i), v }] -> 
+
+                                          a[i] := v; [n_c, v]
+
+                                          esac
+
+  | Skip ->                               [config, BOTTOM]
+
+  | Seq (state_1, state_2) ->
+                                          case eval (config, state_1) of
+
+                                            [n_c, _] -> eval (n_c, state_2)
+
+                                          esac
+
+  | Ignore (state) ->
+                                          case eval (config, state) of
+
+                                            [n_c, _] -> [n_c, BOTTOM]
+
+                                          esac
+
+  | If (exp, state_1, state_2) ->
+                                          case eval (config, exp) of
+
+                                            [n_c, 0] -> eval (n_c, state_2)
+                                          | [n_c, _] -> eval (n_c, state_1)
+
+                                          esac
+  | While (exp, n_state) ->
+                                          case eval (config, exp) of
+
+                                            [n_c, 0] -> [n_c, BOTTOM]
+                                          | [n_c1, _] ->
+
+                                          case eval (n_c1, n_state) of
+                                          
+                                            [n_c2, _] -> eval (n_c2, expr)
+
+                                          esac
+                                          esac
+  | Repeat (n_state, exp) ->
+                                          case eval (config, n_state) of
+
+                                            [n_c1, _] ->
+
+                                          case eval (n_c1, exp) of
+
+                                            [n_c2, 0] -> eval (n_c2, expr)
+                                          | [n_c2, _] -> [n_c2, BOTTOM]
+
+                                          esac
+                                          esac
+
+  | Scope (def, exp) ->                   case eval ([evalScope (enterScope (state), def), world], exp) of
+
+                                          [[n_state, n_world], value] ->
+                                          [[leaveScope (n_state), n_world], value]
+
+                                          esac
+
+
+  | Call (f, args) ->                     case lookup (state, f) of
+
+                                          Fun (a, exp) -> case evalList (config, args) of
+
+                                          [[state_1, world_1], value_1] -> 
+
+                                          case exp of
+
+                                          External ->
+
+                                          case evalBuiltin (f, value_1, world_1) of
+
+                                          [v, n_world] -> [[state_1, n_world], v]
+
+                                          esac
+
+                                          | _ ->
+
+                                          case eval ([evalVal (enterFunction (state_1), a, value_1), world_1], exp) of
+
+                                          [[state_2, world_2], value_2] -> 
+                                          [[leaveFunction (state_1, getGlobal (state_2)), world_2], value_2]
+
+                                          esac
+                                          esac  
+                                          esac
+                                          esac              
+                                          
+  
+ 
+
+  | String (value) ->                     [config, value]
+
+  | Array (args) ->                       case evalList (config, args) of
+
+                                          [n_c, value] -> [n_c, listArray (value)]
+                                        
+                                          esac
+
+  | Elem (e, i) ->                        case evalList (config, { e, i }) of
+
+                                          [n_c, { l, value }] -> [n_c, l[value]]
+
+                                          esac
+
+  | ElemRef (e, i) ->                     case evalList (config, { e, i }) of
+
+                                          [n_c, { l, value }] -> [n_c, ElemRef (l, value)]
+
+                                          esac
+
+  | Builtin (f, args) ->                  case evalList (config, args) of
+
+                                            [[n_state, world_1], vals] ->
+
+                                          case evalBuiltin (f, vals, world_1) of
+
+                                            [value, world_2] ->
+                                            
+                                            [[n_state, world_2], value]
+
+                                          esac
+                                          esac
+
+  esac
 }
 
 
