@@ -121,15 +121,162 @@ fun eval (env, w, insns) {
   }
 
   -- Core interpreter: takes a configuration and a program, returns a configuration
-  fun eval (c@[st, cst, s, w], insns) {
-    failure ("SM interpreter is not implemented\n")
-  }
+ fun eval (config@[stack, cst, state, world], insns) {
+    case insns of
+        CONST (value) : rmd -> eval ([value : stack, cst, state, world], rmd) 
 
-  
-  
+      | READ : rmd -> case 
+      
+              readWorld (world) of [value, world2] -> eval ([value : stack, cst, state, world2], rmd)
+              
+              esac
+
+      | WRITE : rmd -> case
+      
+              stack of value : stackrmd -> eval([stackrmd, cst, state, writeWorld (value, world)], rmd)
+              
+              esac
+
+      
+      | BINOP (operation) : rmd -> case 
+      
+              stack of r : l : stackrmd -> eval ([evalOp(operation, l, r) : stackrmd, cst, state, world], rmd)
+                                              
+
+              esac
+      | LD (value) : rmd -> eval ([lookup (state, value) : stack, cst, state, world], rmd)
+
+      | ST (value) : rmd ->case 
+      
+              stack of   
+
+              v : nst ->  assign (state, value, v); eval (config, rmd)
+
+              esac
+
+      | LABEL (l) : rmd -> eval (config, rmd)
+
+      | {} -> config
+
+      | JMP (l) : rmd -> eval ([stack, cst, state, world], fromLabel (env, l))
+
+      | CJMP (c, l) : rmd -> case c of
+
+              "nz" -> case stack of
+
+              0 : nSt -> eval ([nSt, cst, state, world], rmd)
+              | _ : nSt -> eval ([nSt, cst, state, world], fromLabel (env, l))
+
+              esac
+
+              | "z" ->  case stack of
+
+              0 : nSt -> eval ([nSt, cst, state, world], fromLabel (env, l))
+              | _ : nSt -> eval ([nSt, cst, state, world], rmd)
+              
+              esac
+              esac
+      | DROP : rmd -> case 
+      
+              stack of      x : nSt -> eval ([nSt, cst, state, world], rmd)
+
+              esac 
+
+
+      | LDA (value) : rmd -> eval ([Ref (value) : stack, cst, state, world], rmd)    
+
+      | STI : rmd -> case stack of      x : Ref (val) : nSt -> 
+      
+              
+              
+              assign (state, val, x); 
+              
+              eval ([x : nSt, cst, state, world], rmd)
+          
+              esac
+      | GLOBAL (value) : rmd -> 
+      
+              assign (state, Glb (value), 0);
+              eval (config, rmd)
+
+      | CALL (f, n) : rmd -> 
+              case f[0] of '_' ->
+              case take (stack, n) of [n_stack, args] ->
+              case evalBuiltin (substring (f, 1, f.length - 1), args, world) of
+
+              [z, n_world] -> eval ([z : n_stack, cst, state, n_world], rmd)
+
+              esac
+              esac
+          | _ -> eval ([stack, [state, rmd] : cst, state, world], fromLabel (env, f))
+              esac
+      | BEGIN (_, arg, l) : rmd -> 
+
+              case take (stack, arg) of [nSt, args] -> 
+
+              local n_state = makeState (arg, l);
+              foldl (fun (val, n_a) { 
+                
+                assign (n_state, Arg (val), n_a); 
+                
+                val + 1 
+                
+                }, 0, args);
+
+              eval ([nSt, cst, n_state, world], rmd) 
+
+              esac
+      | END : rmd ->
+              case cst of
+
+              {} -> config
+
+            | [ns, q] : ncst -> eval ([stack, ncst, ns, world], q)
+
+              esac
+
+      | STRING (x) : rmd -> 
+      
+              eval ([x : stack, cst, state, world], rmd)
+
+      | ARRAY (x) : rmd ->
+
+              case take (stack, x) of
+
+                [n_stack, args] ->
+                
+                  eval ([listArray (args) : n_stack, cst, state, world], rmd)
+              esac
+
+      | STA : rmd ->
+
+              case stack of
+
+                v : i : a : n_stack -> a[i] := v; eval ([v : n_stack, cst, state, world], rmd)
+
+              esac
+      | ELEM : rmd ->
+
+              case stack of i : a : n_stack ->
+                
+              eval ([a[i] : n_stack, cst, state, world], rmd)
+
+              esac
+      | BUILTIN (f, n) : rmd ->
+              case take (stack, n) of [n_stack, args] ->
+              case evalBuiltin (f, args, world) of [x, n_world] -> 
+              
+              eval ([x : n_stack, cst, state, n_world], rmd)
+                  
+              esac
+              esac
+    | _ -> config
+    esac 
+
+ 
+  } 
   eval ([{}, {}, makeState (0, 0), w], insns) [3].getOutput
 }
-
 -- Runs a stack machine for a given input and a given program, returns an output
 public fun evalSM (input, insns) {
   eval (initEvalEnv (insns), createWorld (input), insns)
@@ -352,5 +499,282 @@ fun addVars (env, names) {
 --    (use env.addArg).
 
 public fun compileSM (expr) {
-  failure ("compileSM not implemented\n")
+
+
+  fun compile (stmt, env) {
+
+      case stmt of
+
+      Skip -> [{}, env]
+
+      | Const (val) -> [singleton (CONST (val)), env]
+
+
+      | Var (val) -> [singleton (LD (lookupVar (env, val))), env]
+
+
+      | Ref (val) -> [singleton (LDA (lookupVar (env, val))), env]
+
+
+
+
+      | Assn (Ref (val), expr) ->
+
+          case compile (expr, env) of[n_state, env_1] -> 
+
+          [{ n_state, ST (lookupVar (env, val)) }, env_1]
+
+          esac
+
+
+
+      | Assn (ElemRef (a, i), expr) ->
+
+          case compile (a, env) of [n_c1, n_env1] ->
+          case compile (i, n_env1) of [n_c2, n_env2] ->
+          case compile (expr, n_env2) of [n_c3, n_env3] -> 
+          
+          [{ n_c1, n_c2, n_c3, STA }, n_env3]
+
+          esac
+          esac
+          esac
+
+
+      | Assn (val, expr) ->
+
+          case compile (val, env) of [n_state_1, env_1] ->
+          case compile (expr, env_1) of [n_state_2, env_2] -> 
+
+          [{ n_state_1, n_state_2, STI }, env_2]
+
+          esac
+          esac
+
+
+
+      | Binop (operation, l, r) ->
+
+          case compile (l, env) of [n_state_1, env_1] ->
+          case compile (r, env_1) of [n_state_2, env_2] -> 
+
+          [{ n_state_1, n_state_2, BINOP (operation) }, env_2]
+
+          esac
+          esac
+
+      | Seq (state_1, state_2) ->
+
+          case compile (state_1, env) of [n_state_1, env_1] ->
+          case compile (state_2, env_1) of [n_state_2, env_2] -> 
+
+          [{ n_state_1, n_state_2 }, env_2]
+
+          esac
+          esac
+
+
+      | Ignore (s) ->
+
+          case compile (s, env) of
+
+          [n_state, n_env] -> [{ n_state, DROP }, n_env]
+
+          esac
+
+
+      | If (expr, state_1, state_2) ->
+
+          case genLabels (env, 2) of [ls, l, env_1] ->
+          case compile (state_1, env_1) of [n_state_1, env_2] ->
+          case compile (state_2, env_2) of [n_state_2, n_env3] ->
+          case compile (expr, n_env3) of[nev, n_env3] -> 
+          
+          [{ nev, CJMP ("z", ls), n_state_1, JMP (l), LABEL (ls), n_state_2, LABEL (l) }, n_env3]
+          
+          esac
+          esac
+          esac
+          esac
+
+
+      | While (expr, state_1) ->
+
+          case genLabels (env, 2) of [ls, l, env_1] ->
+          case compile (state_1, env_1) of [n_state_1, env_2] ->
+          case compile (expr, env_2) of[nev, env_2] -> 
+                  
+          [{ JMP (ls), LABEL (l), n_state_1, LABEL (ls), nev, CJMP ("nz", l) }, env_2]
+                  
+          esac
+          esac 
+          esac
+
+
+      | Repeat (state_1, expr) ->
+
+          case genLabels (env, 1) of [l, env_1] ->
+          case compile (state_1, env_1) of [n_state, env_2] ->
+          case compile (expr, env_2) of [nev, env_2] -> 
+          
+          [{ LABEL (l), n_state, nev, CJMP ("z", l) }, env_2]
+          
+          esac
+          esac 
+          esac
+
+      | Call (f, args) ->
+
+          case compileArguments (args, env) of[n_args, n_env] ->
+          case f of "read" -> 
+        
+          [{ n_args, CALL ("_read", 0) }, n_env]
+
+          | "write" -> [{ n_args, CALL ("_write", 1) }, n_env]
+
+          | _ ->
+
+          case lookupFun (env, f) of Fun (l, n) -> 
+
+           [{ n_args, CALL (l, n) }, n_env]
+
+          esac
+          esac
+          esac
+
+
+      | Scope (defs, expr) -> 
+      
+          case foldl (fun ([env, funcs, glbs], def) {
+
+          case def of
+
+          Fun (func, args, body) ->
+
+          case genFunLabel (env, func) of
+
+          [l, n_env] -> [addFun (n_env, func, l, args.size), [l, args, body] : funcs, glbs]
+
+          esac
+
+          | Local (vals) -> [
+            
+            addVars (env, vals),funcs,
+
+                    if isGlobal (env) 
+                    
+                    then { 
+
+                      map (fun (val) { GLOBAL (val) }, vals), glbs 
+                      
+                      }
+
+                    else glbs
+
+                    fi
+                    ]
+
+          esac},
+
+          [beginScope (env), {}, {}], defs) of [env, funcs, glbs] ->
+
+          case compile (expr, foldl (fun (env, [n, args, body]) { 
+            
+            rememberFun (env, n, args, body) },
+            
+             env, funcs)) of
+
+          [n_e, n_env] -> [{ glbs, n_e }, endScope (n_env)]
+
+          esac
+          esac
+
+      | String (x) -> [singleton (STRING (x)), env]
+
+
+      | Array (args) ->
+
+          case compileArguments (args, env) of  [n_args, n_env] -> 
+
+         [{ n_args, ARRAY (args.size) }, n_env]
+
+          esac
+
+      | Elem (expr, i) ->
+
+          case compile (expr, env) of[n_c1, n_env1] ->
+          case compile (i, n_env1) of[n_c2, n_env2] -> 
+
+          [{ n_c1, n_c2, ELEM }, n_env2]
+
+          esac
+          esac
+
+
+       | Builtin (f, args) ->
+
+          case compileArguments (args, env) of[ n_args, n_env] ->
+           
+          [{ n_args, BUILTIN (f, args.size)}, n_env]
+
+          esac
+      esac
+  }
+
+ fun compileArguments (args, env) {
+
+        case args of 
+          {} -> [{}, env]
+        | { arg } -> compile (arg, env)
+        | arg : rmd ->
+
+        case compile (arg, env) of [n_arg, n_env] ->
+        case compileArguments (rmd, n_env) of
+
+        [n_args, n_env1] -> [{ n_arg, n_args }, n_env1]
+
+        esac
+        esac
+        esac
+
+  }
+
+  fun compileFunctions (config, env) {
+
+    fun compileFunction (config, env, funcs) {
+      case funcs of {} ->
+      case getFuns (env) of
+
+      [{}, n_env] -> config
+      | [funcs, n_env] -> compileFunction (config, n_env, funcs)
+
+      esac
+      | Fun (funlbls, args, body, state) : rmd -> 
+
+      case compile (body, addArgs (beginFun (env, state), args)) of [n_func, n_env] ->
+
+       compileFunction (
+                {
+        config, LABEL (funlbls), BEGIN (funlbls, args.size, getLocals (n_env)), n_func, END
+            
+            }, 
+                  n_env, rmd)
+      esac
+      esac
+    }
+
+    compileFunction (config, env, {})
+  }
+
+  case compile (expr, initCompEnv ().beginScope) of
+
+    [n_config, n_env] -> deepFlatten (compileFunctions ({
+      
+       LABEL ("main"), BEGIN ("main", 0, getLocals (n_env)), n_config, END 
+       
+       },
+
+        n_env))
+
+  esac
 }
