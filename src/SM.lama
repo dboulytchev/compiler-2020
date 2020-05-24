@@ -67,10 +67,10 @@ fun compileExpr (expr) {
 public fun compileSM (stmt) {
   fun compile (stmt) {
     case stmt of
-      Assn (x, e) -> { compileExpr (e), ST (x) }
+      Assn (x, e) -> deepFlatten({ compileExpr (e), ST (x) })
     | Read (x) -> { READ, ST (x) }
-    | Write (x) -> { compileExpr (x), WRITE }
-    | Seq (s1, s2) -> { compile (s1), compile (s2) }
+    | Write (x) -> deepFlatten({ compileExpr (x), WRITE })
+    | Seq (s1, s2) -> deepFlatten({ compile (s1), compile (s2) })
     esac
   }
 
