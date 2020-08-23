@@ -11,7 +11,7 @@ import Parser;
 import Lexer;
 import Expr;
 import Builtins;
-import Util;
+import Buffer;
 
 -- Stack code printer. Takes a list of SM instructions, return its
 -- string representation.
@@ -64,7 +64,7 @@ fun initEvalEnv (insns) {
             | _ : tl           -> rec ([m, tl])
             esac
           }
-        }) $ [emptyMap (), insns];
+        }) $ [emptyMap (compare), insns];
   
   [fun (l) {
      case findMap (map, l) of Some (insns) -> insns esac
@@ -124,7 +124,6 @@ fun eval (env, w, insns) {
   fun eval (c@[st, cst, s, w], insns) {
     failure ("SM interpreter is not implemented\n")
   }
-
   
   
   eval ([{}, {}, makeState (0, 0), w], insns) [3].getOutput

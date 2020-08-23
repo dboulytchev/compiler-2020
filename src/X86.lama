@@ -4,8 +4,8 @@ import Fun;
 import SM;
 import Collection;
 import List;
-import Util;
 import Manifest;
+import Buffer;
 
 -- Assembler language interface
 -- The registers: 
@@ -362,36 +362,35 @@ fun staticSize (env) {
 
 -- Creates an initial environment
 fun initEnv () {
-  makeEnv ({}, 0, emptySet (), emptySet (), 0, false, emptyMap (), "", 0)
+  makeEnv ({}, 0, emptySet (compare), emptySet (compare), 0, false, emptyMap (compare), "", 0)
 }
 
 -- Codegeneration helper functions
 -- Generates code section
 fun codeSection (text) {
-  Meta ("\t.text\n") : text
+  singletonBuffer (Meta ("\t.text\n")) <+> text
 }
 
 -- Generates data section
 fun dataSection (text) {
-  Meta ("\t.data\n") : text
+  singletonBuffer (Meta ("\t.data\n")) <+> text
 }
 
 -- Generates integer definition
 fun intDef (name) {
-  singleton (Meta (sprintf ("%s:\t.int\t0\n", name)))
+  Meta (sprintf ("%s:\t.int\t0\n", name))
 }
 
 -- Generates string definition
 fun stringDef ([name, val]) {
-  singleton (Meta (sprintf ("%s:\t.string\t""%s""\n", name, val)))
+  Meta (sprintf ("%s:\t.string\t""%s""\n", name, val))
 }
 
 -- Generates function prologue
 fun prologue (fLabel) {
-  {Push  (ebp),
-   Mov   (esp, ebp),
-   Binop ("-", M (sprintf ("$%s_SIZE", fLabel)), esp)
-  }
+  singletonBuffer (Push  (ebp)) <+
+  Mov   (esp, ebp) <+
+  Binop ("-", M (sprintf ("$%s_SIZE", fLabel)), esp)  
 }
 
 -- Generates function epilogue
@@ -399,9 +398,9 @@ fun epilogue (env) {
   local metaDef = Meta (sprintf ("\t.set\t%s_SIZE,\t%d\n", env.currentFunction, env.staticSize * wordSize));
 
   if compare (env.currentFunction, "main") == 0
-  then [env, {Mov (ebp, esp), Pop (ebp), Binop ("^", eax, eax), Ret, metaDef}]
+  then [env, singletonBuffer (Mov (ebp, esp)) <+ Pop (ebp) <+ Binop ("^", eax, eax) <+ Ret <+ metaDef]
   else case env.pop of
-         [y, env] -> [env, {Mov (ebp, esp), Pop (ebp), Mov (y, eax), Ret, metaDef}]
+         [y, env] -> [env, singletonBuffer (Mov (ebp, esp)) <+ Pop (ebp) <+ Mov (y, eax) <+ Ret <+ metaDef]
        esac
   fi
 }
@@ -427,8 +426,8 @@ fun memOpnd (opnd) {
 -- intermediate register if needed
 fun move (from, to) {
   if memOpnd (from) && memOpnd (to)
-  then {Mov (from, eax), Mov (eax, to)}
-  else singleton (Mov (from, to))
+  then singletonBuffer (Mov (from, eax)) <+ Mov (eax, to)
+  else singletonBuffer (Mov (from, to))
   fi
 }
 
@@ -452,15 +451,15 @@ fun compile (env, code) {
   fun compile (env, code) {
     foldl (
       fun ([env, scode], i) {
-        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+        local code = scode <+ Meta ("# " ++ showSMInsn (i) ++ "\n");
         case i of
           READ ->
             case env.allocate of
-              [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
+              [s, env] -> [env, code <+ Call ("Lread") <+ Mov (eax, s)]
             esac             
         | WRITE ->
             case env.pop of
-              [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
+              [s, env] -> [env, code <+ Push (s) <+ Call ("Lwrite") <+ Pop (eax)]
             esac
         
          -- Some guidelines for generating function calls:
@@ -481,7 +480,7 @@ fun compile (env, code) {
                
         | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
         esac
-      }, [env, {}], code)
+      }, [env, emptyBuffer ()], code)
   }
 
   compile (env, code) 
@@ -497,17 +496,15 @@ public fun compileX86 (args, code) {
                          #unboxed -> "../runtime/"
                        | path     -> path
                        esac ++ "/runtime.o";
-       
+
        fwrite (asmFile,
                map (insnString, 
-                    deepFlatten ({
-                      Meta ("\t.global\tmain\n"),
-                      dataSection (
-                        {map (intDef, getGlobals (env)), 
-                         map (stringDef, getStrings (env))}
-                      ),
-                      codeSection (code)
-                    })).stringcat);
+                    getBuffer $ 
+                      singletonBuffer (Meta ("\t.global\tmain\n")) <+>
+                      dataSection (listBuffer (map (intDef   , getGlobals (env))) <+>
+                                   listBuffer (map (stringDef, getStrings (env)))) <+>
+                      codeSection (code)                   
+                    ).stringcat);
                     
        system ({"gcc -g -m32 -o ", args.getBaseName, " ", runtime, " ", asmFile}.stringcat)
   esac
