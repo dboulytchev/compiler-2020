@@ -43,7 +43,7 @@ fun makeState (scopes) {
 
   -- Enters a new scope
   fun enterScope () {
-    makeState (emptyMap () : scopes)
+    makeState (emptyMap (compare) : scopes)
   }
 
   -- Leaves a scope
@@ -71,7 +71,7 @@ fun makeState (scopes) {
       esac
     }
 
-    makeState (emptyMap () : enterScopes (scopes))
+    makeState (emptyMap (compare) : enterScopes (scopes))
   }
 
   -- Leaves a function: replaces the global scope in the state with a given one

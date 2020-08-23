@@ -10,7 +10,7 @@ import State;
 import Parser;
 import Lexer;
 import Expr;
-import Util;
+import Buffer;
 
 -- Stack code printer. Takes a list of SM instructions, return its
 -- string representation.
@@ -60,7 +60,7 @@ fun initEvalEnv (insns) {
             | _ : tl           -> rec ([m, tl])
             esac
           }
-        }) $ [emptyMap (), insns];
+        }) $ [emptyMap (compare), insns];
   
   [fun (l) {
      case findMap (map, l) of Some (insns) -> insns esac
