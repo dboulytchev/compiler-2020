@@ -7,7 +7,7 @@ import Collection;
 import List;
 
 -- A set of all keywords
-local keywords = foldl (addSet, emptySet (), {"read", "write", "skip"});
+local keywords = foldl (addSet, emptySet (compare), {"read", "write", "skip"});
 
 -- Regular expression definitions
 local rWhiteSpace  = createRegexp ("\\(\\([ \n\r\t]*\\)\\|\\(--[^\n]*[ \n\r\t]*\\)\\)*", "whitespace"),
