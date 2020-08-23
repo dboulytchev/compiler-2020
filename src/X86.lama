@@ -3,7 +3,8 @@
 import SM;
 import Collection;
 import List;
-import Util;
+import Buffer;
+import Fun;
 import Manifest;
 
 -- Assembler language interface
@@ -273,38 +274,38 @@ fun retrieveStack (env, l) {
 
 -- Creates an initial environment
 fun initEnv () {
-  makeEnv (0, emptySet (), {}, false, emptyMap ())
+  makeEnv (0, emptySet (compare), emptySet (compare), false, emptyMap (compare))
 }
 
 -- Codegeneration helper functions
 -- Generates code section
 fun codeSection (text) {
-  Meta ("\t.text\n") : text
+  singletonBuffer (Meta ("\t.text\n")) <+> text
 }
 
 -- Generates data section
 fun dataSection (text) {
-  Meta ("\t.data\n") : text
+  singletonBuffer (Meta ("\t.data\n")) <+> text
 }
 
 -- Generates data definition
 fun dataDef (name) {
-  singleton (Meta (sprintf ("%s:\t.int\t0\n", name)))
+  Meta (sprintf ("%s:\t.int\t0\n", name))
 }
 
 -- Generates function prologue
 fun prologue (size) {
-  {Push  (ebp),
-   Mov   (esp, ebp),
-   Binop ("-", L (wordSize*size), esp)}
+  singletonBuffer (Push (ebp)) <+
+  Mov   (esp, ebp) <+
+  Binop ("-", L (wordSize*size), esp)
 }
 
 -- Generates function epilogue
 fun epilogue () {
-  {Mov   (ebp, esp),
-   Pop   (ebp),
-   Binop ("^", eax, eax),
-   Ret}
+  singletonBuffer (Mov (ebp, esp)) <+
+  Pop   (ebp) <+
+  Binop ("^", eax, eax) <+
+  Ret
 }
 
 -- Checks if an operand resides on a stack
@@ -328,8 +329,8 @@ fun memOpnd (opnd) {
 -- intermediate register if needed
 fun move (from, to) {
   if memOpnd (from) && memOpnd (to)
-  then {Mov (from, eax), Mov (eax, to)}
-  else singleton (Mov (from, to))
+  then singletonBuffer (Mov (from, eax)) <+ Mov (eax, to)
+  else singletonBuffer (Mov (from, to))
   fi
 }
 
@@ -352,19 +353,19 @@ fun compile (env, code) {
   fun compile (env, code) {
     foldl (
       fun ([env, scode], i) {
-        local code = scode : singleton (Meta ("# " ++ showSMInsn (i) ++ "\n"));
+        local code = scode <+ Meta ("# " ++ showSMInsn (i) ++ "\n");
         case i of
           READ ->
             case env.allocate of
-              [s, env] -> [env, code : {Call ("Lread"), Mov (eax, s)}]
+              [s, env] -> [env, code <+ Call ("Lread") <+ Mov (eax, s)]
             esac             
         | WRITE ->
             case env.pop of
-              [s, env] -> [env, code : {Push (s), Call ("Lwrite"), Pop (eax)}]
+              [s, env] -> [env, code <+ Push (s) <+ Call ("Lwrite") <+ Pop (eax)]
             esac
         | _ -> failure ("codegeneration for instruction %s is not yet implemented\n", i.string)
         esac
-      }, [env, {}], code)
+      }, [env, emptyBuffer ()], code)
   }
 
   compile (env, code) 
@@ -383,17 +384,16 @@ public fun compileX86 (args, code) {
        
        fwrite (asmFile,
                map (insnString, 
-                    deepFlatten ({
-                      Meta ("\t.global\tmain\n"),
-                      dataSection (
-                        map (dataDef, getGlobals (env))
-                      ),
-                      codeSection ({
-                        Meta ("main:\n"),
-                        prologue (getStackSize (env)),
-                        code,
-                        epilogue ()})
-                    })).stringcat);
+                    getBuffer $
+                      singletonBuffer (Meta ("\t.global\tmain\n")) <+>
+                      dataSection (listBuffer $ map (dataDef, getGlobals (env))) <+>
+                      codeSection (
+                        singletonBuffer (Meta ("main:\n")) <+>
+                        prologue (getStackSize (env)) <+>
+                        code <+>
+                        epilogue ()
+                      )
+                   ).stringcat);
                     
        system ({"gcc -g -m32 -o ", args.getBaseName, " ", runtime, " ", asmFile}.stringcat)
   esac
